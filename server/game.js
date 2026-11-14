@@ -67,8 +67,8 @@ export function cleanText(p) {
 }
 const cleanCode = (c) => cleanText(c).toUpperCase();
 
-const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5|X)$/;
-const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X";
+const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5|X|B)$/;
+const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X" || c === "B";
 export const cardValue = (c) => (isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
   return isWild(c) || c[0] === color || (!isWild(top) && c.slice(1) === top.slice(1));
@@ -85,7 +85,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5 = 186 cards. */
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb = 188 cards. */
 export function newDeck() {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
@@ -95,7 +95,7 @@ export function newDeck() {
   }
   for (let i = 0; i < 10; i++) d.push("W", "W4");
   for (let i = 0; i < 2; i++) d.push("W5");
-  d.push("X"); // A single Detective Wild in every fresh deck.
+  d.push("X", "B"); // A single Detective Wild and a single Bomb in every fresh deck.
   for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T");
   return shuffle(d);
 }
@@ -238,10 +238,8 @@ export function sweep() {
     }
     if (!store.rooms.has(room.id)) continue;
     const game = room.game;
-    if (game && game.status === "playing") {
-      const seen = store.guestsById.get(currentPlayer(game))?.last_seen ?? 0;
-      if (seen < t - LIMITS.autoPassMs && game.turn_started_at < t - LIMITS.autoPassMs) autoPass(room);
-    }
+    // A loss of connection never immediately changes turns. The advanced
+    // engine alone applies an offline grace deadline and normal turn limit.
     const anyRecent = room.members.some((m) => (store.guestsById.get(m.guest_id)?.last_seen ?? 0) > t - LIMITS.roomExpireMs);
     if (room.updated_at < t - LIMITS.roomExpireMs && !anyRecent) {
       deleteRoom(room);

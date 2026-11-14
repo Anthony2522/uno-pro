@@ -198,7 +198,23 @@ const dictionary:Record<string,string>={
   "Segure": "Hold",
   "Denunciar UNO": "Catch UNO",
   "1º": "1st",
-  "2º": "2nd"
+  "2º": "2nd",
+  "Desuno": "Desuno",
+  "Bloqueio em dobro": "Double skip",
+  "Bloqueio triplo": "Triple skip",
+  "Bloqueio": "Skip",
+  "Bloqueio ×": "Skip ×",
+  "Coringa Bomba": "Bomb Wild",
+  "BOMBA! Todos os adversários compram 2 cartas": "BOMB! Every opponent draws 2 cards",
+  "Todos os adversários compram 2 cartas": "Every opponent draws 2 cards",
+  "DETETIVE": "DETECTIVE",
+  "BOMBA": "BOMB",
+  "Desuno: denuncie quem está há 4 segundos com uma carta sem gritar UNO.": "Desuno: catch anyone with one card who has not called UNO after four seconds.",
+  "Desuno denuncia todos após quatro segundos de UNO": "Desuno catches everyone after four seconds",
+  "Organizado por número. Clique para organizar por cor.": "Sorted by number. Tap to sort by color.",
+  "Organizado por cor. Clique para organizar por número.": "Sorted by color. Tap to sort by number.",
+  "Ordenar por cor": "Sort by color",
+  "Ordenar por número": "Sort by number"
 };
 const longPairs=Object.entries(dictionary).filter(([pt])=>pt.length>=10).sort((a,b)=>b[0].length-a[0].length);
 function translatePiece(value:string,lang:Language){

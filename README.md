@@ -27,3 +27,13 @@ Entre no jogo com o apelido `Toninho`, abra o perfil e selecione **Acesso desenv
 - +2 Volta: inverte a direção e acumula duas compras; com dois jogadores, funciona como um +2 comum.
 - Primeiro colocado sai da disputa e os demais jogam pelo segundo.
 - 100 nomes engraçados para bots e alternância de português/inglês.
+
+## Atualização Desuno, Bomba e animações
+
+- A mão começa ordenada por número; é possível alternar para organização por cor.
+- Desuno é um botão simples: após quatro segundos com uma carta sem chamar UNO, todos os infratores são denunciados por um clique.
+- Cada carta jogada agora gera um movimento público de um segundo até o descarte. O resultado é calculado exclusivamente no servidor.
+- Bloqueios consecutivos mostram avisos acumulativos com os nomes dos jogadores pulados.
+- Coringa Detetive exibe cartas maiores, com identificação legível, apenas ao jogador autorizado pelo prazo de dez segundos.
+- Coringa Bomba: uma cópia no baralho, cada adversário compra duas cartas sem perder a vez.
+- Desconexão não força o avanço imediato: enquanto o participante está offline, há até trinta segundos de tolerância, limitada também pelo relógio normal de cinquenta segundos. Reconectar não reinicia o tempo gasto.

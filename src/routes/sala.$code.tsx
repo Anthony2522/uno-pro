@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Ban, Loader2, Repeat2, Scissors, Megaphone, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
@@ -213,13 +213,32 @@ function RoomPage() {
                  specialEffect.type==="reverse" ? <Repeat2 className="size-16 sm:size-24" strokeWidth={3}/> :
                  specialEffect.type==="cut" ? <Scissors className="size-16 sm:size-24" strokeWidth={3}/> :
                  specialEffect.type==="catch" ? <ShieldAlert className="size-16 sm:size-24" strokeWidth={3}/> :
+                 specialEffect.type==="bomb" ? <Bomb className="size-16 sm:size-24" strokeWidth={3}/> :
                  specialEffect.type==="penalty" ? <span className="text-6xl sm:text-8xl">+{specialEffect.n ?? 2}</span> :
                  specialEffect.type==="uno" ? <Megaphone className="size-16 sm:size-24" strokeWidth={3}/> :
                  <span className="text-5xl">↶</span>}
               </div>
-              {(specialEffect.type==="skip" || specialEffect.type==="penalty" || specialEffect.type==="cut" || specialEffect.type==="catch") ? (
+              {specialEffect.type==="bomb" ? (
+                <span className="uno-effect-player">BOMBA! Todos os adversários compram 2 cartas</span>
+              ) : specialEffect.type==="skip" ? (
+                <>
+                  {(specialEffect.n??1)>1&&(
+                    <span className="text-xl font-black text-warning">
+                      {(specialEffect.n??1)===2?"Bloqueio em dobro":
+                       (specialEffect.n??1)===3?"Bloqueio triplo":
+                       `Bloqueio ×${specialEffect.n}`}
+                    </span>
+                  )}
+                  <span className="uno-effect-player">
+                    {specialEffect.name} <span className="mx-1 text-cyan">→</span>{" "}
+                    {(specialEffect.target_names?.length?specialEffect.target_names:[specialEffect.target_name??"Jogador"]).join(" · ")}
+                  </span>
+                </>
+              ) : (specialEffect.type==="penalty" || specialEffect.type==="cut" || specialEffect.type==="catch") ? (
                 <span className="uno-effect-player">
-                  {specialEffect.name} <span className="mx-1 text-cyan">→</span> {specialEffect.target_name ?? "Jogador"}
+                  {specialEffect.reason==="nine"
+                    ? `${specialEffect.target_name??specialEffect.name} +${specialEffect.n??1} · Regra do 9`
+                    : <>{specialEffect.name} <span className="mx-1 text-cyan">→</span> {specialEffect.target_name??"Jogador"}</>}
                 </span>
               ) : (
                 <span className="uno-effect-player">

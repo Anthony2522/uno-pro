@@ -376,3 +376,18 @@
   .uno-hand.uno-hand-single {height:min(34dvh,calc(var(--uno-hand-col)*1.5 + 88px));}
 }
 .uno-hand-toolbar button {font-size:clamp(12px,2.8vw,15px);}
+
+/* Server-synchronized playing-card flight, one full second for each play. */
+@keyframes uno-playing-card-flight {
+  0%   {transform:translate3d(var(--start-x),var(--start-y),0) rotate(-16deg) scale(.82);opacity:.9;}
+  38%  {transform:translate3d(var(--mid-x),var(--mid-y),0) rotate(8deg) scale(1.22);opacity:1;}
+  78%  {transform:translate3d(var(--end-x),var(--end-y),0) rotate(-3deg) scale(1.05);opacity:1;}
+  100% {transform:translate3d(var(--end-x),var(--end-y),0) rotate(0) scale(1);opacity:1;}
+}
+.uno-play-flight {
+  position:fixed;left:0;top:0;width:70px;z-index:61;pointer-events:none;
+  will-change:transform;animation:uno-playing-card-flight 1s cubic-bezier(.22,.61,.25,1) both;
+}
+@media(prefers-reduced-motion:reduce) {
+  .uno-play-flight {animation:none;transform:translate3d(var(--end-x),var(--end-y),0);}
+}
