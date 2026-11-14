@@ -21,8 +21,9 @@ export function WaitingRoom({
   const { room, members, me, game } = state;
   const isHost = room.host_id === me;
   const host = members.find((m) => m.is_host);
-  const canStart = members.length >= 2;
-  const empty = Math.max(0, room.max_players - members.length);
+  const playerCount=members.filter(m=>!m.spectator).length;
+  const canStart = playerCount >= 2;
+  const empty = Math.max(0, room.max_players - playerCount);
   const lastWinner = game?.status === "finished" && game.winner_id ? members.find((m) => m.id === game.winner_id)?.nickname ?? game.last_action?.name : null;
   const secondWinner = game?.status==="finished" && game.second_winner_id ? members.find(m=>m.id===game.second_winner_id)?.nickname : null;
 
@@ -69,7 +70,7 @@ export function WaitingRoom({
       <section aria-labelledby="players-title" className="glass mt-6 rounded-3xl p-5 sm:p-6">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 id="players-title" className="text-lg font-bold">Jogadores</h2>
-          <span className="font-display text-sm tabular-nums text-muted-foreground">{members.length}/{room.max_players}</span>
+          <span className="font-display text-sm tabular-nums text-muted-foreground">{playerCount}/{room.max_players}</span>
         </div>
         <ul className="grid gap-2 sm:grid-cols-2">
           {members.map((m) => (
@@ -79,7 +80,7 @@ export function WaitingRoom({
                 <p className="truncate font-semibold">
                   {m.nickname} {m.id === me && <span className="text-sm font-normal text-cyan">(você)</span>}
                 </p>
-                <p className={cn("text-xs", m.online ? "text-success" : "text-muted-foreground")}>{m.bot ? (m.difficulty==="hard" ? "Bot difícil" : "Bot fácil") : m.online ? "Online" : "Desconectado"}</p>
+                <p className={cn("text-xs", m.online ? "text-success" : "text-muted-foreground")}>{m.spectator ? "Observador (dev)" : m.bot ? (m.difficulty==="hard" ? "Bot difícil" : "Bot fácil") : m.online ? "Online" : "Desconectado"}</p>
               </div>
               {m.bot && isHost && (
                 <button type="button" title="Remover bot" aria-label={`Remover ${m.nickname}`} onClick={()=>onRemoveBot(m.id)} disabled={busy} className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><X className="size-4" /></button>
@@ -107,7 +108,7 @@ export function WaitingRoom({
           <h2 className="flex items-center gap-2 font-display font-bold"><Bot className="size-5 text-cyan" /> Adicionar bots</h2>
           <p className="mt-2 text-sm text-muted-foreground">Preencha as vagas com jogadores automáticos. O modo fácil escolhe a melhor jogada em 60% das decisões; o difícil sempre prioriza as melhores jogadas disponíveis.</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="glass" className="h-11 rounded-xl" disabled={busy||members.length>=room.max_players} onClick={()=>onAddBot("easy")}><Bot /> + Bot fácil</Button>
+            <Button variant="glass" className="h-11 rounded-xl" disabled={busy||playerCount>=room.max_players} onClick={()=>onAddBot("easy")}><Bot /> + Bot fácil</Button>
             <Button variant="cyan" className="h-11 rounded-xl" disabled={busy||members.length>=room.max_players} onClick={()=>onAddBot("hard")}><Bot /> + Bot difícil</Button>
           </div>
         </section>
@@ -118,7 +119,7 @@ export function WaitingRoom({
           {isHost ? (
             <>
               <p className="flex-1 text-center text-sm text-muted-foreground sm:text-left">
-                {canStart ? `${members.length} jogadores prontos. Bora?` : "Aguardando mais jogadores (mínimo 2). Mande o link!"}
+                {canStart ? `${playerCount} jogadores prontos. Bora?` : "Aguardando mais jogadores (mínimo 2). Mande o link!"}
               </p>
               <Button variant="hero" size="xl" className="w-full sm:w-auto" disabled={!canStart || busy} onClick={onStart}>
                 {busy ? <Loader2 className="animate-spin" /> : <Play />} {game ? "Jogar novamente" : "Iniciar partida"}

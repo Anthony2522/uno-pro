@@ -194,7 +194,7 @@ function removeMember(room, gid) {
   if (room.members.length === 0) {
     deleteRoom(room);
   } else if (room.host_id === gid) {
-    room.host_id = room.members.find(m => !store.guestsById.get(m.guest_id)?.bot)?.guest_id ?? null; // a bot can never host
+    room.host_id = room.members.find(m=>!m.spectator && !store.guestsById.get(m.guest_id)?.bot)?.guest_id ?? null; // a bot cannot host
     touch(room);
   } else {
     touch(room);
@@ -319,7 +319,7 @@ const handlers = {
       status: r.status,
       max_players: r.max_players,
       host_name: nick(r.host_id),
-      player_count: r.members.length,
+      player_count: r.members.filter(m=>!m.spectator).length,
     }));
   },
 
@@ -360,7 +360,7 @@ const handlers = {
     const r = findRoom(p_code);
     if (isMember(r, me.id)) return { code: r.code, already: true };
     if (r.status === "playing") fail("GAME_STARTED");
-    if (r.members.length >= r.max_players) fail("ROOM_FULL");
+    if (r.members.filter(m=>!m.spectator).length >= r.max_players) fail("ROOM_FULL");
     leaveOtherRooms(me.id, r.id);
     // joined_at strictly increasing keeps host succession deterministic
     const last = r.members[r.members.length - 1]?.joined_at ?? 0;
@@ -444,7 +444,7 @@ const handlers = {
     if (!isMember(r, me.id)) fail("NOT_MEMBER", 403);
     if (r.host_id !== me.id) fail("NOT_HOST", 403);
     if (r.status !== "waiting") fail("GAME_STARTED");
-    const players = r.members.map((m) => m.guest_id);
+    const players = r.members.filter(m=>!m.spectator).map((m) => m.guest_id);
     if (players.length < 2) fail("NOT_ENOUGH_PLAYERS");
     let dp = newDeck();
     r.hands = new Map();

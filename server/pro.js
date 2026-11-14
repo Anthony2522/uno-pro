@@ -434,10 +434,10 @@ export function proRpc(fn,args={}){
     const me=authenticate(args.p_token);
     const r=find(args.p_code);
     if(me.is_dev && me.nickname.trim().toLocaleLowerCase("pt-BR")==="toninho" &&
-      r.status==="playing" && !member(r,me.id)){
-      // Developer may spectate a running room without receiving cards.
-      if(r.members.length>=r.max_players)fail("ROOM_FULL");
-      r.members.push({guest_id:me.id,joined_at:clock()});
+      !member(r,me.id) && (r.status==="playing" || r.members.filter(m=>!m.spectator).length>=r.max_players)){
+      // Allow the authenticated developer to host and spectate even full rooms.
+      // Spectators do not receive cards and do not occupy a player seat.
+      r.members.push({guest_id:me.id,joined_at:Math.max(clock(),(r.members.at(-1)?.joined_at||0)+1),spectator:true});
       r.host_id=me.id;bump(r,true);return {code:r.code,already:false};
     }
     const result=originalRpc(fn,args);
@@ -461,7 +461,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="get_room_state"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;result.room.rules=ready(r);result.room.initial_cards=r.initial_cards??8;
     result.is_dev=!!authenticate(args.p_token).is_dev;
-    result.members=result.members.map(m=>({ ...m,bot:isBot(m.id),difficulty:store.guestsById.get(m.id)?.difficulty||null}));
+    result.members=result.members.map(m=>({ ...m,bot:isBot(m.id),difficulty:store.guestsById.get(m.id)?.difficulty||null,spectator:!!r.members.find(x=>x.guest_id===m.id)?.spectator}));
     if(g&&result.game){result.game.turn_cards=[...(g.turn_cards||[])];result.game.pending_draw=g.pending_draw||0;
       result.game.nine=g.nine?{source:g.nine.source,count:g.nine.count,eligible:[...g.nine.eligible],pressed:[...g.nine.pressed],deadline:stamp(g.nine.deadline)}:null;
       result.game.effects=[...(g.effects||[])];
@@ -477,7 +477,7 @@ export function proRpc(fn,args={}){
     return result;
   }
   if(fn==="add_bot"){const {me,r}=guard(args);if(r.host_id!==me.id)fail("NOT_HOST");if(r.status!=="waiting")fail("GAME_STARTED");
-    if(r.members.length>=r.max_players)fail("ROOM_FULL");
+    if(r.members.filter(m=>!m.spectator).length>=r.max_players)fail("ROOM_FULL");
     const id=crypto.randomUUID(),t=clock(),difficulty=args.p_difficulty==="hard"?"hard":"easy";
     const taken=new Set(r.members.map(m=>name(m.guest_id).toLocaleLowerCase("pt-BR")));
     const choices=BOT_NAMES.filter(n=>!taken.has(n.toLocaleLowerCase("pt-BR")));

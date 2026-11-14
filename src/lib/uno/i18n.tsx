@@ -179,17 +179,40 @@ const dictionary:Record<string,string>={
   "Detetive": "Detective",
   "Você": "You",
   "você": "you",
-  "Sala": "Room"
+  "Sala": "Room",
+  "Regra do 9": "9 rule",
+  "Aguardando o segundo colocado…": "Waiting for second place…",
+  "1º colocado! Aguardando o segundo colocado…": "First place! Waiting for the runner-up…",
+  "Coringa Detetive": "Detective Wild",
+  "Escolha um jogador para ver as cartas dele por 10 segundos.": "Choose a player to reveal their hand for 10 seconds.",
+  "Nova cor": "New color",
+  "Você comprou": "You drew",
+  "Termine a vez": "End your turn",
+  "Não há cartas válidas": "No playable cards",
+  "Carta comprada. Você pode jogar qualquer carta compatível.": "Card drawn. You may play any compatible card.",
+  "Sem jogada possível: você comprou e a vez passou automaticamente.": "No playable cards: you drew one and your turn passed automatically.",
+  "Baralho infinito": "Infinite deck",
+  "A partida começou! Boa sorte.": "Match started! Good luck.",
+  "A sua vez terminou.": "Your turn ended.",
+  "Você já terminou a partida!": "You already finished!",
+  "Aguardando mais jogadores": "Waiting for more players",
+  "Conexão instável — reconectando…": "Unstable connection — reconnecting…",
+  "Segure": "Hold",
+  "Jogar novamente": "Play again",
+  "Denunciar UNO": "Catch UNO",
+  "1º": "1st",
+  "2º": "2nd",
+  "você": "you",
+  "Jogador": "Player"
 };
+const longPairs=Object.entries(dictionary).filter(([pt])=>pt.length>=10).sort((a,b)=>b[0].length-a[0].length);
 function translatePiece(value:string,lang:Language){
   if(lang==="pt")return value;
   let s=localizeBotNames(value,"en");
   const full=dictionary[s];
   if(full)return full;
   const trim=s.trim();if(dictionary[trim])return s.replace(trim,dictionary[trim]);
-  for(const [pt,en] of Object.entries(dictionary).sort((a,b)=>b[0].length-a[0].length)){
-    if(pt.length>=10 && s.includes(pt))s=s.replaceAll(pt,en);
-  }
+  for(const [pt,en] of longPairs){if(s.includes(pt))s=s.replaceAll(pt,en);}
   s=s.replace(/(\d+) cartas\b/g,"$1 cards").replace(/(\d+) carta\b/g,"$1 card");
   return s;
 }
@@ -199,8 +222,8 @@ export function LanguageProvider({children}:{children:ReactNode}){
   const [language,setLanguage]=useState<Language>(()=>{
     try{return localStorage.getItem("unopro.lang")==="en"?"en":"pt"}catch{return "pt"}
   });
-  const originals=useRef(new WeakMap<Text,{original:string;output:string}>());
-  const attrs=useRef(new WeakMap<Element,Map<string,{original:string;output:string}>>());
+  const originals=useRef(new WeakMap<Text,{original:string;output:string;lang?:Language}>());
+  const attrs=useRef(new WeakMap<Element,Map<string,{original:string;output:string;lang?:Language}>>());
   useEffect(()=>{
     try{localStorage.setItem("unopro.lang",language)}catch{/* storage may be blocked */}
     document.documentElement.lang=language==="pt"?"pt-BR":"en-US";
@@ -211,8 +234,9 @@ export function LanguageProvider({children}:{children:ReactNode}){
         const n=node as Text;
         if(n.parentElement?.closest("script,style,textarea,code"))continue;
         let rec=originals.current.get(n);
+        if(rec?.output===n.data&&rec.lang===language)continue;
         if(!rec || rec.output!==n.data){rec={original:n.data,output:n.data};originals.current.set(n,rec)}
-        const converted=translatePiece(rec.original,language);rec.output=converted;
+        const converted=translatePiece(rec.original,language);rec.output=converted;rec.lang=language;
         if(n.data!==converted)n.data=converted;
       }
       for(const el of Array.from(document.querySelectorAll("*"))){
@@ -221,8 +245,9 @@ export function LanguageProvider({children}:{children:ReactNode}){
         for(const attr of ["title","aria-label","placeholder","alt"]){
           const val=el.getAttribute(attr);if(val===null)continue;
           let rec=map.get(attr);
+          if(rec?.output===val&&rec.lang===language)continue;
           if(!rec || rec.output!==val){rec={original:val,output:val};map.set(attr,rec)}
-          const converted=translatePiece(rec.original,language);rec.output=converted;
+          const converted=translatePiece(rec.original,language);rec.output=converted;rec.lang=language;
           if(val!==converted)el.setAttribute(attr,converted);
         }
       }

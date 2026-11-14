@@ -12,6 +12,7 @@ export type Member = {
   uno_called: boolean;
   uno_since?: string | null;
   bot?: boolean;
+  spectator?: boolean;
   bot_name_en?: string | null;
   difficulty?: "easy" | "hard" | null;
 };

@@ -734,3 +734,26 @@ test("bot difícil espera 3 segundos e 2 segundos por carta consecutiva",()=>{
   assert.equal(g.turn_cards.length,0);
   assert.notEqual(g.turn_order[g.turn_idx],bot);
 });
+
+
+test("desenvolvedor entra como observador numa sala cheia e não ocupa uma vaga",()=>{
+  const old=process.env.DEV_ACCESS_KEY;process.env.DEV_ACCESS_KEY="uma-chave-segura-grande-2026";
+  try{
+    const a=call("register_guest",{p_nickname:"JogeA"});
+    const b=call("register_guest",{p_nickname:"JogeB"});
+    const dev=call("register_guest",{p_nickname:"Toninho"});
+    const code=call("create_room",{p_token:a.token,p_name:"Sala lotada",p_max_players:2}).code;
+    call("join_room",{p_token:b.token,p_code:code});
+    call("dev_auth",{p_token:dev.token,p_key:process.env.DEV_ACCESS_KEY});
+    call("join_room",{p_token:dev.token,p_code:code});
+    const r=store.roomsByCode.get(code);
+    assert.equal(r.host_id,dev.guest_id);
+    assert.equal(r.members.filter(m=>!m.spectator).length,2);
+    call("start_game",{p_token:dev.token,p_code:code});
+    assert.equal(r.game.turn_order.length,2);
+    assert.equal(call("get_room_state",{p_token:dev.token,p_code:code}).game.my_hand.length,0);
+  }finally{
+    if(old===undefined)delete process.env.DEV_ACCESS_KEY;
+    else process.env.DEV_ACCESS_KEY=old;
+  }
+});
