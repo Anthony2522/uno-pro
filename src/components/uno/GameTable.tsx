@@ -143,10 +143,10 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       let source:HTMLElement|null=null;
       if(m.by===me){
         source=Array.from(document.querySelectorAll<HTMLElement>("[data-hand-card]"))
-          .find(el=>el.dataset.handCard===m.card)??document.querySelector<HTMLElement>("[data-my-hand]");
+          .find(el=>el.dataset['handCard']===m.card)??document.querySelector<HTMLElement>("[data-my-hand]");
       }else{
         source=Array.from(document.querySelectorAll<HTMLElement>("[data-player-seat]"))
-          .find(el=>el.dataset.playerSeat===m.by)?.querySelector<HTMLElement>("[data-seat-cards]")??null;
+          .find(el=>el.dataset['playerSeat']===m.by)?.querySelector<HTMLElement>("[data-seat-cards]")??null;
       }
       const r=source?.getBoundingClientRect()??discard.getBoundingClientRect();
       const item={id:m.id,card:m.card,
