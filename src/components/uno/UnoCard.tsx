@@ -27,7 +27,7 @@ function Symbol({ card, corner }: { card: string; corner?: boolean }) {
   const v = cardValue(card);
   if (v === "S") return <Ban className={corner ? "size-[16cqw]" : "size-[44cqw]"} strokeWidth={3} />;
   if (v === "R") return <Repeat2 className={corner ? "size-[16cqw]" : "size-[46cqw]"} strokeWidth={3} />;
-  const label = v === "D" ? "+2" : v === "W4" ? "+4" : v === "W" ? "" : v;
+  const label = v === "D" ? "+2" : v === "W4" ? "+4" : v === "W5" ? "+5" : v === "W" ? "" : v;
   return (
     <span className={cn(corner ? "text-[17cqw]" : label.length > 1 ? "text-[36cqw]" : "text-[50cqw]", (v === "6" || v === "9") && "underline decoration-[0.08em] underline-offset-[0.1em]")}>
       {label}

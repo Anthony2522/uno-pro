@@ -14,6 +14,7 @@ const RULES: {title: string; text: string; card?: string}[] = [
   {title:"Comprar",text:"Você pode comprar uma carta por vontade própria e então jogá-la, se servir, ou terminar sua vez."},
   {title:"UNO e denúncia",text:"Aperte UNO discretamente com uma carta. Após 8 segundos, outra pessoa pode segurar Denunciar por 5 segundos; quem esqueceu compra 2."},
   {title:"Tempo",text:"Após 60 segundos, as cartas que você jogou ficam na mesa e a vez termina; se não jogou, compra uma carta e passa."},
+  {title:"Coringa +5",text:"Troca a cor e obriga o próximo a comprar cinco cartas e perder a vez. Não pode ser rebatido.",card:"W5"},
   {title:"Bots",text:"O anfitrião pode adicionar bots fáceis ou difíceis durante a espera."},
 ];
 

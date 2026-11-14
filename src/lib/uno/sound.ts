@@ -31,7 +31,7 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = "
   o.stop(ctx.currentTime + start + dur + 0.02);
 }
 
-export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join";
+export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild";
 
 export function sfx(kind: Sfx) {
   if (typeof window === "undefined" || isMuted()) return;
@@ -42,6 +42,31 @@ export function sfx(kind: Sfx) {
     return;
   }
   switch (kind) {
+
+    case "reverse":
+      tone(310,0,.16,"sawtooth",.042);
+      tone(430,.11,.16,"triangle",.065);
+      tone(610,.23,.18,"triangle",.058);
+      tone(840,.32,.21,"sine",.055);
+      break;
+    case "skip":
+      tone(820,0,.09,"square",.05);
+      tone(220,.1,.25,"sawtooth",.08);
+      break;
+    case "draw2":
+      tone(480,0,.16,"triangle",.09);
+      tone(360,.13,.22,"triangle",.07);
+      tone(250,.27,.18,"sine",.07);
+      break;
+    case "draw4":
+      [570,460,350,220].forEach((f,i)=>tone(f,i*.1,.21,"sawtooth",.045));
+      break;
+    case "draw5":
+      [730,570,420,300,180].forEach((f,i)=>tone(f,i*.085,.19,i%2?"triangle":"sawtooth",.06));
+      break;
+    case "wild":
+      [520,660,800,960].forEach((f,i)=>tone(f,i*.08,.22,"sine",.07));
+      break;
     case "play":
       tone(520, 0, 0.09, "triangle", 0.09);
       tone(780, 0.05, 0.1, "triangle", 0.06);
@@ -55,8 +80,10 @@ export function sfx(kind: Sfx) {
       tone(990, 0.1, 0.18, "sine", 0.07);
       break;
     case "uno":
-      tone(880, 0, 0.12, "square", 0.05);
-      tone(1175, 0.12, 0.2, "square", 0.05);
+      tone(660,0,.1,"square",.06);
+      tone(880,.08,.12,"square",.065);
+      tone(1175,.2,.18,"triangle",.09);
+      tone(1568,.32,.24,"sine",.06);
       break;
     case "win":
       [523, 659, 784, 1046].forEach((f, i) => tone(f, i * 0.12, 0.3, "triangle", 0.08));

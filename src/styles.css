@@ -238,3 +238,78 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* The entire match, including both rows of cards, fits inside one viewport. */
+.uno-game { --uno-hand-col: clamp(2.15rem, min(12vw, 7.5dvh), 3.8rem); min-height:0; }
+.uno-opponents { max-height: clamp(62px, 12dvh, 98px); }
+.uno-table { min-height:0; overflow:hidden; }
+.uno-table > [role="status"]:first-of-type { flex-shrink:0; }
+.uno-stack { flex-shrink:1; min-height:0; }
+.uno-center-card { width: min(20vw, 13.2dvh, 8rem) !important; }
+.uno-table-status { flex-shrink:0; }
+.uno-hand { display:flex; flex-direction:column; height:min(42dvh, calc(var(--uno-hand-col) * 3 + 95px)); min-height:0; }
+.uno-hand-scroll { flex:1; height:auto; min-height:0; }
+.uno-hand-grid { grid-auto-columns:var(--uno-hand-col); grid-template-rows:repeat(2, calc(var(--uno-hand-col) * 1.5)); }
+.uno-hand-card { width:var(--uno-hand-col) !important; }
+.uno-hand-button { height:calc(var(--uno-hand-col) * 1.5); }
+.uno-nine-panel { position:absolute !important; top:0; left:50%; transform:translateX(-50%); max-height:100%; overflow:auto; z-index:36; }
+.uno-debt-panel { position:absolute !important; bottom:0; left:50%; transform:translateX(-50%); width:min(95%,350px); max-height:100%; overflow-y:auto; z-index:35; }
+@media (max-height: 700px) {
+  .uno-game { --uno-hand-col: clamp(2.15rem, min(12vw, 6.5dvh), 3.7rem); }
+  .uno-opponents { max-height:75px; }
+  .uno-hand { height:min(42dvh, calc(var(--uno-hand-col) * 3 + 95px)); }
+  .uno-center-card { width:min(16vw,12dvh,6.6rem) !important; }
+  .uno-table {gap:3px !important; padding-block:2px !important;}
+  .uno-table-status { font-size:11px !important;}
+}
+@media (max-height: 590px) {
+  .uno-opponents {max-height:58px;}
+  .uno-hand {height:min(43dvh, calc(var(--uno-hand-col) * 3 + 85px));}
+  .uno-game {--uno-hand-col:clamp(2.15rem,6.2dvh,3.15rem);}
+  .uno-center-card {width:min(16vw,11dvh,5.8rem) !important;}
+}
+
+@keyframes uno-fresh-card {
+  0% { box-shadow:0 0 8px 3px #ffffff,0 0 26px 8px #67e8f9; filter:brightness(1.25); }
+  15% { box-shadow:0 0 12px 4px #ccfbf1,0 0 32px 12px #7c3aed; filter:brightness(1.32);}
+  65% { box-shadow:0 0 7px 2px #67e8f9bb,0 0 20px 6px #7c3aed77; filter:brightness(1.12);}
+  100% { box-shadow:0 0 0 transparent; filter:brightness(1); }
+}
+.uno-recently-drawn { animation:uno-fresh-card 8s ease-out both; z-index:20; }
+
+@keyframes uno-draw-to-hand {
+  0% { transform:translate3d(-9vw,-1rem,0) rotate(-8deg) scale(1); opacity:1; }
+  35% { transform:translate3d(0vw,3dvh,0) rotate(10deg) scale(1.16);opacity:1; }
+  100% {transform:translate3d(10vw,42dvh,0) rotate(2deg) scale(.75);opacity:0;}
+}
+.uno-draw-flight {position:fixed !important; left:40%; top:36%; animation:uno-draw-to-hand .8s cubic-bezier(.2,.7,.15,1) both; filter:drop-shadow(0 0 12px #60a5fa);}
+@keyframes uno-special-in {
+  0%{opacity:0;transform:translateY(40px) scale(.55) rotate(-8deg);filter:blur(8px);}
+  20%{opacity:1;transform:translateY(-4px) scale(1.12) rotate(2deg);filter:blur(0);}
+  32%{transform:translateY(0) scale(1) rotate(0);}
+  75%{opacity:1;transform:translateY(0) scale(1);}
+  100%{opacity:0;transform:translateY(-28px) scale(.95);}
+}
+.uno-special-overlay {position:fixed;inset:0;z-index:80;pointer-events:none;display:grid;place-items:center;}
+.uno-special-badge {
+  display:flex;flex-direction:column;align-items:center;gap:.35rem;
+  width:min(84vw,490px);padding:1.25rem 1.75rem;text-align:center;
+  border-radius:1.5rem;border:2px solid #67e8f9;
+  color:white;background:linear-gradient(130deg,rgba(18,15,66,.96),rgba(82,27,150,.95));
+  box-shadow:0 0 65px 10px rgba(88,80,236,.58),inset 0 0 20px #67e8f940;
+  animation:uno-special-in 1.85s ease both;
+}
+.uno-effect-title {font-family:var(--font-display);font-weight:900;font-size:clamp(1.3rem,5vw,3rem);line-height:1.1;text-shadow:0 0 24px #22d3ee;}
+.uno-effect-player {font-weight:800;font-size:clamp(.85rem,2vw,1.15rem);}
+.uno-effect-reverse .uno-special-badge {border-color:#a78bfa;box-shadow:0 0 80px #a78bfa88;}
+.uno-effect-skip .uno-special-badge {border-color:#fbbf24;box-shadow:0 0 80px #eab30888;}
+.uno-effect-draw2 .uno-special-badge {border-color:#f87171;box-shadow:0 0 80px #ef444488;}
+.uno-effect-draw4 .uno-special-badge {border-color:#fb7185;box-shadow:0 0 90px #f43f5e99;}
+.uno-effect-draw5 .uno-special-badge {border-color:#d946ef;box-shadow:0 0 100px #d946efaa;}
+.uno-effect-wild .uno-special-badge {border-color:#60a5fa;box-shadow:0 0 100px #3b82f6aa;}
+.uno-effect-uno .uno-special-badge {border-color:#fbbf24;box-shadow:0 0 100px #f97316aa;}
+@media(prefers-reduced-motion:reduce) {
+  .uno-draw-flight {display:none;}
+  .uno-special-badge {animation:none;}
+  .uno-recently-drawn {animation:none;outline:2px solid #67e8f9;}
+}

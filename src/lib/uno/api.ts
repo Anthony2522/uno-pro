@@ -16,7 +16,7 @@ export type Member = {
 };
 
 export type LastAction = {
-  type: "start" | "play" | "draw" | "draw_pass" | "pass" | "uno" | "catch" | "auto" | "left" | "abandon" | "cut" | "end" | "nine" | "stack_take";
+  type: "start" | "play" | "draw" | "draw_pass" | "pass" | "uno" | "catch" | "auto" | "left" | "abandon" | "cut" | "end" | "nine" | "stack_take" | "auto_draw";
   count?: number;
   by?: string;
   name?: string;
@@ -47,6 +47,9 @@ export type GameState = {
   seq: number;
   turn_started_at: string;
   my_hand: string[];
+  pending_uncounterable: boolean;
+  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"; by: string; name: string; card: string|null; color: string|null; at: number }>;
+  last_draw: { card: string; nonce: number; at: string } | null;
   turn_cards: string[];
   pending_draw: number;
   can_catch_uno: boolean;
@@ -135,7 +138,7 @@ export const api = {
   playCard: (token: string, code: string, card: string, color?: string) =>
     call("play_card", { p_token: token, p_code: code, p_card: card, p_color: color ?? null }),
   drawCard: (token: string, code: string) =>
-    call<{ card: string | null; playable: boolean }>("draw_card", { p_token: token, p_code: code }),
+    call<{ card: string | null; playable: boolean; auto_passed?: boolean }>("draw_card", { p_token: token, p_code: code }),
   passTurn: (token: string, code: string) => call("pass_turn", { p_token: token, p_code: code }),
   endTurn: (token: string, code: string) => call("end_turn", { p_token: token, p_code: code }),
   acceptDraw: (token: string, code: string) => call("accept_draw", { p_token: token, p_code: code }),
