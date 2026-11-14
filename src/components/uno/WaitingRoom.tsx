@@ -1,6 +1,7 @@
 import { Bot, Crown, Globe, Loader2, Lock, Play, Trophy, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { RoomState } from "@/lib/uno/api";
+import type { RoomState,RuleSettings } from "@/lib/uno/api";
+import { EditRoomSettingsDialog } from "./EditRoomSettingsDialog";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { CopyInviteButton } from "./RoomTopBar";
 import { cn } from "@/lib/utils";
@@ -11,12 +12,14 @@ export function WaitingRoom({
   onStart,
   onAddBot,
   onRemoveBot,
+  onUpdateSettings,
 }: {
   state: RoomState;
   busy: boolean;
   onStart: () => void;
   onAddBot: (difficulty: "easy" | "hard") => void;
   onRemoveBot: (id: string) => void;
+  onUpdateSettings: (startingCards:number,rules:RuleSettings)=>Promise<void>;
 }) {
   const { room, members, me, game } = state;
   const isHost = room.host_id === me;
@@ -51,6 +54,8 @@ export function WaitingRoom({
             </span>
           </div>
           <h1 className="mt-3 break-words text-2xl font-black sm:text-4xl">{room.name}</h1>
+          {isHost&&<EditRoomSettingsDialog room={room} onSave={onUpdateSettings}/>}
+          <p className="mt-2 text-xs text-muted-foreground">{room.initial_cards} cartas iniciais · {Object.values(room.rules).filter(Boolean).length} regras opcionais ativadas</p>
 
           <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-glass-border bg-navy/50 p-4 sm:flex-row sm:items-center">
             <div className="flex-1">

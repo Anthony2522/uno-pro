@@ -214,7 +214,18 @@ const dictionary:Record<string,string>={
   "Organizado por número. Clique para organizar por cor.": "Sorted by number. Tap to sort by color.",
   "Organizado por cor. Clique para organizar por número.": "Sorted by color. Tap to sort by number.",
   "Ordenar por cor": "Sort by color",
-  "Ordenar por número": "Sort by number"
+  "Ordenar por número": "Sort by number",
+  "Configurações da sala atualizadas!": "Room settings updated!",
+  "Estas alterações valem para a próxima partida, inclusive na revanche. Não é possível alterá-las durante uma partida.": "Changes apply to the next game, including rematches. Settings cannot be changed during an active game.",
+  "As regras ficam ativadas por padrão. Desmarque as que não quiser utilizar nesta sala.": "Optional rules are enabled by default. Uncheck any you don't want in this room.",
+  "Salvar alterações": "Save changes",
+  "cartas iniciais": "starting cards",
+  "regras opcionais ativadas": "optional rules enabled",
+  "jogou Volta!": "played Reverse!",
+  "Sentido mantido.": "Direction unchanged.",
+  "Sentido invertido.": "Direction reversed.",
+  "jogou": "played",
+  "Voltas!": "Reverses!"
 };
 const longPairs=Object.entries(dictionary).filter(([pt])=>pt.length>=10).sort((a,b)=>b[0].length-a[0].length);
 function translatePiece(value:string,lang:Language){

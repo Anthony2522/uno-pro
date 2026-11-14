@@ -108,6 +108,8 @@ export function chooseBotUnoDelay(difficulty,random=Math.random){
 }
 function catchUnoBy(r,actor,delayMs) {
   const g=r.game,caught=[];
+  // A player who has finished the match cannot influence active competitors.
+  if(!g || g.status!=="playing" || !g.turn_order.includes(actor))return caught;
   for(const m of r.members){
     if(m.guest_id===actor)continue;
     const h=r.hands.get(m.guest_id);
@@ -146,7 +148,7 @@ function botUnoAndCatchTick(r) {
   // keep their existing eight-second window plus the five-second hold.
   for(const m of r.members){
     const id=m.guest_id;
-    if(!isBot(id))continue;
+    if(!isBot(id)||!g.turn_order.includes(id))continue;
     const delay=store.guestsById.get(id)?.difficulty==="hard"?4000:15000;
     catchUnoBy(r,id,delay);
   }
@@ -163,6 +165,25 @@ function effect(r,kind,by,card,color,details={}){
   }
   const event={id:++g.event_seq,type:kind,by,name:name(by),card:card||null,color:color||null,at:now,show_at,...details};
   g.effects.push(event);if(g.effects.length>64)g.effects.shift();
+}
+// A multi-card move announces its special action ONCE, at End Turn.
+function emitTurnEffect(r,actor,cards,finalDirection){
+  if(!cards.length)return;
+  const g=r.game,n=g.turn_order.length,topCard=cards.at(-1);
+  const skips=cards.filter(c=>value(c)==="S").length;
+  const reverses=cards.filter(c=>value(c)==="R" || value(c)==="T").length;
+  if(cards.includes("B")){
+    const targets=g.turn_order.filter(id=>id!==actor);
+    effect(r,"bomb",actor,"B",g.current_color,{n:2,targets,target_names:targets.map(name)});
+  }else if(skips){
+    const targets=Array.from({length:skips},(_,i)=>g.turn_order[advance(g.turn_idx,finalDirection,n===2?1:i+1,n)]);
+    effect(r,"skip",actor,topCard,g.current_color,{n:skips,targets,target:targets[0],
+      target_name:name(targets[0]),target_names:targets.map(name)});
+  }else if(reverses){
+    effect(r,"reverse",actor,topCard,g.current_color,{n:reverses,direction:finalDirection});
+  }else if(cards.some(wild)){
+    effect(r,"color_wave",actor,topCard,g.current_color);
+  }
 }
 function rememberDraw(r,id,card){
   if(!card)return;
@@ -224,6 +245,7 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
   g.direction=dir;g.pending_draw+=added;
   if(added>0)g.pending_source=actor;
   if(hasFive)g.pending_uncounterable=true;
+  emitTurnEffect(r,actor,cards,dir);
 
   g.last_action={type:"end",by:actor,name:name(actor),count:cards.length};g.seq++;
   // In a 2-player match, any number of Skip cards skips the one opponent.
@@ -282,39 +304,27 @@ function play(r,id,card,color,targetId){
   if(card==="B"){
     const targets=g.turn_order.filter(pid=>pid!==id);
     for(const victim of targets)draw(r,victim,2);
-    effect(r,"bomb",id,card,g.current_color,{targets,target_names:targets.map(name),n:2});
   }
   g.turn_cards=[...series,card];
   g.last_action={type:cutting?"cut":"play",by:id,name:name(id),card,color:g.current_color,left:h.cards.length};
   g.seq++;
-  const kind=wild(card)?"color_wave":
-    value(card)==="R"?"reverse":value(card)==="S"?"skip":null;
+  // A cut itself remains immediate; card-specific effects wait for End Turn.
   if(cutting && cutVictim)effect(r,"cut",id,card,g.current_color,{target:cutVictim,target_name:name(cutVictim)});
-  if(kind){
-    const details={};
-    if(kind==="skip"){
-      // One announcement for each card: normal skip first, double on the
-      // second, triple on the third, with the complete set of skipped players.
-      const skips=g.turn_cards.filter(c=>value(c)==="S").length;
-      const n=g.turn_order.length;
-      const targets=Array.from({length:skips},(_,i)=>g.turn_order[advance(g.turn_idx,g.direction,n===2?1:i+1,n)]);
-      details.n=skips;details.targets=targets;details.target=targets[0];
-      details.target_name=name(targets[0]);details.target_names=targets.map(name);
-    }
-    effect(r,kind,id,card,g.current_color,details);
-  }
   planBotCut(r,id);
   bump(r);
   if(h.cards.length===0){
     g.placements??=[];
     g.placements.push({id,rank:g.placements.length+1,name:name(id)});
     g.winner_id=g.placements[0]?.id??id;
-    if(g.placements.length>=2||g.turn_order.length===2){
+    const remaining=g.turn_order.filter(pid=>pid!==id);
+    const onlyBotsRemain=remaining.length>0&&remaining.every(isBot);
+    if(g.placements.length>=2||g.turn_order.length===2||onlyBotsRemain){
       if(g.placements.length===1){
-        const runnerUp=g.turn_order.find(p=>p!==id);
+        const runnerUp=remaining.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0];
         if(runnerUp)g.placements.push({id:runnerUp,rank:2,name:name(runnerUp)});
       }
       g.second_winner_id=g.placements[1]?.id??null;
+      emitTurnEffect(r,id,g.turn_cards||[],g.direction);
       g.status="finished";
       g.last_action={type:"placement",by:id,name:name(id),rank:g.placements[0]?.id===id?1:2,win:true};
       g.pending_draw=0;g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
@@ -386,12 +396,32 @@ function botTick(r){
   });
   if(!hasCombo)finish(r);
 }
+// When every active contestant is a bot, conclude instead of running an
+// unattended bot-only tournament. Keep any already-earned human placement.
+function finishWhenOnlyBots(r){
+  const g=r.game;
+  if(!g||g.status!=="playing"||!g.turn_order.length||g.turn_order.some(id=>!isBot(id)))return false;
+  g.placements??=[];
+  const ranking=g.turn_order.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length);
+  while(g.placements.length<2 && ranking.length){
+    const id=ranking.shift();
+    if(g.placements.some(p=>p.id===id))continue;
+    g.placements.push({id,rank:g.placements.length+1,name:name(id)});
+  }
+  g.winner_id=g.placements[0]?.id??null;
+  g.second_winner_id=g.placements[1]?.id??null;
+  g.status="finished";r.status="waiting";g.nine=null;g.pending_draw=0;
+  g.last_action={type:"bots_only_end",by:g.winner_id,name:name(g.winner_id),win:true};
+  g.seq++;bump(r,true);
+  return true;
+}
 let lastBasicSweep=0;
 export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
   for(const r of store.rooms.values()){
     for(const m of r.members){const b=store.guestsById.get(m.guest_id);if(b?.bot)b.last_seen=time;}
     const g=r.game;
     if(!g||g.status!=="playing")continue;
+    if(finishWhenOnlyBots(r))continue;
     if(g.nine){
       for(const [id,due] of Object.entries(g.nine.botTimes||{})){
         if(!g.nine.pressed.includes(id) && time>=due && time<g.nine.deadline){
@@ -432,7 +462,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
   }
   if(time-lastBasicSweep>=3000){lastBasicSweep=time;basicSweep();}
 }
-export const RPC_NAMES=[...new Set([...basicNames,"end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room"])];
+export const RPC_NAMES=[...new Set([...basicNames,"end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings"])];
 export function proRpc(fn,args={}){
   if(fn==="dev_auth"){
     const me=authenticate(args.p_token);
@@ -477,12 +507,30 @@ export function proRpc(fn,args={}){
     }
     return result;
   }
+  if(fn==="leave_room"){
+    const r=store.roomsByCode.get(String(args.p_code||"").trim().toUpperCase());
+    const result=originalRpc(fn,args);
+    if(r&&store.rooms.has(r.id))finishWhenOnlyBots(r);
+    return result;
+  }
   if(fn==="create_room"){
     const count=args.p_starting_cards===undefined?8:args.p_starting_cards;
     if(!Number.isInteger(count)||count<2||count>20)fail("INVALID_STARTING_CARDS");
     const result=originalRpc(fn,args),r=find(result.code);
     r.rules=stateRules(args.p_rules);r.initial_cards=count;
     return result;
+  }
+  if(fn==="update_room_settings"){
+    const {me,r}=guard(args);
+    if(r.host_id!==me.id)fail("NOT_HOST",403);
+    if(r.status!=="waiting" || r.game?.status==="playing")fail("GAME_STARTED",409);
+    const count=args.p_starting_cards;
+    if(!Number.isInteger(count)||count<2||count>20)fail("INVALID_STARTING_CARDS");
+    if(!args.p_rules||Object.keys(DEFAULT_RULES).some(k=>typeof args.p_rules[k]!=="boolean"))
+      fail("INVALID_RULE_SETTINGS");
+    r.initial_cards=count;r.rules=stateRules(args.p_rules);
+    bump(r);
+    return {ok:true,initial_cards:count,rules:r.rules};
   }
   if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
     Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0});
@@ -506,7 +554,7 @@ export function proRpc(fn,args={}){
       result.game.detective=g.detective?.viewer===result.me&&clock()<g.detective.until
         ?{target:g.detective.target,target_name:name(g.detective.target),cards:[...(r.hands.get(g.detective.target)?.cards??[])],expires_at:stamp(g.detective.until)}:null;
       result.members=result.members.map(m=>({...m,bot_name_en:isBot(m.id)?BOT_NAMES_EN[BOT_NAMES.indexOf(m.nickname)]??m.nickname:null}));
-      result.game.can_catch_uno=r.members.some(m=>m.guest_id!==result.me&&r.hands.get(m.guest_id)?.cards.length===1&&!r.hands.get(m.guest_id)?.uno_called&&clock()-(r.hands.get(m.guest_id)?.uno_since||clock())>=4000);
+      result.game.can_catch_uno=g.status==="playing"&&g.turn_order.includes(result.me)&&r.members.some(m=>m.guest_id!==result.me&&r.hands.get(m.guest_id)?.cards.length===1&&!r.hands.get(m.guest_id)?.uno_called&&clock()-(r.hands.get(m.guest_id)?.uno_since||clock())>=4000);
       result.members=result.members.map(m=>({...m,uno_since:r.hands.get(m.id)?.uno_since?stamp(r.hands.get(m.id).uno_since):null}));}
     return result;
   }
@@ -539,7 +587,8 @@ export function proRpc(fn,args={}){
     if(!(h.cards.length===1||(h.cards.length===2&&current(g)===me.id)))fail("UNO_NOT_ALLOWED");
     if(!h.uno_called){announceUno(r,me.id);}return {ok:true};}
   if(fn==="catch_uno"){
-    const {me,r}=guard(args);game(r);
+    const {me,r}=guard(args),g=game(r);
+    if(!g.turn_order.includes(me.id))fail("CATCH_NOT_ALLOWED",403);
     const caught=catchUnoBy(r,me.id,4000);
     if(!caught.length)fail("CATCH_NOT_ALLOWED");
     return {ok:true,count:caught.length};

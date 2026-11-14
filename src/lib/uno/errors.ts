@@ -3,6 +3,8 @@ const MESSAGES: Record<string, string> = {
   INVALID_NAME: "O apelido precisa ter de 2 a 18 caracteres.",
   INVALID_ROOM_NAME: "O nome da sala precisa ter de 2 a 32 caracteres.",
   INVALID_MAX_PLAYERS: "Escolha entre 2 e 8 jogadores.",
+  INVALID_STARTING_CARDS: "Escolha entre 2 e 20 cartas iniciais.",
+  INVALID_RULE_SETTINGS: "Confira as regras selecionadas para esta sala.",
   ROOM_NOT_FOUND: "Sala não encontrada. Confira o código ou o link do convite.",
   ROOM_FULL: "Esta sala está cheia.",
   GAME_STARTED: "A partida já começou nesta sala. Aguarde o fim da rodada ou entre em outra sala.",

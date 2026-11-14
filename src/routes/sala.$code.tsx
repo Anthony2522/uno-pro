@@ -8,7 +8,7 @@ import { ConnectionBanner, CopyInviteButton, LeaveButton } from "@/components/un
 import { WaitingRoom } from "@/components/uno/WaitingRoom";
 import { WinnerOverlay } from "@/components/uno/WinnerOverlay";
 import { Button } from "@/components/ui/button";
-import { api, type GameState } from "@/lib/uno/api";
+import { api, type GameState, type RuleSettings } from "@/lib/uno/api";
 import { errorMessage, toGameError } from "@/lib/uno/errors";
 import { sfx } from "@/lib/uno/sound";
 import { useRoom } from "@/lib/uno/useRoom";
@@ -243,7 +243,13 @@ function RoomPage() {
               ) : (
                 <span className="uno-effect-player">
                   {specialEffect.type==="uno" ? specialEffect.name+" gritou UNO!" :
-                  specialEffect.type==="reverse" ? specialEffect.name+" inverteu o sentido!" :
+                  specialEffect.type==="reverse" ? (
+                    (specialEffect.n??1)>1
+                      ? `${specialEffect.name} jogou ${specialEffect.n} Voltas! ${(specialEffect.n??1)%2===0?"Sentido mantido.":"Sentido invertido."}`
+                      : (g?.turn_order.length===2
+                        ? specialEffect.name+" jogou Volta!"
+                        : specialEffect.name+" inverteu o sentido!")
+                  ) :
                   specialEffect.name}
                 </span>
               )}
@@ -251,7 +257,11 @@ function RoomPage() {
           </div>
         )
       )}
-      {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))} />}
+      {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))}
+        onUpdateSettings={async (startingCards:number,rules:RuleSettings)=>{
+          await api.updateRoomSettings(token,code,startingCards,rules);
+          void refresh();
+        }} />}
       <WinnerOverlay
         open={showWinner}
         winnerName={winnerName}
