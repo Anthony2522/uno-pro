@@ -94,7 +94,6 @@ function play(r,id,card,color){
     if(g.status!=="playing"||g.nine||g.pending_uncounterable)fail("CUT_NOT_ALLOWED");
     nextTurn(g,g.turn_order.indexOf(id));series=[];
   }
-  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D)|W|W4)$/).test(card))fail("CARD_NOT_IN_HAND");
   if(g.pending_draw && !series.length && !isDraw(card))fail("MUST_COUNTER_OR_DRAW");
   // After buying, the player may select ANY compatible card from their hand.
   if(!series.length){if(!g.pending_draw && !playable(card,g))fail("INVALID_CARD");}

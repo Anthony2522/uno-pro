@@ -138,6 +138,7 @@ test("durante o contra-ataque de +4 não cobra o jogador antes de Terminar vez",
   s.play(a,"W4","r");s.end(a);
   assert.equal(g.pending_draw,4);
   s.play(b,"W4","b");
+  room.hands.get(s.bot).cards=["r0","g1","y2","b3","r4","g5","y6"];
   const before=room.hands.get(b.guest_id).cards.length;
   proSweep();
   assert.equal(room.hands.get(b.guest_id).cards.length,before);
@@ -203,4 +204,20 @@ test("cada efeito especial e grito UNO ficam na fila de eventos para todos",()=>
   assert.equal(events.at(-2).type,"reverse");
   assert.equal(events.at(-1).type,"uno");
   assert.equal(events.at(-1).name,"Alice");
+});
+
+test("timeout após rebater +4 finaliza a jogada sem cobrar o próprio jogador",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["r2"];g.current_color="r";
+  room.hands.get(a.guest_id).cards=["W4","r0"];
+  room.hands.get(b.guest_id).cards=["W4","b7"];
+  room.hands.get(s.bot).cards=["b1","b2","g1","g2","y1","y2","r1"];
+  s.play(a,"W4","g");s.end(a);
+  s.play(b,"W4","r");
+  const countBefore=room.hands.get(b.guest_id).cards.length;
+  g.turn_started_at=Date.now()-61000;
+  proSweep();
+  assert.equal(room.hands.get(b.guest_id).cards.length,countBefore);
+  assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
+  assert.equal(room.hands.get(s.bot).cards.length,15);
 });

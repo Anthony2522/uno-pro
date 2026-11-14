@@ -36,6 +36,7 @@ function RoomPage() {
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
   const [specialEffect,setSpecialEffect] = useState<GameState["effects"][number]|null>(null);
   const lastEffectId = useRef<number|null>(null);
+  const lastEffectRound = useRef<number|null>(null);
   const specialTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const prev = useRef<{ seq: number; turn: string | null; status: string | null; members: number } | null>(null);
 
@@ -58,6 +59,8 @@ function RoomPage() {
   // Effects are recorded by the server, so every connected player sees and hears them.
   useEffect(()=>{
     const events=state?.game?.effects;
+    const round=state?.game?.round ?? null;
+    if(round!==lastEffectRound.current){lastEffectRound.current=round;lastEffectId.current=null;}
     if(!events?.length)return;
     const currentMax=events[events.length-1].id;
     if(lastEffectId.current===null){
