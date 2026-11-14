@@ -34,6 +34,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const holdStart = useRef<number|null>(null);
   const interval = useRef<ReturnType<typeof setInterval>|null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
+  const handViewportRef=useRef<HTMLDivElement|null>(null);
+  const [fitColumns,setFitColumns]=useState(6);
   useEffect(()=>{const t=setInterval(()=>setClock(Date.now()),350);return()=>clearInterval(t);},[]);
   useEffect(()=>()=>{if(interval.current)clearInterval(interval.current);if(holdTimer.current)clearTimeout(holdTimer.current);},[]);
   const byId = useMemo(() => new Map(state.members.map((m) => [m.id, m])), [state.members]);
@@ -73,10 +75,12 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const freshIndex=recentDraw?hand.lastIndexOf(recentDraw.card):-1;
   const played = game.turn_cards || [];
   const nine = game.nine;
+  const lockedByNotice=(game.effects||[]).some(e=>
+    typeof e.show_at==="number" && clock>=e.show_at && clock<e.show_at+2000);
   const canPlay = (c:string) => {
-    if(busy || nine)return false;
-    if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (!game.pending_uncounterable && (c==="W4"||cardValue(c)==="D")));
-    if(pending&&!played.length)return !game.pending_uncounterable && (c==="W4"||cardValue(c)==="D");
+    if(busy || nine || lockedByNotice)return false;
+    if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"));
+    if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D";
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
     const first=played[0]!,last=played[played.length-1]!;
     const same=cardValue(first)===cardValue(c);
@@ -89,8 +93,28 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     return state.room.rules.sequence&&sequential&&Math.sign(diff)===Math.sign(prev);
   };
   const myCount = hand.length;
+  // Row-major arrangement: first row is in sorted order, second row continues it.
+  // Prefer one complete row; use two only if all cards cannot fit without shrinking.
+  const columnCount=Math.max(1,myCount<=fitColumns?myCount:Math.max(fitColumns,Math.ceil(myCount/2)));
+  const handRows=myCount>fitColumns?2:1;
+  useEffect(()=>{
+    const view=handViewportRef.current;
+    if(!view)return;
+    const measure=()=>{
+      const sample=view.querySelector<HTMLElement>(".uno-hand-card");
+      const cw=sample?.getBoundingClientRect().width||56;
+      const gap=6;
+      const available=Math.max(140,view.clientWidth-16);
+      setFitColumns(Math.max(1,Math.floor((available+gap)/(cw+gap))));
+    };
+    measure();
+    const observer=new ResizeObserver(measure);
+    observer.observe(view);
+    window.addEventListener("resize",measure);
+    return ()=>{observer.disconnect();window.removeEventListener("resize",measure);};
+  },[myCount,sortMode]);
   const canUno = myCount===1||(myCount===2&&myTurn);
-  const remaining=Math.max(0,Math.ceil((new Date(game.turn_started_at).getTime()+60000-clock)/1000));
+  const remaining=Math.min(60,Math.max(0,Math.ceil((new Date(game.turn_started_at).getTime()+60000-clock)/1000)));
   const nineRemaining=nine?Math.max(0,Math.ceil((new Date(nine.deadline).getTime()-clock)/1000)):0;
   const nineReady=!!nine&&nine.eligible.includes(me)&&!nine.pressed.includes(me);
   const feed = describeAction(game.last_action, me);
@@ -155,17 +179,18 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       {/* Table */}
       <section aria-label="Mesa" className="uno-table relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 py-2">
         <div className="pointer-events-none absolute inset-x-0 top-1/2 mx-auto aspect-square w-[min(90vw,32rem)] -translate-y-1/2 rounded-full bg-felt" aria-hidden />
-        <div
-          role="status"
-          aria-live="polite"
-          className={cn(
-            "relative z-10 rounded-full px-5 py-2 font-display text-sm font-bold sm:text-base",
-            myTurn ? "bg-cyan text-navy animate-pulse-ring" : "glass",
+        <div className="uno-turn-controls relative z-10 flex shrink-0 items-center justify-center gap-2">
+          <div role="status" aria-live="polite"
+            className={cn("rounded-full px-3 py-2 font-display text-[11px] font-bold sm:px-5 sm:text-sm",myTurn?"bg-cyan text-navy animate-pulse-ring":"glass")}>
+            {myTurn ? ("Sua vez · "+remaining+"s") : current ? `Vez de ${current.nickname}` : "…"}
+          </div>
+          {myTurn && !nine && (
+            <Button variant="hero" className="h-9 shrink-0 rounded-xl px-3 text-xs sm:h-11 sm:px-4 sm:text-sm"
+              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy||lockedByNotice}>
+              {busy?<Loader2 className="size-4 animate-spin"/>:<SkipForward className="size-4"/>} Terminar vez
+            </Button>
           )}
-        >
-          {myTurn ? ("Sua vez · "+remaining+"s") : current ? `Vez de ${current.nickname}` : "…"}
         </div>
-
 
         {nine && (
           <div className="uno-nine-panel relative z-20 w-full max-w-md rounded-2xl border border-cyan/50 bg-navy/95 p-4 text-center shadow-glow-cyan">
@@ -176,18 +201,18 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <p className="mt-2 text-sm text-muted-foreground">O último a apertar compra {nine.count} carta(s).</p>
           </div>
         )}
-        {myTurn && !!pending && (hand.some(c=>c==="W4"||cardValue(c)==="D")) && !nine && (
+        {myTurn && !!pending && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D")) && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
-            <p className="mt-1 text-sm text-muted-foreground">Escolha um +2 ou +4 da mão para rebater ou aceite a compra.</p>
-            <Button variant="glass" className="mt-3 rounded-xl" onClick={actions.accept} disabled={busy}>Comprar {pending} e passar</Button>
+            <p className="mt-1 text-sm text-muted-foreground">Escolha uma carta de compra permitida (+5 também pode rebater) ou aceite a penalidade.</p>
+            <Button variant="glass" className="mt-3 rounded-xl" onClick={actions.accept} disabled={busy||lockedByNotice}>Comprar {pending} e passar</Button>
           </div>
         )}
         <div className="uno-stack relative z-10 flex items-center gap-4 sm:gap-8">
           <button
             type="button"
             onClick={actions.draw}
-            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || busy}
+            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || lockedByNotice || busy}
             aria-label={`Comprar carta. ${game.draw_count} cartas no baralho`}
             className={cn(
               "group relative rounded-[12%] transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:cursor-default",
@@ -225,36 +250,39 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       </section>
 
       {/* My area */}
-      <section aria-label="Sua mão" className="uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x">
-        <div className="flex flex-wrap items-center gap-2 px-2">
-          <p className="mr-auto text-sm text-muted-foreground"><strong className="text-foreground">Sua mão</strong> · {myCount} carta(s)</p>
-          <button type="button" title="Alterar organização" onClick={()=>setSortMode(v=>v==="color"?"number":"color")} className="glass inline-flex h-9 items-center gap-1 rounded-xl px-2 text-xs">
-            <ArrowDownWideNarrow className="size-4" /> {sortMode==="color"?"Por cor":"Por número"}
+      <section aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
+        <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
+          <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}</span>
+          <button type="button" title={sortMode==="color"?"Organizado por cor. Clique para organizar por número.":"Organizado por número. Clique para organizar por cor."}
+            aria-label={sortMode==="color"?"Ordenar por número":"Ordenar por cor"}
+            onClick={()=>setSortMode(v=>v==="color"?"number":"color")}
+            className="glass flex h-9 min-w-0 w-full max-w-44 items-center justify-center gap-1 rounded-xl px-1.5 text-xs sm:px-3">
+            <ArrowDownWideNarrow className="size-4 shrink-0"/><span className="truncate">{sortMode==="color"?"Por cor":"Por número"}</span>
           </button>
-          <div className="flex flex-col items-center gap-1">
-            <button type="button" onPointerDown={beginHold} onPointerUp={stopHold} onPointerCancel={stopHold} onLostPointerCapture={stopHold} disabled={!game.can_catch_uno||busy} aria-label="Segure 5 segundos para denunciar UNO" className="glass flex h-9 items-center gap-1 rounded-xl px-2 text-xs disabled:opacity-45">
-              <svg viewBox="0 0 24 24" width="21" height="21" className="-rotate-90" aria-hidden>
-                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3"/>
-                <circle cx="12" cy="12" r="9" fill="none" stroke="#67e8f9" strokeWidth="3" strokeDasharray="56.55" strokeDashoffset={56.55*(1-hold/100)}/>
-              </svg>
-              <ShieldAlert className="size-4"/> Denunciar
-            </button>
-            <Button variant="glass" className="h-9 rounded-xl px-3 text-xs" onClick={actions.uno} disabled={busy||!canUno}>
-              <Megaphone className="size-4"/> UNO
-            </Button>
-          </div>
-          {myTurn && !nine && (
-            <Button variant="hero" className="h-11 rounded-xl px-4" onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy}>
-              {busy?<Loader2 className="animate-spin"/>:<SkipForward/>} Terminar vez
-            </Button>
-          )}
+          <button type="button" onPointerDown={beginHold} onPointerUp={stopHold} onPointerCancel={stopHold} onLostPointerCapture={stopHold}
+            disabled={!game.can_catch_uno||busy} title="Segure 5 segundos para denunciar UNO"
+            aria-label="Segure 5 segundos para denunciar UNO"
+            className="glass flex h-9 shrink-0 items-center justify-center gap-1 rounded-xl px-2 text-xs disabled:opacity-45 sm:px-3">
+            <svg viewBox="0 0 24 24" width="21" height="21" className="-rotate-90 shrink-0" aria-hidden>
+              <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3"/>
+              <circle cx="12" cy="12" r="9" fill="none" stroke="#67e8f9" strokeWidth="3" strokeDasharray="56.55" strokeDashoffset={56.55*(1-hold/100)}/>
+            </svg>
+            <ShieldAlert className="hidden size-4 shrink-0 sm:block"/><span className="hidden md:inline">Denunciar</span>
+          </button>
+          <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3" onClick={actions.uno} disabled={busy||!canUno} aria-label="Gritar UNO">
+            <Megaphone className="size-4 shrink-0"/><span>UNO</span>
+          </Button>
         </div>
+        {myTurn && lockedByNotice && (
+          <p className="mt-1 text-center text-xs text-cyan">Aviso na mesa — jogadas liberadas após 2 segundos.</p>
+        )}
         {myTurn && game.has_drawn && game.drawn_card && !played.length && (
           <p className="mt-2 px-2 text-center text-sm text-cyan">Você comprou {cardLabel(game.drawn_card)} — jogue qualquer carta válida ou termine a vez.</p>
         )}
         {!myTurn && state.room.rules.cut && <p className="mt-1 text-center text-xs text-muted-foreground">Corte: jogue uma carta idêntica à do descarte para roubar a vez.</p>}
-        <div className="uno-hand-scroll no-scrollbar mt-1 overflow-x-auto overflow-y-hidden px-2 pb-1 pt-1">
-          <div className="uno-hand-grid grid w-max min-w-full grid-flow-col grid-rows-2 justify-center gap-x-1.5 gap-y-1">
+        <div ref={handViewportRef} className="uno-hand-scroll no-scrollbar mt-1 min-w-0 overflow-x-auto overflow-y-hidden px-2 pb-1 pt-1">
+          <div className="uno-hand-grid mx-auto grid w-max grid-flow-row gap-x-1.5 gap-y-1"
+            style={{gridTemplateColumns:`repeat(${columnCount}, var(--uno-hand-col))`,gridTemplateRows:`repeat(${handRows}, calc(var(--uno-hand-col) * 1.5))`}}>
             {hand.map((c,i)=>{
               const ok=canPlay(c);
               return (

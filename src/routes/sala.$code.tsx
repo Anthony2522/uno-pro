@@ -66,7 +66,7 @@ function RoomPage() {
     setSpecialEffect(event);
     sfx(event.type);
     if(specialTimer.current)clearTimeout(specialTimer.current);
-    specialTimer.current=setTimeout(showNextEffect,1600);
+    specialTimer.current=setTimeout(showNextEffect,5000);
   },[]);
   useEffect(()=>{
     const events=state?.game?.effects;
@@ -205,9 +205,17 @@ function RoomPage() {
           <div className="uno-special-badge">
             <span className="uno-effect-title">{({
               reverse:"↶ INVERSÃO!",skip:"⛔ BLOQUEIO!",draw2:"+2 CARTAS!",
-              draw4:"+4 CARTAS!",draw5:"+5 CARTAS!",wild:"✦ CORINGA!",uno:"UNO!"
+              draw4:"+4 CARTAS!",draw5:"+5 CARTAS!",wild:"✦ CORINGA!",uno:"UNO!",cut:"✂ CORTE!",penalty:"CARTAS COMPRADAS!"
             } as Record<string,string>)[specialEffect.type]}</span>
-            <span className="uno-effect-player">{specialEffect.name}{specialEffect.type==="uno"?" gritou UNO!":" jogou a carta!"}</span>
+            <span className="uno-effect-player">{specialEffect.type==="cut"
+              ? `${specialEffect.name} cortou ${specialEffect.target_name ?? "a vez"}!`
+              : specialEffect.type==="penalty"
+                ? `${specialEffect.target_name ?? specialEffect.name} comprou ${specialEffect.n ?? 0} carta(s)!`
+                : specialEffect.type==="skip"
+                  ? `${specialEffect.name} bloqueou ${specialEffect.target_name ?? "o próximo jogador"}!`
+                  : specialEffect.type==="uno"
+                    ? `${specialEffect.name} gritou UNO!`
+                    : `${specialEffect.name} jogou a carta!`}</span>
           </div>
         </div>
       )}

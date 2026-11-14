@@ -22,6 +22,7 @@ const MESSAGES: Record<string, string> = {
   INVALID_COMBO: "Essa carta não continua a sequência.",
   CUT_NOT_ALLOWED: "Não é possível cortar agora.",
   NINE_ACTIVE: "Aguarde a rodada do 9 terminar.",
+  ANNOUNCEMENT_WAIT: "Aguarde 2 segundos do aviso para jogar.",
   NINE_NOT_ALLOWED: "Você não pode apertar 9 agora.",
   MUST_COUNTER_OR_DRAW: "Rebata com +2 ou +4 ou aceite comprar as cartas.",
   ALREADY_PLAYED: "Você já jogou cartas; termine sua vez.",
