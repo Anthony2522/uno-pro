@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Globe, Loader2, Lock } from "lucide-react";
+import { ChevronDown, ChevronUp, Globe, Loader2, Lock, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api } from "@/lib/uno/api";
+import { api, type RuleSettings } from "@/lib/uno/api";
 import { errorMessage, toGameError } from "@/lib/uno/errors";
 import { useReadyGuest } from "@/lib/uno/guest";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,8 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [max, setMax] = useState(6);
+  const [advanced, setAdvanced] = useState(false);
+  const [rules, setRules] = useState<RuleSettings>({ repeat:true,sequence:true,nine:true,cut:true,stack:true });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +25,8 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
     if (open) {
       setName(`Sala de ${guest.nickname}`.slice(0, 32));
       setError(null);
+      setAdvanced(false);
+      setRules({repeat:true,sequence:true,nine:true,cut:true,stack:true});
     }
   }, [open, guest.nickname]);
 
@@ -38,7 +42,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
     setBusy(true);
     setError(null);
     try {
-      const { code } = await api.createRoom(guest.token, clean, isPublic, max);
+      const { code } = await api.createRoom(guest.token, clean, isPublic, max, rules);
       onOpenChange(false);
       navigate({ to: "/sala/$code", params: { code } });
     } catch (err) {
@@ -121,6 +125,31 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
               ))}
             </div>
           </fieldset>
+
+
+          <div className="rounded-2xl border border-glass-border bg-navy/40 p-3">
+            <button type="button" className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 font-semibold text-cyan" onClick={() => setAdvanced(v => !v)} aria-expanded={advanced}>
+              <span className="flex items-center gap-2"><SlidersHorizontal className="size-5" /> Configurações avançadas</span>
+              {advanced ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            </button>
+            {advanced && (
+              <div className="mt-3 space-y-2 border-t border-glass-border pt-3">
+                <p className="mb-3 text-xs text-muted-foreground">Todas as regras opcionais vêm ativadas. Desmarque as que não quiser usar nesta sala.</p>
+                {([
+                  ["repeat","Cartas repetidas","Jogue duas ou mais cartas com o mesmo número ou símbolo, mesmo com cores diferentes."],
+                  ["sequence","Sequências numéricas","Jogue números consecutivos da mesma cor em ordem crescente ou decrescente."],
+                  ["nine","Desafio do 9","Com 3 ou mais jogadores, o último a apertar 9 compra uma carta por 9 jogado."],
+                  ["cut","Corte de turno","Quem tiver a carta exatamente igual à mesa pode jogar fora da vez."],
+                  ["stack","Rebater +2 e +4","Acumule compras e permita que o próximo jogador rebata ou aceite a punição."],
+                ] as const).map(([key,label,description]) => (
+                  <label key={key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-glass-border/60 bg-navy/40 p-3 hover:border-cyan/40">
+                    <input type="checkbox" checked={rules[key]} onChange={e=>setRules(prev=>({...prev,[key]:e.target.checked}))} className="mt-1 size-4 accent-cyan" />
+                    <span><span className="block text-sm font-semibold">{label}</span><span className="mt-1 block text-xs text-muted-foreground">{description}</span></span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
 
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <Button type="submit" variant="hero" size="xl" className="w-full" disabled={busy || !valid}>

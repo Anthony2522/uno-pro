@@ -3,17 +3,18 @@ import { Button } from "@/components/ui/button";
 import { BookOpen } from "lucide-react";
 import { UnoCard } from "./UnoCard";
 
-const RULES: { title: string; text: string; card?: string }[] = [
-  { title: "Objetivo", text: "Seja o primeiro a ficar sem cartas. Cada jogador começa com 7, e a primeira carta da mesa é sempre um número." },
-  { title: "Na sua vez", text: "Jogue uma carta da mesma cor, número ou símbolo da carta do topo. Coringas valem sempre." , card: "g7"},
-  { title: "Comprar", text: "Sem jogada (ou se preferir), compre 1 carta. Se ela servir, jogue-a ou passe. Se não servir, a vez passa sozinha." },
-  { title: "Pular", text: "O próximo jogador perde a vez.", card: "rS" },
-  { title: "Inverter", text: "Muda o sentido do jogo. Com 2 jogadores, funciona como Pular.", card: "yR" },
-  { title: "+2", text: "O próximo compra 2 cartas e perde a vez. Não dá para acumular.", card: "bD" },
-  { title: "Coringa", text: "Jogue em qualquer carta e escolha a nova cor.", card: "W" },
-  { title: "Coringa +4", text: "Escolha a cor; o próximo compra 4 e perde a vez. Pode ser jogado a qualquer momento.", card: "W4" },
-  { title: "UNO!", text: "Ficou com 1 carta? Aperte UNO! Se esquecer, alguém pode apertar “Pegar!” e você compra 2. Na sua vez, com 2 cartas, já dá para gritar antes de jogar." },
-  { title: "Conexão", text: "Caiu a internet? Você volta como o mesmo jogador ao reabrir o link. Se ficar mais de 30 s fora na sua vez, compra 1 e a vez passa; após 5 min fora, sai da partida." },
+const RULES: {title: string; text: string; card?: string}[] = [
+  {title:"Objetivo",text:"Seja o primeiro a ficar sem cartas. Cada jogador começa com 7 cartas."},
+  {title:"Na sua vez",text:"Jogue uma carta compatível e, se quiser, continue com sequências. Aperte Terminar vez. O limite é 60 segundos."},
+  {title:"Sequências repetidas",text:"Jogue várias cartas de número ou símbolo igual, mesmo com cores diferentes.",card:"b1"},
+  {title:"Sequências numéricas",text:"Jogue 4-5-6 ou 6-5-4 da mesma cor, sem pular números.",card:"g5"},
+  {title:"O desafio do 9",text:"Com pelo menos 3 jogadores, todos exceto quem jogou devem apertar 9. O último compra uma carta por 9 jogado.",card:"y9"},
+  {title:"Corte",text:"Se tiver exatamente a mesma carta do descarte, pode lançá-la mesmo fora da sua vez; a vez passa a ser sua."},
+  {title:"Rebater compras",text:"Use +2 ou +4 para repassar a penalidade acumulada. Sem defesa, compre e passe a vez.",card:"W4"},
+  {title:"Comprar",text:"Você pode comprar uma carta por vontade própria e então jogá-la, se servir, ou terminar sua vez."},
+  {title:"UNO e denúncia",text:"Aperte UNO discretamente com uma carta. Após 8 segundos, outra pessoa pode segurar Denunciar por 5 segundos; quem esqueceu compra 2."},
+  {title:"Tempo",text:"Após 60 segundos, as cartas que você jogou ficam na mesa e a vez termina; se não jogou, compra uma carta e passa."},
+  {title:"Bots",text:"O anfitrião pode adicionar bots fáceis ou difíceis durante a espera."},
 ];
 
 export function HowToPlayDialog({ trigger }: { trigger?: React.ReactNode }) {
@@ -29,7 +30,7 @@ export function HowToPlayDialog({ trigger }: { trigger?: React.ReactNode }) {
       <DialogContent className="glass-strong max-h-[88dvh] overflow-y-auto rounded-3xl border-glass-border sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">Como jogar</DialogTitle>
-          <DialogDescription>Regras simples do UNO Pro, iguais para todo mundo na mesa.</DialogDescription>
+          <DialogDescription>Regras opcionais podem ser ativadas ou desativadas pelo anfitrião antes da partida.</DialogDescription>
         </DialogHeader>
         <ul className="space-y-3">
           {RULES.map((r) => (

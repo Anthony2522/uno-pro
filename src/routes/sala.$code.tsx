@@ -129,12 +129,14 @@ function RoomPage() {
       act(async () => {
         const r = await api.drawCard(token, code);
         sfx("draw");
-        if (r.card && !r.playable) toast("A carta comprada não serve — a vez passou.");
-        if (!r.card) toast("O baralho acabou — a vez passou.");
+        if (r.card && !r.playable) toast("Carta comprada. Você pode terminar a vez.");
+        if (!r.card) toast("O baralho acabou.");
       }),
-    pass: () => act(() => api.passTurn(token, code)),
+    end: () => act(() => api.endTurn(token, code)),
+    accept: () => act(() => api.acceptDraw(token, code)),
+    pressNine: () => act(() => api.pressNine(token, code)),
     uno: () => act(() => api.callUno(token, code)),
-    catchUno: (t) => act(() => api.catchUno(token, code, t)),
+    catchUno: () => act(() => api.catchUno(token, code)),
   };
   const start = () =>
     act(async () => {
@@ -157,7 +159,7 @@ function RoomPage() {
         <LeaveButton inGame={playing} onConfirm={() => void doLeave()} />
       </AppHeader>
       <ConnectionBanner show={connection === "reconnecting"} />
-      {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} />}
+      {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))} />}
       <WinnerOverlay
         open={showWinner}
         winnerName={winnerName}

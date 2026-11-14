@@ -1,4 +1,4 @@
-import { Crown, Globe, Loader2, Lock, Play, Trophy, UserPlus } from "lucide-react";
+import { Bot, Crown, Globe, Loader2, Lock, Play, Trophy, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RoomState } from "@/lib/uno/api";
 import { PlayerAvatar } from "./PlayerAvatar";
@@ -9,10 +9,14 @@ export function WaitingRoom({
   state,
   busy,
   onStart,
+  onAddBot,
+  onRemoveBot,
 }: {
   state: RoomState;
   busy: boolean;
   onStart: () => void;
+  onAddBot: (difficulty: "easy" | "hard") => void;
+  onRemoveBot: (id: string) => void;
 }) {
   const { room, members, me, game } = state;
   const isHost = room.host_id === me;
@@ -74,8 +78,11 @@ export function WaitingRoom({
                 <p className="truncate font-semibold">
                   {m.nickname} {m.id === me && <span className="text-sm font-normal text-cyan">(você)</span>}
                 </p>
-                <p className={cn("text-xs", m.online ? "text-success" : "text-muted-foreground")}>{m.online ? "Online" : "Desconectado"}</p>
+                <p className={cn("text-xs", m.online ? "text-success" : "text-muted-foreground")}>{m.bot ? (m.difficulty==="hard" ? "Bot difícil" : "Bot fácil") : m.online ? "Online" : "Desconectado"}</p>
               </div>
+              {m.bot && isHost && (
+                <button type="button" title="Remover bot" aria-label={`Remover ${m.nickname}`} onClick={()=>onRemoveBot(m.id)} disabled={busy} className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><X className="size-4" /></button>
+              )}
               {m.is_host && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-1 text-xs font-semibold text-warning">
                   <Crown className="size-3.5" /> Anfitrião
@@ -93,6 +100,17 @@ export function WaitingRoom({
           ))}
         </ul>
       </section>
+
+      {isHost && (
+        <section className="glass mt-5 rounded-3xl p-5 sm:p-6">
+          <h2 className="flex items-center gap-2 font-display font-bold"><Bot className="size-5 text-cyan" /> Adicionar bots</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Preencha as vagas com jogadores automáticos. O modo fácil escolhe a melhor jogada em 60% das decisões; o difícil sempre prioriza as melhores jogadas disponíveis.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button variant="glass" className="h-11 rounded-xl" disabled={busy||members.length>=room.max_players} onClick={()=>onAddBot("easy")}><Bot /> + Bot fácil</Button>
+            <Button variant="cyan" className="h-11 rounded-xl" disabled={busy||members.length>=room.max_players} onClick={()=>onAddBot("hard")}><Bot /> + Bot difícil</Button>
+          </div>
+        </section>
+      )}
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-glass-border bg-navy/80 px-4 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl flex-col items-center gap-2 sm:flex-row">

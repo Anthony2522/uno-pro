@@ -101,11 +101,7 @@ export function CardBack({ size = "md", className, rotate = 0 }: { size?: CardSi
     >
       <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[9%] bg-navy-2">
         <div className="absolute left-1/2 top-1/2 h-[92%] w-[66%] -translate-x-1/2 -translate-y-1/2 rotate-[28deg] rounded-[50%] bg-gradient-brand" />
-        {size !== "xs" && (
-          <span className="relative z-10 -rotate-[18deg] font-display text-[22cqw] font-black italic leading-none text-uno-paper drop-shadow-[0_2px_0_var(--navy)]">
-            UNO
-          </span>
-        )}
+        {size !== "xs" && <img src="/logo-uno-pro.webp" alt="" draggable={false} className="relative z-10 w-[95%] scale-110 object-contain drop-shadow-[0_2px_3px_rgba(0,0,0,0.5)]" />}
       </div>
     </div>
   );
