@@ -62,7 +62,7 @@ function RoomPage() {
     const round=state?.game?.round ?? null;
     if(round!==lastEffectRound.current){lastEffectRound.current=round;lastEffectId.current=null;}
     if(!events?.length)return;
-    const currentMax=events[events.length-1].id;
+    const currentMax=events[events.length-1]?.id ?? 0;
     if(lastEffectId.current===null){
       lastEffectId.current=currentMax;
       return;
@@ -73,6 +73,7 @@ function RoomPage() {
     // The latest event is shown; each event gets its own distinct sound.
     for(const event of next)sfx(event.type);
     const event=next[next.length-1];
+    if(!event)return;
     setSpecialEffect(event);
     if(specialTimer.current)clearTimeout(specialTimer.current);
     specialTimer.current=setTimeout(()=>setSpecialEffect(null),1900);

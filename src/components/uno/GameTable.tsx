@@ -41,7 +41,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
     const colors=["b","y","g","r"], special=["R","S","W","D","W4","W5"];
-    const col=(c:string)=>colors.indexOf(c[0])===-1?4:colors.indexOf(c[0]);
+    const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
   },[game.my_hand,sortMode]);
@@ -78,14 +78,14 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (!game.pending_uncounterable && (c==="W4"||cardValue(c)==="D")));
     if(pending&&!played.length)return !game.pending_uncounterable && (c==="W4"||cardValue(c)==="D");
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
-    const first=played[0],last=played[played.length-1];
+    const first=played[0]!,last=played[played.length-1]!;
     const same=cardValue(first)===cardValue(c);
     const diff=Number(cardValue(c))-Number(cardValue(last));
     const sequential=/^\d$/.test(cardValue(c))&&/^\d$/.test(cardValue(last))&&c[0]===last[0]&&Math.abs(diff)===1;
     if(played.length===1)return (state.room.rules.repeat&&same)||(state.room.rules.sequence&&sequential);
-    const mode=cardValue(played[0])===cardValue(played[1])?"repeat":"sequence";
+    const mode=cardValue(played[0]!)===cardValue(played[1]!)?"repeat":"sequence";
     if(mode==="repeat")return state.room.rules.repeat&&same;
-    const prev=Number(cardValue(played[1]))-Number(cardValue(played[0]));
+    const prev=Number(cardValue(played[1]!))-Number(cardValue(played[0]!));
     return state.room.rules.sequence&&sequential&&Math.sign(diff)===Math.sign(prev);
   };
   const myCount = hand.length;
