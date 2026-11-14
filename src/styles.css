@@ -368,3 +368,11 @@
  .uno-hand.uno-hand-double {height:min(46dvh,calc(var(--uno-hand-col)*3 + 62px));}
  .uno-hand.uno-hand-single {height:min(31dvh,calc(var(--uno-hand-col)*1.5 + 62px));}
 }
+
+/* Taller phones: reclaim unused table whitespace for larger hand cards. */
+@media (min-height:651px) {
+  .uno-game {--uno-hand-col:clamp(3.25rem,min(15vw,9.7dvh),5.2rem);}
+  .uno-hand.uno-hand-double {height:min(49dvh,calc(var(--uno-hand-col)*3 + 94px));}
+  .uno-hand.uno-hand-single {height:min(34dvh,calc(var(--uno-hand-col)*1.5 + 88px));}
+}
+.uno-hand-toolbar button {font-size:clamp(12px,2.8vw,15px);}
