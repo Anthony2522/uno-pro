@@ -56,28 +56,39 @@ function RoomPage() {
     [refresh],
   );
 
-  // Effects are recorded by the server, so every connected player sees and hears them.
+  // Every special card event is queued; spectators see all effects, including fast combos.
+  const effectQueue=useRef<GameState["effects"]>([]);
+  const effectShowing=useRef(false);
+  const showNextEffect=useCallback(()=>{
+    const event=effectQueue.current.shift();
+    if(!event){effectShowing.current=false;setSpecialEffect(null);return;}
+    effectShowing.current=true;
+    setSpecialEffect(event);
+    sfx(event.type);
+    if(specialTimer.current)clearTimeout(specialTimer.current);
+    specialTimer.current=setTimeout(showNextEffect,1600);
+  },[]);
   useEffect(()=>{
     const events=state?.game?.effects;
     const round=state?.game?.round ?? null;
-    if(round!==lastEffectRound.current){lastEffectRound.current=round;lastEffectId.current=null;}
-    if(!events?.length)return;
-    const currentMax=events[events.length-1]?.id ?? 0;
-    if(lastEffectId.current===null){
-      lastEffectId.current=currentMax;
+    if(round!==lastEffectRound.current){
+      lastEffectRound.current=round;
+      lastEffectId.current=events?.at(-1)?.id ?? 0;
+      effectQueue.current=[];
+      effectShowing.current=false;
+      setSpecialEffect(null);
+      if(specialTimer.current)clearTimeout(specialTimer.current);
       return;
     }
+    if(!events?.length)return;
+    const currentMax=events.at(-1)?.id ?? 0;
     const next=events.filter(e=>e.id>(lastEffectId.current??0));
     lastEffectId.current=currentMax;
-    if(!next.length)return;
-    // The latest event is shown; each event gets its own distinct sound.
-    for(const event of next)sfx(event.type);
-    const event=next[next.length-1];
-    if(!event)return;
-    setSpecialEffect(event);
-    if(specialTimer.current)clearTimeout(specialTimer.current);
-    specialTimer.current=setTimeout(()=>setSpecialEffect(null),1900);
-  },[state?.game?.effects]);
+    if(next.length){
+      effectQueue.current.push(...next);
+      if(!effectShowing.current)showNextEffect();
+    }
+  },[state?.game?.effects,state?.game?.round,showNextEffect]);
   useEffect(()=>()=>{if(specialTimer.current)clearTimeout(specialTimer.current);},[]);
 
   // Sounds on state transitions.
