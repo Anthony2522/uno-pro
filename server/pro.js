@@ -250,7 +250,7 @@ function botTick(r){
   const chooseColor=()=>{const counts={r:0,y:0,g:0,b:0};h.cards.forEach(c=>{if(counts[c[0]]!==undefined)counts[c[0]]++});
     return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];};
   if(pick){play(r,id,pick,chooseColor());if(h.cards.length===1){h.uno_called=true;h.uno_since=null;}
-    for(let i=0;i<10&&g.status==="playing";i++){const series=g.turn_cards,first=series[0],prev=series.at(-1);
+    for(let i=0;i<10&&g.status==="playing"&&!actionLocked(g);i++){const series=g.turn_cards,first=series[0],prev=series.at(-1);
       const combos=h.cards.filter(c=>{const same=value(first)===value(c),delta=Number(value(c))-Number(value(prev));
         const run=/^\d$/.test(value(c))&&/^\d$/.test(value(prev))&&c[0]===prev[0]&&Math.abs(delta)===1&&(!g.turn_step||Math.sign(delta)===g.turn_step);
         return g.turn_mode==="repeat"?same:g.turn_mode==="sequence"?run:(same&&rules.repeat)||(run&&rules.sequence);});

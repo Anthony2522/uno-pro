@@ -446,3 +446,18 @@ test("9 termina quando resta um, ou penaliza todos os omissos após o tempo",()=
   for(let i=0;i<3;i++)assert.equal(r.hands.get([b,c,d][i].guest_id).cards.length,before[i]+2);
   assert.equal(g.last_action.count,3);
 });
+
+
+test("bot que joga ação especial não força segunda carta durante os 2s de aviso",()=>{
+  const s=setup(),{room,g}=s;
+  g.turn_idx=g.turn_order.indexOf(s.bot);
+  g.turn_started_at=Date.now();g.bot_move=null;
+  g.discard_pile=["bR"];g.current_color="b";
+  room.hands.get(s.bot).cards=["bR","gR","y7"];
+  proSweep();
+  assert.ok(g.bot_move);
+  g.bot_move.due=Date.now()-1;
+  proSweep();
+  assert.notEqual(g.turn_order[g.turn_idx],s.bot);
+  assert.ok(g.effects.some(e=>e.type==="reverse"));
+});
