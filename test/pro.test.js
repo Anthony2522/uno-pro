@@ -246,6 +246,8 @@ test("bot só responde ao 9 depois do seu tempo sorteado",()=>{
   room.hands.get(a.guest_id).cards=["r9","b8"];
   s.play(a,"r9");s.end(a);
   assert.equal(g.nine.pressed.includes(s.bot),false);
+  const publicNine=call("get_room_state",{p_token:a.token,p_code:s.code}).game.nine;
+  assert.equal("botTimes" in publicNine,false,"não revelar o tempo de reação de bots ao adversário");
   g.nine.botTimes[s.bot]=Date.now()+30000;
   proSweep();assert.equal(g.nine.pressed.includes(s.bot),false);
   g.nine.botTimes[s.bot]=Date.now()-1;
