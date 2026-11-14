@@ -300,7 +300,7 @@
   border-radius:1.5rem;border:2px solid #67e8f9;
   color:white;background:linear-gradient(130deg,rgba(18,15,66,.96),rgba(82,27,150,.95));
   box-shadow:0 0 65px 10px rgba(88,80,236,.58),inset 0 0 20px #67e8f940;
-  animation:uno-special-in 1.85s ease both;
+  animation:uno-special-in 5s ease both;
 }
 .uno-effect-title {font-family:var(--font-display);font-weight:900;font-size:clamp(1.3rem,5vw,3rem);line-height:1.1;text-shadow:0 0 24px #22d3ee;}
 .uno-effect-player {font-weight:800;font-size:clamp(.85rem,2vw,1.15rem);}

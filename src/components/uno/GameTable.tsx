@@ -75,8 +75,10 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const freshIndex=recentDraw?hand.lastIndexOf(recentDraw.card):-1;
   const played = game.turn_cards || [];
   const nine = game.nine;
+  const lockedByNotice=(game.effects||[]).some(e=>
+    typeof e.show_at==="number" && clock>=e.show_at && clock<e.show_at+2000);
   const canPlay = (c:string) => {
-    if(busy || nine)return false;
+    if(busy || nine || lockedByNotice)return false;
     if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"));
     if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D";
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
@@ -112,7 +114,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     return ()=>{observer.disconnect();window.removeEventListener("resize",measure);};
   },[myCount,sortMode]);
   const canUno = myCount===1||(myCount===2&&myTurn);
-  const remaining=Math.max(0,Math.ceil((new Date(game.turn_started_at).getTime()+60000-clock)/1000));
+  const remaining=Math.min(60,Math.max(0,Math.ceil((new Date(game.turn_started_at).getTime()+60000-clock)/1000)));
   const nineRemaining=nine?Math.max(0,Math.ceil((new Date(nine.deadline).getTime()-clock)/1000)):0;
   const nineReady=!!nine&&nine.eligible.includes(me)&&!nine.pressed.includes(me);
   const feed = describeAction(game.last_action, me);
@@ -184,7 +186,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           </div>
           {myTurn && !nine && (
             <Button variant="hero" className="h-9 shrink-0 rounded-xl px-3 text-xs sm:h-11 sm:px-4 sm:text-sm"
-              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy}>
+              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy||lockedByNotice}>
               {busy?<Loader2 className="size-4 animate-spin"/>:<SkipForward className="size-4"/>} Terminar vez
             </Button>
           )}
@@ -203,14 +205,14 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
             <p className="mt-1 text-sm text-muted-foreground">Escolha uma carta de compra permitida (+5 também pode rebater) ou aceite a penalidade.</p>
-            <Button variant="glass" className="mt-3 rounded-xl" onClick={actions.accept} disabled={busy}>Comprar {pending} e passar</Button>
+            <Button variant="glass" className="mt-3 rounded-xl" onClick={actions.accept} disabled={busy||lockedByNotice}>Comprar {pending} e passar</Button>
           </div>
         )}
         <div className="uno-stack relative z-10 flex items-center gap-4 sm:gap-8">
           <button
             type="button"
             onClick={actions.draw}
-            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || busy}
+            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || lockedByNotice || busy}
             aria-label={`Comprar carta. ${game.draw_count} cartas no baralho`}
             className={cn(
               "group relative rounded-[12%] transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:cursor-default",
@@ -271,6 +273,9 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <Megaphone className="size-4 shrink-0"/><span>UNO</span>
           </Button>
         </div>
+        {myTurn && lockedByNotice && (
+          <p className="mt-1 text-center text-xs text-cyan">Aviso na mesa — jogadas liberadas após 2 segundos.</p>
+        )}
         {myTurn && game.has_drawn && game.drawn_card && !played.length && (
           <p className="mt-2 px-2 text-center text-sm text-cyan">Você comprou {cardLabel(game.drawn_card)} — jogue qualquer carta válida ou termine a vez.</p>
         )}

@@ -48,7 +48,8 @@ export type GameState = {
   turn_started_at: string;
   my_hand: string[];
   pending_uncounterable: boolean;
-  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"; by: string; name: string; card: string|null; color: string|null; at: number; target?:string; target_name?:string; n?:number }>;
+  action_locked_until?: string | null;
+  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; target?:string; target_name?:string; n?:number }>;
   last_draw: { card: string; nonce: number; at: string } | null;
   turn_cards: string[];
   pending_draw: number;

@@ -66,7 +66,7 @@ function RoomPage() {
     setSpecialEffect(event);
     sfx(event.type);
     if(specialTimer.current)clearTimeout(specialTimer.current);
-    specialTimer.current=setTimeout(showNextEffect,1600);
+    specialTimer.current=setTimeout(showNextEffect,5000);
   },[]);
   useEffect(()=>{
     const events=state?.game?.effects;
