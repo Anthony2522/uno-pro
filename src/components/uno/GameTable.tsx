@@ -286,7 +286,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             {hand.map((c,i)=>{
               const ok=canPlay(c);
               return (
-                <button key={c+"-"+i} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(ok?" — jogável":"")} aria-disabled={!ok}
+                <button key={c+"-"+i} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(myTurn&&ok?" — jogável":"")} aria-disabled={!ok}
                   className={cn("uno-hand-button relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",played.length===0 ? (ok ? "shadow-glow-cyan" : "opacity-65") : "",i===freshIndex&&recentDraw&&clock-recentDraw.at<8000&&"uno-recently-drawn")}>
                   <UnoCard card={c} size="md" className="uno-hand-card"/>
                 </button>
