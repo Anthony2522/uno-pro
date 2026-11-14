@@ -5,7 +5,8 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { rpc, RpcError, RPC_NAMES, onBump, sweep } from "./server/game.js";
+import { RpcError } from "./server/game.js";
+import { proRpc as rpc, RPC_NAMES, onBumpPro as onBump, proSweep as sweep } from "./server/pro.js";
 import { TokenBucket } from "./server/rateLimit.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

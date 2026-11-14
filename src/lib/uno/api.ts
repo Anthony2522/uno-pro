@@ -1,5 +1,6 @@
 import { GameError, toGameError } from "./errors";
 
+export type RuleSettings = { repeat: boolean; sequence: boolean; nine: boolean; cut: boolean; stack: boolean };
 export type Guest = { guest_id: string; token: string; nickname: string };
 
 export type Member = {
@@ -9,10 +10,14 @@ export type Member = {
   is_host: boolean;
   card_count: number;
   uno_called: boolean;
+  uno_since?: string | null;
+  bot?: boolean;
+  difficulty?: "easy" | "hard" | null;
 };
 
 export type LastAction = {
-  type: "start" | "play" | "draw" | "draw_pass" | "pass" | "uno" | "catch" | "auto" | "left" | "abandon";
+  type: "start" | "play" | "draw" | "draw_pass" | "pass" | "uno" | "catch" | "auto" | "left" | "abandon" | "cut" | "end" | "nine" | "stack_take";
+  count?: number;
   by?: string;
   name?: string;
   card?: string;
@@ -42,6 +47,10 @@ export type GameState = {
   seq: number;
   turn_started_at: string;
   my_hand: string[];
+  turn_cards: string[];
+  pending_draw: number;
+  can_catch_uno: boolean;
+  nine: {source: string; count: number; eligible: string[]; pressed: string[]; deadline: string} | null;
 };
 
 export type RoomState = {
@@ -55,6 +64,7 @@ export type RoomState = {
     max_players: number;
     host_id: string;
     status: "waiting" | "playing";
+    rules: RuleSettings;
   };
   members: Member[];
   game: GameState | null;
@@ -108,12 +118,13 @@ export const api = {
   updateNickname: (token: string, nickname: string) =>
     call<{ guest_id: string; nickname: string }>("update_nickname", { p_token: token, p_nickname: nickname }),
   listPublicRooms: () => call<PublicRoom[]>("list_public_rooms"),
-  createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number) =>
+  createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings) =>
     call<{ code: string }>("create_room", {
       p_token: token,
       p_name: name,
       p_is_public: isPublic,
       p_max_players: maxPlayers,
+      p_rules: rules,
     }),
   joinRoom: (token: string, code: string) =>
     call<{ code: string; already: boolean }>("join_room", { p_token: token, p_code: code }),
@@ -126,9 +137,14 @@ export const api = {
   drawCard: (token: string, code: string) =>
     call<{ card: string | null; playable: boolean }>("draw_card", { p_token: token, p_code: code }),
   passTurn: (token: string, code: string) => call("pass_turn", { p_token: token, p_code: code }),
+  endTurn: (token: string, code: string) => call("end_turn", { p_token: token, p_code: code }),
+  acceptDraw: (token: string, code: string) => call("accept_draw", { p_token: token, p_code: code }),
+  pressNine: (token: string, code: string) => call("press_nine", { p_token: token, p_code: code }),
+  addBot: (token: string, code: string, difficulty: "easy" | "hard") => call("add_bot", { p_token: token, p_code: code, p_difficulty: difficulty }),
+  removeBot: (token: string, code: string, botId: string) => call("remove_bot", { p_token: token, p_code: code, p_bot_id: botId }),
   callUno: (token: string, code: string) => call("call_uno", { p_token: token, p_code: code }),
-  catchUno: (token: string, code: string, target: string) =>
-    call("catch_uno", { p_token: token, p_code: code, p_target: target }),
+  catchUno: (token: string, code: string) =>
+    call("catch_uno", { p_token: token, p_code: code }),
 };
 
 export { GameError };

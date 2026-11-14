@@ -19,6 +19,14 @@ const MESSAGES: Record<string, string> = {
   UNO_NOT_ALLOWED: "Você só pode gritar UNO com 1 carta (ou com 2, na sua vez).",
   CATCH_NOT_ALLOWED: "Tarde demais! Não dá mais para pegar esse jogador.",
   GAME_NOT_ACTIVE: "Não há partida em andamento.",
+  INVALID_COMBO: "Essa carta não continua a sequência.",
+  CUT_NOT_ALLOWED: "Não é possível cortar agora.",
+  NINE_ACTIVE: "Aguarde a rodada do 9 terminar.",
+  NINE_NOT_ALLOWED: "Você não pode apertar 9 agora.",
+  MUST_COUNTER_OR_DRAW: "Rebata com +2 ou +4 ou aceite comprar as cartas.",
+  ALREADY_PLAYED: "Você já jogou cartas; termine sua vez.",
+  NOTHING_TO_ACCEPT: "Não há cartas acumuladas para comprar.",
+  NOT_BOT: "Esse jogador não é um bot.",
   NETWORK: "Problema de conexão. Verifique sua internet e tente novamente.",
 };
 

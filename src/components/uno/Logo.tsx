@@ -1,22 +1,6 @@
 import { cn } from "@/lib/utils";
 
 export function Logo({ size = "md", className }: { size?: "sm" | "md" | "lg"; className?: string }) {
-  const text = size === "lg" ? "text-5xl sm:text-6xl" : size === "md" ? "text-2xl" : "text-xl";
-  const pill = size === "lg" ? "text-sm px-2.5 py-1 -top-1" : "text-[0.6rem] px-1.5 py-0.5 -top-1";
-  return (
-    <span className={cn("relative inline-flex select-none items-start font-display font-black leading-none", className)} aria-label="UNO Pro">
-      <span className={cn("text-gradient italic tracking-tighter", text)} aria-hidden>
-        UNO
-      </span>
-      <span
-        className={cn(
-          "relative ml-1 rotate-[-6deg] rounded-md bg-cyan font-display font-extrabold tracking-wider text-navy shadow-glow-cyan",
-          pill,
-        )}
-        aria-hidden
-      >
-        PRO
-      </span>
-    </span>
-  );
+  const sizes={sm:"h-12 w-[110px]",md:"h-20 w-44",lg:"h-44 w-72 sm:h-52 sm:w-80"};
+  return <img src="/logo-uno-pro.webp" alt="UNO Pro" draggable={false} className={cn("block select-none object-contain drop-shadow-[0_3px_12px_rgba(91,62,245,0.4)]",sizes[size],className)}/>;
 }

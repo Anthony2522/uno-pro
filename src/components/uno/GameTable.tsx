@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
-import { Hand, Loader2, Megaphone, RotateCcw, RotateCw, SkipForward, WifiOff } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { ArrowDownWideNarrow, Hand, Loader2, Megaphone, RotateCcw, RotateCw, ShieldAlert, SkipForward, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { RoomState } from "@/lib/uno/api";
-import { cardLabel, COLOR_NAMES, isPlayable, isWild, sortHand, type CardColor } from "@/lib/uno/cards";
+import { cardLabel, cardValue, COLOR_NAMES, isPlayable, isWild, type CardColor } from "@/lib/uno/cards";
 import { describeAction } from "@/lib/uno/describe";
 import { sfx } from "@/lib/uno/sound";
 import { cn } from "@/lib/utils";
@@ -17,19 +17,34 @@ const DOT: Record<string, string> = { r: "bg-uno-r", y: "bg-uno-y", g: "bg-uno-g
 export type GameActions = {
   play: (card: string, color?: CardColor) => void;
   draw: () => void;
-  pass: () => void;
+  end: () => void;
+  accept: () => void;
+  pressNine: () => void;
   uno: () => void;
-  catchUno: (target: string) => void;
+  catchUno: () => void;
 };
 
 export function GameTable({ state, busy, actions }: { state: RoomState; busy: boolean; actions: GameActions }) {
   const game = state.game!;
   const me = state.me;
   const [pendingWild, setPendingWild] = useState<string | null>(null);
+  const [sortMode,setSortMode] = useState<"color"|"number">("color");
+  const [clock,setClock] = useState(Date.now());
+  const [hold,setHold] = useState(0);
+  const holdStart = useRef<number|null>(null);
+  const interval = useRef<ReturnType<typeof setInterval>|null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
+  useEffect(()=>{const t=setInterval(()=>setClock(Date.now()),350);return()=>clearInterval(t);},[]);
+  useEffect(()=>()=>{if(interval.current)clearInterval(interval.current);if(holdTimer.current)clearTimeout(holdTimer.current);},[]);
   const byId = useMemo(() => new Map(state.members.map((m) => [m.id, m])), [state.members]);
   const myTurn = game.current_player === me;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
-  const hand = useMemo(() => sortHand(game.my_hand), [game.my_hand]);
+  const hand = useMemo(()=>{
+    const colors=["b","y","g","r"], special=["R","S","W","D","W4"];
+    const col=(c:string)=>colors.indexOf(c[0])===-1?4:colors.indexOf(c[0]);
+    const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
+    return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
+  },[game.my_hand,sortMode]);
 
   // Opponents in seat order, starting with whoever plays after me.
   const opponents = useMemo(() => {
@@ -39,24 +54,46 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     return rotated.map((id) => byId.get(id)).filter((m): m is NonNullable<typeof m> => !!m);
   }, [game.turn_order, me, byId]);
 
-  const canPlay = (c: string) =>
-    myTurn && !busy && isPlayable(c, game.top_card, game.current_color) && (!game.has_drawn || c === game.drawn_card);
 
+  const pending = game.pending_draw || 0;
+  const played = game.turn_cards || [];
+  const nine = game.nine;
+  const canPlay = (c:string) => {
+    if(busy || nine)return false;
+    if(!myTurn)return state.room.rules.cut && !pending && c===game.top_card;
+    if(pending&&!played.length)return c==="W4"||cardValue(c)==="D";
+    if(!played.length)return (!game.has_drawn||c===game.drawn_card)&&isPlayable(c,game.top_card,game.current_color);
+    const first=played[0],last=played[played.length-1];
+    const same=cardValue(first)===cardValue(c);
+    const diff=Number(cardValue(c))-Number(cardValue(last));
+    const sequential=/^\d$/.test(cardValue(c))&&/^\d$/.test(cardValue(last))&&c[0]===last[0]&&Math.abs(diff)===1;
+    if(played.length===1)return (state.room.rules.repeat&&same)||(state.room.rules.sequence&&sequential);
+    const mode=cardValue(played[0])===cardValue(played[1])?"repeat":"sequence";
+    if(mode==="repeat")return state.room.rules.repeat&&same;
+    const prev=Number(cardValue(played[1]))-Number(cardValue(played[0]));
+    return state.room.rules.sequence&&sequential&&Math.sign(diff)===Math.sign(prev);
+  };
   const myCount = hand.length;
-  const meMember = byId.get(me);
-  const canUno = !meMember?.uno_called && (myCount === 1 || (myCount === 2 && myTurn));
+  const canUno = myCount===1||(myCount===2&&myTurn);
+  const remaining=Math.max(0,Math.ceil((new Date(game.turn_started_at).getTime()+60000-clock)/1000));
+  const nineRemaining=nine?Math.max(0,Math.ceil((new Date(nine.deadline).getTime()-clock)/1000)):0;
+  const nineReady=!!nine&&nine.eligible.includes(me)&&!nine.pressed.includes(me);
   const feed = describeAction(game.last_action, me);
+  const stopHold = () => {
+    if(interval.current)clearInterval(interval.current);
+    if(holdTimer.current)clearTimeout(holdTimer.current);
+    interval.current=null;holdTimer.current=null;holdStart.current=null;setHold(0);
+  };
+  const beginHold=(e:PointerEvent<HTMLButtonElement>)=>{
+    if(!game.can_catch_uno||busy)return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    stopHold();holdStart.current=Date.now();
+    interval.current=setInterval(()=>setHold(Math.min(100,(Date.now()-(holdStart.current||Date.now()))/50)),50);
+    holdTimer.current=setTimeout(()=>{actions.catchUno();stopHold();},5000);
+  };
 
   function onCard(c: string) {
-    if (!myTurn) {
-      toast("Ainda não é a sua vez.");
-      return;
-    }
-    if (!canPlay(c)) {
-      sfx("error");
-      toast.error(game.has_drawn ? "Depois de comprar, só dá para jogar a carta comprada ou passar." : "Essa carta não combina com a mesa.");
-      return;
-    }
+    if (!canPlay(c)) {sfx("error");toast.error("Essa carta não pode ser jogada agora.");return;}
     if (isWild(c)) setPendingWild(c);
     else actions.play(c);
   }
@@ -67,7 +104,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       <section aria-label="Adversários" className="no-scrollbar -mx-2 flex gap-2 overflow-x-auto px-2 pb-2 pt-3 sm:justify-center">
         {opponents.map((p) => {
           const turn = game.current_player === p.id;
-          const catchable = p.card_count === 1 && !p.uno_called;
+
           return (
             <div
               key={p.id}
@@ -95,14 +132,6 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                 ))}
                 <span className="ml-2 font-display text-sm font-bold tabular-nums">{p.card_count}</span>
               </div>
-              {p.uno_called && p.card_count === 1 && (
-                <span className="absolute -right-1.5 -top-1.5 rotate-6 rounded-lg bg-uno-r px-1.5 py-0.5 font-display text-[0.65rem] font-black text-uno-paper shadow-card animate-pop">UNO!</span>
-              )}
-              {catchable && (
-                <Button size="sm" variant="destructive" className="h-7 rounded-lg text-xs" onClick={() => actions.catchUno(p.id)} disabled={busy}>
-                  Pegar! Não gritou UNO
-                </Button>
-              )}
             </div>
           );
         })}
@@ -119,14 +148,31 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             myTurn ? "bg-cyan text-navy animate-pulse-ring" : "glass",
           )}
         >
-          {myTurn ? "Sua vez!" : current ? `Vez de ${current.nickname}` : "…"}
+          {myTurn ? ("Sua vez · "+remaining+"s") : current ? `Vez de ${current.nickname}` : "…"}
         </div>
 
+
+        {nine && (
+          <div className="relative z-20 w-full max-w-md rounded-2xl border border-cyan/50 bg-navy/95 p-4 text-center shadow-glow-cyan">
+            <p className="font-display text-lg font-black">DESAFIO DO 9 · {nineRemaining}s</p>
+            {nineReady ? (
+              <button type="button" disabled={busy} onClick={actions.pressNine} className="mt-2 size-24 rounded-full bg-cyan font-display text-6xl font-black text-navy shadow-glow-cyan active:scale-95">9</button>
+            ) : <p className="mt-2 text-sm text-muted-foreground">{nine.source===me?"Você está salvo!":"Aguardando os demais jogadores…"}</p>}
+            <p className="mt-2 text-sm text-muted-foreground">O último a apertar compra {nine.count} carta(s).</p>
+          </div>
+        )}
+        {myTurn && !!pending && (hand.some(c=>c==="W4"||cardValue(c)==="D")) && !nine && (
+          <div role="alert" className="relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
+            <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
+            <p className="mt-1 text-sm text-muted-foreground">Escolha um +2 ou +4 da mão para rebater ou aceite a compra.</p>
+            <Button variant="glass" className="mt-3 rounded-xl" onClick={actions.accept} disabled={busy}>Comprar {pending} e passar</Button>
+          </div>
+        )}
         <div className="relative z-10 flex items-center gap-6 sm:gap-10">
           <button
             type="button"
             onClick={actions.draw}
-            disabled={!myTurn || game.has_drawn || busy}
+            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || busy}
             aria-label={`Comprar carta. ${game.draw_count} cartas no baralho`}
             className={cn(
               "group relative rounded-[12%] transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:cursor-default",
@@ -165,49 +211,41 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
       {/* My area */}
       <section aria-label="Sua mão" className="sticky bottom-0 z-20 -mx-2 border-t border-glass-border bg-navy/85 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x">
-        <div className="flex flex-wrap items-center justify-center gap-2 px-2">
-          <p className="mr-auto text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">Sua mão</span> · {myCount} carta{myCount === 1 ? "" : "s"}
-            {meMember?.uno_called && myCount === 1 && <span className="ml-2 rounded-md bg-uno-r px-1.5 py-0.5 font-display text-xs font-black text-uno-paper">UNO!</span>}
-          </p>
-          {myTurn && !game.has_drawn && (
-            <Button variant="glass" className="h-11 rounded-xl" onClick={actions.draw} disabled={busy}>
-              {busy ? <Loader2 className="animate-spin" /> : <Hand />} Comprar
+        <div className="flex flex-wrap items-center gap-2 px-2">
+          <p className="mr-auto text-sm text-muted-foreground"><strong className="text-foreground">Sua mão</strong> · {myCount} carta(s)</p>
+          <button type="button" title="Alterar organização" onClick={()=>setSortMode(v=>v==="color"?"number":"color")} className="glass inline-flex h-9 items-center gap-1 rounded-xl px-2 text-xs">
+            <ArrowDownWideNarrow className="size-4" /> {sortMode==="color"?"Por cor":"Por número"}
+          </button>
+          <div className="flex flex-col items-center gap-1">
+            <button type="button" onPointerDown={beginHold} onPointerUp={stopHold} onPointerCancel={stopHold} onLostPointerCapture={stopHold} disabled={!game.can_catch_uno||busy} aria-label="Segure 5 segundos para denunciar UNO" className="glass flex h-9 items-center gap-1 rounded-xl px-2 text-xs disabled:opacity-45">
+              <svg viewBox="0 0 24 24" width="21" height="21" className="-rotate-90" aria-hidden>
+                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3"/>
+                <circle cx="12" cy="12" r="9" fill="none" stroke="#67e8f9" strokeWidth="3" strokeDasharray="56.55" strokeDashoffset={56.55*(1-hold/100)}/>
+              </svg>
+              <ShieldAlert className="size-4"/> Denunciar
+            </button>
+            <Button variant="glass" className="h-9 rounded-xl px-3 text-xs" onClick={actions.uno} disabled={busy||!canUno}>
+              <Megaphone className="size-4"/> UNO
             </Button>
-          )}
-          {myTurn && game.has_drawn && (
-            <Button variant="glass" className="h-11 rounded-xl" onClick={actions.pass} disabled={busy}>
-              <SkipForward /> Passar
-            </Button>
-          )}
-          {canUno && (
-            <Button className="h-11 rounded-xl bg-uno-r font-display font-black text-uno-paper shadow-card hover:bg-uno-r/90 animate-pulse-ring" onClick={actions.uno} disabled={busy}>
-              <Megaphone /> UNO!
+          </div>
+          {myTurn && !nine && (
+            <Button variant="hero" className="h-11 rounded-xl px-4" onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy}>
+              {busy?<Loader2 className="animate-spin"/>:<SkipForward/>} Terminar vez
             </Button>
           )}
         </div>
-        {myTurn && game.has_drawn && game.drawn_card && (
+        {myTurn && game.has_drawn && game.drawn_card && !played.length && (
           <p className="mt-2 px-2 text-center text-sm text-cyan">Você comprou {cardLabel(game.drawn_card)} — jogue-a ou passe a vez.</p>
         )}
-        <div className="no-scrollbar mt-1 flex overflow-x-auto px-3 pb-1 pt-6">
-          <div className="mx-auto flex">
-            {hand.map((c, i) => {
-              const ok = canPlay(c);
+        {!myTurn && state.room.rules.cut && <p className="mt-1 text-center text-xs text-muted-foreground">Corte: jogue uma carta idêntica à do descarte para roubar a vez.</p>}
+        <div className="no-scrollbar mt-2 overflow-x-auto px-2 pb-2 pt-3">
+          <div className="grid w-max min-w-full grid-flow-col grid-rows-2 auto-cols-[4.25rem] justify-center gap-x-2 gap-y-1 sm:auto-cols-[5.25rem]">
+            {hand.map((c,i)=>{
+              const ok=canPlay(c);
               return (
-                <button
-                  key={`${c}-${i}`}
-                  type="button"
-                  onClick={() => onCard(c)}
-                  aria-label={`${cardLabel(c)}${ok ? " — jogável" : ""}`}
-                  aria-disabled={!ok}
-                  className={cn(
-                    "relative shrink-0 rounded-[12%] transition-all duration-200 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring",
-                    i > 0 && "-ml-7 sm:-ml-6",
-                    ok ? "-translate-y-4 hover:z-10 hover:-translate-y-6" : myTurn ? "opacity-55 saturate-50" : "hover:-translate-y-1",
-                    game.has_drawn && c === game.drawn_card && "z-10",
-                  )}
-                >
-                  <UnoCard card={c} size="md" className={cn(ok && "shadow-glow-cyan")} />
+                <button key={c+"-"+i} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(ok?" — jogável":"")} aria-disabled={!ok}
+                  className={cn("relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",ok?"shadow-glow-cyan":"opacity-65")}>
+                  <UnoCard card={c} size="md"/>
                 </button>
               );
             })}
