@@ -183,7 +183,6 @@ const dictionary:Record<string,string>={
   "Regra do 9": "9 rule",
   "Aguardando o segundo colocado…": "Waiting for second place…",
   "1º colocado! Aguardando o segundo colocado…": "First place! Waiting for the runner-up…",
-  "Coringa Detetive": "Detective Wild",
   "Escolha um jogador para ver as cartas dele por 10 segundos.": "Choose a player to reveal their hand for 10 seconds.",
   "Nova cor": "New color",
   "Você comprou": "You drew",
@@ -192,18 +191,14 @@ const dictionary:Record<string,string>={
   "Carta comprada. Você pode jogar qualquer carta compatível.": "Card drawn. You may play any compatible card.",
   "Sem jogada possível: você comprou e a vez passou automaticamente.": "No playable cards: you drew one and your turn passed automatically.",
   "Baralho infinito": "Infinite deck",
-  "A partida começou! Boa sorte.": "Match started! Good luck.",
   "A sua vez terminou.": "Your turn ended.",
   "Você já terminou a partida!": "You already finished!",
   "Aguardando mais jogadores": "Waiting for more players",
   "Conexão instável — reconectando…": "Unstable connection — reconnecting…",
   "Segure": "Hold",
-  "Jogar novamente": "Play again",
   "Denunciar UNO": "Catch UNO",
   "1º": "1st",
-  "2º": "2nd",
-  "você": "you",
-  "Jogador": "Player"
+  "2º": "2nd"
 };
 const longPairs=Object.entries(dictionary).filter(([pt])=>pt.length>=10).sort((a,b)=>b[0].length-a[0].length);
 function translatePiece(value:string,lang:Language){
