@@ -4,18 +4,19 @@ import { BookOpen } from "lucide-react";
 import { UnoCard } from "./UnoCard";
 
 const RULES: {title: string; text: string; card?: string}[] = [
-  {title:"Objetivo",text:"Seja o primeiro a ficar sem cartas. Cada jogador começa com 7 cartas."},
+  {title:"Objetivo",text:"Seja o primeiro a ficar sem cartas. Cada jogador começa com 8 cartas por padrão (o anfitrião pode escolher entre 2 e 20)."},
   {title:"Na sua vez",text:"Jogue uma carta compatível e, se quiser, continue com sequências. Aperte Terminar vez. O limite é 60 segundos."},
   {title:"Sequências repetidas",text:"Jogue várias cartas de número ou símbolo igual, mesmo com cores diferentes.",card:"b1"},
   {title:"Sequências numéricas",text:"Jogue 4-5-6 ou 6-5-4 da mesma cor, sem pular números.",card:"g5"},
-  {title:"O desafio do 9",text:"Com pelo menos 3 jogadores, todos exceto quem jogou devem apertar 9. O último compra uma carta por 9 jogado.",card:"y9"},
+  {title:"O desafio do 9",text:"Com pelo menos 3 jogadores, todos exceto quem jogou devem apertar 9. O desafio só acontece se a última carta jogada for 9. O último compra uma carta por 9 consecutivo no topo.",card:"y9"},
   {title:"Corte",text:"Se tiver exatamente a mesma carta do descarte, pode lançá-la mesmo fora da sua vez; a vez passa a ser sua."},
   {title:"Rebater compras",text:"Use +2 ou +4 para repassar a penalidade acumulada. Sem defesa, compre e passe a vez.",card:"W4"},
   {title:"Comprar",text:"Você pode comprar uma carta por vontade própria e então jogá-la, se servir, ou terminar sua vez."},
   {title:"UNO e denúncia",text:"Aperte UNO discretamente com uma carta. Após 8 segundos, outra pessoa pode segurar Denunciar por 5 segundos; quem esqueceu compra 2."},
   {title:"Tempo",text:"Após 60 segundos, as cartas que você jogou ficam na mesa e a vez termina; se não jogou, compra uma carta e passa."},
+  {title:"+2 Volta",text:"Uma carta de cada cor que inverte imediatamente o sentido e soma duas cartas à dívida. Ao rebater, devolve a compra ao jogador no sentido inverso.",card:"bT"},
   {title:"Coringa +5",text:"Troca a cor e obriga o próximo a comprar cinco cartas e perder a vez. Não pode ser rebatido.",card:"W5"},
-  {title:"Bots",text:"O anfitrião pode adicionar bots fáceis ou difíceis durante a espera."},
+  {title:"Bots",text:"O anfitrião pode adicionar bots fáceis ou difíceis. Eles também podem gritar e denunciar UNO em momentos diferentes."},
 ];
 
 export function HowToPlayDialog({ trigger }: { trigger?: React.ReactNode }) {

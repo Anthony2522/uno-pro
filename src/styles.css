@@ -334,3 +334,25 @@
 /* Distinct broadcast feedback for cut and penalty; no layout changes to the rest of the game. */
 .uno-effect-cut .uno-special-badge {border-color:#22d3ee; box-shadow:0 0 80px #22d3eeaa;}
 .uno-effect-penalty .uno-special-badge {border-color:#fb923c; box-shadow:0 0 80px #fb923c99;}
+
+
+/* The new color is communicated as a wave, not a text announcement. */
+@keyframes uno-color-splash {
+  0% {opacity:0;clip-path:circle(0% at 50% 58%);filter:blur(10px)}
+  18% {opacity:.8;clip-path:circle(50% at 50% 58%);filter:blur(0)}
+  55% {opacity:.6;clip-path:circle(150% at 50% 58%)}
+  85% {opacity:.24;clip-path:circle(165% at 50% 58%)}
+  100% {opacity:0;clip-path:circle(165% at 50% 58%)}
+}
+.uno-color-wave {position:fixed;inset:0;z-index:79;pointer-events:none;
+  background:radial-gradient(circle at 50% 58%,var(--wave-light),var(--wave-color) 58%,transparent 95%);
+  animation:uno-color-splash 5s ease-out both;}
+.uno-color-wave-r {--wave-color:rgba(239,68,68,.82);--wave-light:rgba(254,202,202,.87);}
+.uno-color-wave-y {--wave-color:rgba(234,179,8,.79);--wave-light:rgba(254,240,138,.84);}
+.uno-color-wave-g {--wave-color:rgba(22,163,74,.83);--wave-light:rgba(187,247,208,.84);}
+.uno-color-wave-b {--wave-color:rgba(37,99,235,.84);--wave-light:rgba(186,230,253,.87);}
+.uno-effect-title {display:flex;align-items:center;justify-content:center;min-height:60px;}
+.uno-effect-player {font-size:clamp(1rem,3.8vw,1.65rem);line-height:1.2}
+@media (prefers-reduced-motion: reduce) {
+  .uno-color-wave {animation:none;opacity:.3;clip-path:none;}
+}

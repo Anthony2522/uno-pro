@@ -67,7 +67,7 @@ export function cleanText(p) {
 }
 const cleanCode = (c) => cleanText(c).toUpperCase();
 
-const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D)|W|W4|W5)$/;
+const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5)$/;
 const isWild = (c) => c === "W" || c === "W4" || c === "W5";
 export const cardValue = (c) => (isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
@@ -85,7 +85,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of every colored number/action, 10 wilds, 10 +4 and 2 +5 = 178 cards. */
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5 = 186 cards. */
 export function newDeck() {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
@@ -95,6 +95,7 @@ export function newDeck() {
   }
   for (let i = 0; i < 10; i++) d.push("W", "W4");
   for (let i = 0; i < 2; i++) d.push("W5");
+  for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T");
   return shuffle(d);
 }
 
@@ -443,7 +444,7 @@ const handlers = {
     if (players.length < 2) fail("NOT_ENOUGH_PLAYERS");
     let dp = newDeck();
     r.hands = new Map();
-    for (const p of players) r.hands.set(p, { cards: dp.splice(0, 7), uno_called: false });
+    for (const p of players) r.hands.set(p, { cards: dp.splice(0, r.initial_cards ?? 8), uno_called: false, uno_since: null });
     let top;
     for (;;) {
       top = dp.shift();
@@ -458,7 +459,7 @@ const handlers = {
       current_color: top[0],
       turn_order: players,
       turn_idx: crypto.randomInt(players.length),
-      direction: 1,
+      direction: crypto.randomInt(2) === 0 ? 1 : -1,
       has_drawn: false,
       drawn_card: null,
       winner_id: null,

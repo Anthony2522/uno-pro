@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {store, newDeck} from "../server/game.js";
-import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,BOT_NAMES} from "../server/pro.js";
+import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
 const call=(fn,args)=>proRpc(fn,args);
 function setup(rules) {
   const a=call("register_guest",{p_nickname:"Alice"}),b=call("register_guest",{p_nickname:"Bruno"});
@@ -10,6 +10,7 @@ function setup(rules) {
   const {id:bot}=call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"hard"});
   call("start_game",{p_token:a.token,p_code:code});
   const room=store.roomsByCode.get(code),g=room.game;
+  g.direction=1; // Deterministic turn direction for unit tests; production remains randomized.
   const setTurn=id=>{g.turn_idx=g.turn_order.indexOf(id);g.turn_cards=[];g.turn_mode=null;g.turn_step=0;g.has_drawn=false;g.drawn_card=null;g.pending_draw=0;g.nine=null;g.turn_started_at=Date.now();};
   // Legacy mechanics tests skip the animation-only two-second gate.
   const clearNotice=()=>{
@@ -26,8 +27,9 @@ test("criação, bots, privacidade e regras ativadas por padrão",()=>{
   assert.equal(alice.members.length,3);
   assert.equal(alice.members.filter(m=>m.bot).length,1);
   assert.deepEqual(alice.room.rules,{repeat:true,sequence:true,nine:true,cut:true,stack:true});
-  assert.equal(alice.game.my_hand.length,7);
-  assert.equal(bruno.game.my_hand.length,7);
+  assert.equal(alice.game.my_hand.length,8);
+  assert.equal(bruno.game.my_hand.length,8);
+  assert.equal(alice.room.initial_cards,8);
   assert.equal("draw_pile" in alice.game,false);
   assert.equal("cards" in alice.members[1],false);
 });
@@ -87,14 +89,15 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("novo baralho tem 178 cartas: 3 cartas coloridas por tipo, dez W/dez +4 e dois +5",()=>{
+test("baralho 186 cartas, incluindo dois +2 Volta por cor e dois +5",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,178);
+  assert.equal(deck.length,186);
   for(const col of ["r","y","g","b"])
     for(const value of ["0","1","2","3","4","5","6","7","8","9","S","R","D"])
       assert.equal(deck.filter(c=>c===col+value).length,3,col+value);
   for(const card of ["W","W4"])assert.equal(deck.filter(c=>c===card).length,10,card);
   assert.equal(deck.filter(c=>c==="W5").length,2);
+  for(const col of ["r","y","g","b"])assert.equal(deck.filter(c=>c===col+"T").length,2);
 });
 test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   const s=setup(),{room,g,a}=s;
@@ -103,7 +106,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   room.hands.get(a.guest_id).cards=["b1","r5"];
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,177);
+  assert.equal(g.draw_pile.length,185);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -402,11 +405,11 @@ test("aviso especial dura cinco segundos, permite jogar aos 2s sem gastar turno"
   const notice=g.effects.at(-1);
   assert.equal(notice.type,"reverse");
   assert.equal(g.turn_started_at>=start+5000,true,"tempo da notificação não consome o turno");
-  assert.throws(()=>call("play_card",{p_token:a.token,p_code:s.code,p_card:"yR"}),/ANNOUNCEMENT_WAIT/);
-  notice.show_at=Date.now()-2500;
-  // The animation is still visible for about 2.5s but the player may act.
+  // During the notice, the same player may complete a combo and end their turn.
   call("play_card",{p_token:a.token,p_code:s.code,p_card:"yR"});
   assert.equal(g.turn_cards.length,2);
+  call("end_turn",{p_token:a.token,p_code:s.code});
+  assert.equal(g.turn_cards.length,0);
 });
 
 test("bot decide uma vez por turno e não joga antes da espera de 5/11 segundos",()=>{
@@ -460,4 +463,131 @@ test("bot que joga ação especial não força segunda carta durante os 2s de av
   proSweep();
   assert.notEqual(g.turn_order[g.turn_idx],s.bot);
   assert.ok(g.effects.some(e=>e.type==="reverse"));
+});
+
+
+test("cartas iniciais são configuráveis e o padrão é 8",()=>{
+  const a=call("register_guest",{p_nickname:"Oito"});
+  const b=call("register_guest",{p_nickname:"Doze"});
+  const code=call("create_room",{p_token:a.token,p_name:"Distribuição",p_max_players:2,p_starting_cards:12}).code;
+  call("join_room",{p_token:b.token,p_code:code});
+  call("start_game",{p_token:a.token,p_code:code});
+  const r=store.roomsByCode.get(code);
+  assert.equal(r.hands.get(a.guest_id).cards.length,12);
+  assert.equal(r.hands.get(b.guest_id).cards.length,12);
+  assert.equal(call("get_room_state",{p_token:a.token,p_code:code}).room.initial_cards,12);
+  assert.throws(()=>call("create_room",{p_token:a.token,p_name:"Invalida",p_max_players:2,p_starting_cards:100}),/INVALID_STARTING_CARDS/);
+  assert.ok([-1,1].includes(r.game.direction));
+  assert.ok(r.game.turn_order.includes(r.game.turn_order[r.game.turn_idx]));
+});
+
+test("9 seguido por 8 e 7 não ativa desafio; só os 9 finais contam",()=>{
+  const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b9"];g.current_color="b";g.direction=1;
+  room.hands.get(a.guest_id).cards=["b9","b8","b7","r0"];
+  s.play(a,"b9");s.play(a,"b8");s.play(a,"b7");s.end(a);
+  assert.equal(g.nine,null);
+  s.setTurn(a.guest_id);g.discard_pile=["b8"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["b8","b9","r1"];
+  s.play(a,"b8");s.play(a,"b9");s.end(a);
+  assert.equal(g.nine.count,1);
+});
+
+test("duas cartas +2 Volta: acumulam, invertem, voltam ao atacante",()=>{
+  const ps=["AliceRe","BrunoRe","CrisRe","DoraRe"].map(n=>call("register_guest",{p_nickname:n}));
+  const [a,b,c,d]=ps;
+  const code=call("create_room",{p_token:a.token,p_name:"Revidar volta",p_max_players:4}).code;
+  for(const p of [b,c,d])call("join_room",{p_token:p.token,p_code:code});
+  call("start_game",{p_token:a.token,p_code:code});
+  const r=store.roomsByCode.get(code),g=r.game;
+  g.turn_idx=0;g.direction=1;g.discard_pile=["b3"];g.current_color="b";
+  r.hands.get(a.guest_id).cards=["bT","yD","r1"];
+  r.hands.get(b.guest_id).cards=["g2","g8"];
+  r.hands.get(c.guest_id).cards=["g8","y6"];
+  r.hands.get(d.guest_id).cards=["rT","g9"];
+  call("play_card",{p_token:a.token,p_code:code,p_card:"bT"});
+  call("end_turn",{p_token:a.token,p_code:code});
+  assert.equal(g.direction,-1);
+  assert.equal(g.pending_draw,2);
+  assert.equal(g.turn_order[g.turn_idx],d.guest_id);
+  call("play_card",{p_token:d.token,p_code:code,p_card:"rT"});
+  call("end_turn",{p_token:d.token,p_code:code});
+  assert.equal(g.direction,1);
+  assert.equal(g.pending_draw,4);
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  // An ordinary +2 response does not invert; the debt travels onward.
+  r.hands.get(a.guest_id).cards=["yD","r1"];
+  call("play_card",{p_token:a.token,p_code:code,p_card:"yD"});
+  call("end_turn",{p_token:a.token,p_code:code});
+  assert.equal(g.pending_draw,0);
+  assert.equal(r.hands.get(b.guest_id).cards.length,8);
+});
+
+test("bot grita UNO em 0/8 segundos ou esquece; difícil é imediato",()=>{
+  assert.equal(chooseBotUnoDelay("hard",()=>0.99),0);
+  assert.equal(chooseBotUnoDelay("easy",()=>0.1999),0);
+  assert.equal(chooseBotUnoDelay("easy",()=>0.20),8000);
+  assert.equal(chooseBotUnoDelay("easy",()=>0.7999),8000);
+  assert.equal(chooseBotUnoDelay("easy",()=>0.80),null);
+  const s=setup(),{room,g}=s;
+  s.setTurn(s.a.guest_id);
+  const h=room.hands.get(s.bot);
+  h.cards=["b1"];h.uno_called=false;h.uno_since=Date.now()-50;h.bot_uno_plan=null;
+  proSweep();
+  assert.equal(h.uno_called,true,"bot difícil deveria gritar UNO imediatamente");
+  assert.ok(g.effects.some(e=>e.type==="uno"&&e.by===s.bot));
+});
+
+test("bot difícil denuncia aos 4s; fácil somente após 15s",()=>{
+  const s=setup(),{room,g,a}=s;
+  s.setTurn(s.bot);
+  const h=room.hands.get(a.guest_id);
+  h.cards=["b3"];h.uno_called=false;h.uno_since=Date.now()-5000;
+  proSweep();
+  assert.equal(h.cards.length,3,"bot difícil denuncia com 4 segundos");
+  assert.equal(g.last_action.by,s.bot);
+  // Reset the victim and switch the bot difficulty to easy.
+  const bot=store.guestsById.get(s.bot);
+  bot.difficulty="easy";
+  h.cards=["g4"];h.uno_called=false;h.uno_since=Date.now()-14000;
+  proSweep();
+  assert.equal(h.cards.length,1,"bot fácil não pode denunciar antes de 15s");
+  h.uno_since=Date.now()-16000;
+  proSweep();
+  assert.equal(h.cards.length,3,"bot fácil denuncia após 15s");
+});
+
+test("o corte não é permitido durante os dois primeiros segundos do aviso, mas termina vez é",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["bR"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bR","yR","r1"];
+  room.hands.get(b.guest_id).cards=["bR","g2"];
+  s.play(a,"bR");
+  assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"bR"}),/ANNOUNCEMENT_WAIT/);
+  // A may play the rest of the combo and finish while the announcement is visible.
+  call("play_card",{p_token:a.token,p_code:s.code,p_card:"yR"});
+  call("end_turn",{p_token:a.token,p_code:s.code});
+  assert.equal(g.turn_cards.length,0);
+});
+
+test("penalidade após +2 Volta informa quem atacou, vítima e quantidade",()=>{
+  const s=setup(),{room,g,a}=s;
+  s.setTurn(a.guest_id);g.direction=1;g.discard_pile=["b1"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bT","r2"];
+  room.hands.get(s.bot).cards=["r1","y6","g8"];
+  s.play(a,"bT");s.end(a);
+  const debt=g.effects.findLast(e=>e.type==="penalty");
+  assert.equal(debt.by,a.guest_id);
+  assert.equal(debt.target,s.bot);
+  assert.equal(debt.n,2);
+  assert.equal(g.direction,-1);
+});
+
+test("somente mudanças de cor geram onda, não anúncio de carta +2/+4 jogada",()=>{
+  const s=setup(),{room,g,a}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","r1"];
+  s.play(a,"W4","g");
+  assert.equal(g.effects.at(-1).type,"color_wave");
+  assert.equal(g.effects.at(-1).color,"g");
 });

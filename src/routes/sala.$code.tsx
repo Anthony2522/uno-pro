@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Ban, Loader2, Repeat2, Scissors, Megaphone, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
@@ -64,7 +64,7 @@ function RoomPage() {
     if(!event){effectShowing.current=false;setSpecialEffect(null);return;}
     effectShowing.current=true;
     setSpecialEffect(event);
-    sfx(event.type);
+    sfx(event.type==="color_wave"?"wild":event.type);
     if(specialTimer.current)clearTimeout(specialTimer.current);
     specialTimer.current=setTimeout(showNextEffect,5000);
   },[]);
@@ -201,23 +201,36 @@ function RoomPage() {
       </AppHeader>
       <ConnectionBanner show={connection === "reconnecting"} />
       {specialEffect && playing && (
-        <div key={specialEffect.id} className={"uno-special-overlay uno-effect-"+specialEffect.type} aria-live="assertive" role="status">
-          <div className="uno-special-badge">
-            <span className="uno-effect-title">{({
-              reverse:"↶ INVERSÃO!",skip:"⛔ BLOQUEIO!",draw2:"+2 CARTAS!",
-              draw4:"+4 CARTAS!",draw5:"+5 CARTAS!",wild:"✦ CORINGA!",uno:"UNO!",cut:"✂ CORTE!",penalty:"CARTAS COMPRADAS!"
-            } as Record<string,string>)[specialEffect.type]}</span>
-            <span className="uno-effect-player">{specialEffect.type==="cut"
-              ? `${specialEffect.name} cortou ${specialEffect.target_name ?? "a vez"}!`
-              : specialEffect.type==="penalty"
-                ? `${specialEffect.target_name ?? specialEffect.name} comprou ${specialEffect.n ?? 0} carta(s)!`
-                : specialEffect.type==="skip"
-                  ? `${specialEffect.name} bloqueou ${specialEffect.target_name ?? "o próximo jogador"}!`
-                  : specialEffect.type==="uno"
-                    ? `${specialEffect.name} gritou UNO!`
-                    : `${specialEffect.name} jogou a carta!`}</span>
+        specialEffect.type==="color_wave" ? (
+          <div key={specialEffect.id}
+            className={"uno-color-wave uno-color-wave-"+(specialEffect.color || "b")}
+            role="status" aria-label="Uma nova cor foi escolhida" />
+        ) : (
+          <div key={specialEffect.id} className={"uno-special-overlay uno-effect-"+specialEffect.type} aria-live="assertive" role="status">
+            <div className="uno-special-badge">
+              <div className="uno-effect-title" aria-hidden>
+                {specialEffect.type==="skip" ? <Ban className="size-16 sm:size-24" strokeWidth={3.2}/> :
+                 specialEffect.type==="reverse" ? <Repeat2 className="size-16 sm:size-24" strokeWidth={3}/> :
+                 specialEffect.type==="cut" ? <Scissors className="size-16 sm:size-24" strokeWidth={3}/> :
+                 specialEffect.type==="catch" ? <ShieldAlert className="size-16 sm:size-24" strokeWidth={3}/> :
+                 specialEffect.type==="penalty" ? <span className="text-6xl sm:text-8xl">+{specialEffect.n ?? 2}</span> :
+                 specialEffect.type==="uno" ? <Megaphone className="size-16 sm:size-24" strokeWidth={3}/> :
+                 <span className="text-5xl">↶</span>}
+              </div>
+              {(specialEffect.type==="skip" || specialEffect.type==="penalty" || specialEffect.type==="cut" || specialEffect.type==="catch") ? (
+                <span className="uno-effect-player">
+                  {specialEffect.name} <span className="mx-1 text-cyan">→</span> {specialEffect.target_name ?? "Jogador"}
+                </span>
+              ) : (
+                <span className="uno-effect-player">
+                  {specialEffect.type==="uno" ? specialEffect.name+" gritou UNO!" :
+                  specialEffect.type==="reverse" ? specialEffect.name+" inverteu o sentido!" :
+                  specialEffect.name}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )
       )}
       {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))} />}
       <WinnerOverlay

@@ -1,7 +1,7 @@
 name: UNO Pro - checagem
 on:
   push:
-    branches: [main, upgrade-uno-pro-rules, upgrade-bot-pacing-notices-2026-11-14]
+    branches: [main, upgrade-uno-pro-rules, upgrade-bot-pacing-notices-2026-11-14, feature-uno-pro-new-cards-2026-11-14]
   workflow_dispatch:
 jobs:
   build-and-tests:
