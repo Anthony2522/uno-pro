@@ -1,51 +1,58 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Trophy, Hand, ArrowDownUp, Timer, Users, Eye, Crown, Zap, Layers3, ShieldAlert, MousePointer2 } from "lucide-react";
 import { UnoCard } from "./UnoCard";
+import { useLanguage } from "@/lib/uno/i18n";
+import type { LucideIcon } from "lucide-react";
 
-const RULES: {title: string; text: string; card?: string}[] = [
-  {title:"Objetivo",text:"Seja o primeiro a ficar sem cartas. Cada jogador começa com 8 cartas por padrão (o anfitrião pode escolher entre 2 e 20)."},
-  {title:"Na sua vez",text:"Jogue uma carta compatível e, se quiser, continue com sequências. Aperte Terminar vez. O limite é 60 segundos."},
-  {title:"Sequências repetidas",text:"Jogue várias cartas de número ou símbolo igual, mesmo com cores diferentes.",card:"b1"},
-  {title:"Sequências numéricas",text:"Jogue 4-5-6 ou 6-5-4 da mesma cor, sem pular números.",card:"g5"},
-  {title:"O desafio do 9",text:"Com pelo menos 3 jogadores, todos exceto quem jogou devem apertar 9. O desafio só acontece se a última carta jogada for 9. O último compra uma carta por 9 consecutivo no topo.",card:"y9"},
-  {title:"Corte",text:"Se tiver exatamente a mesma carta do descarte, pode lançá-la mesmo fora da sua vez; a vez passa a ser sua."},
-  {title:"Rebater compras",text:"Use +2 ou +4 para repassar a penalidade acumulada. Sem defesa, compre e passe a vez.",card:"W4"},
-  {title:"Comprar",text:"Você pode comprar uma carta por vontade própria e então jogá-la, se servir, ou terminar sua vez."},
-  {title:"UNO e denúncia",text:"Aperte UNO discretamente com uma carta. Após 8 segundos, outra pessoa pode segurar Denunciar por 5 segundos; quem esqueceu compra 2."},
-  {title:"Tempo",text:"Após 60 segundos, as cartas que você jogou ficam na mesa e a vez termina; se não jogou, compra uma carta e passa."},
-  {title:"+2 Volta",text:"Uma carta de cada cor que inverte imediatamente o sentido e soma duas cartas à dívida. Ao rebater, devolve a compra ao jogador no sentido inverso.",card:"bT"},
-  {title:"Coringa +5",text:"Troca a cor e obriga o próximo a comprar cinco cartas e perder a vez. Não pode ser rebatido.",card:"W5"},
-  {title:"Bots",text:"O anfitrião pode adicionar bots fáceis ou difíceis. Eles também podem gritar e denunciar UNO em momentos diferentes."},
+type Rule={pt:string;en:string;descPt:string;descEn:string;card?:string;icon?:LucideIcon};
+const RULES:Rule[]=[
+  {pt:"Objetivo e classificação",en:"Goal and placements",descPt:"Seja o primeiro a ficar sem cartas. A partida continua até sair também o segundo colocado. Com apenas 2 jogadores, o segundo lugar é automático.",descEn:"Be the first to empty your hand. The match continues until a second player finishes. With only 2 players, second place is automatic.",icon:Trophy},
+  {pt:"Começando a partida",en:"Starting the match",descPt:"O primeiro jogador e o sentido são aleatórios. Todos recebem 8 cartas por padrão (de 2 a 20, a critério do anfitrião).",descEn:"The first player and direction are random. Players receive 8 cards by default (the host may choose 2–20).",icon:Users},
+  {pt:"Sua vez",en:"Your turn",descPt:"Jogue uma ou mais cartas compatíveis e aperte Terminar vez. O limite é 50 segundos, sem contar os avisos.",descEn:"Play one or more compatible cards and press End turn. You have 50 seconds, excluding announcements.",icon:Hand},
+  {pt:"Comprar carta",en:"Drawing a card",descPt:"Você pode comprar uma carta e ainda jogar qualquer carta válida da sua mão. Sem jogada, compre e passe.",descEn:"You may draw a card and still play any valid card from your hand. With no playable card, draw and pass.",icon:Layers3},
+  {pt:"Repetições",en:"Repeated cards",descPt:"Jogue várias cartas com o mesmo valor ou símbolo, inclusive em cores diferentes.",descEn:"Play multiple cards with the same value or symbol, even across different colors.",card:"b1"},
+  {pt:"Sequências numéricas",en:"Number runs",descPt:"Jogue números em ordem crescente ou decrescente da mesma cor, como 4–5–6 ou 6–5–4.",descEn:"Play ascending or descending consecutive numbers of the same color, e.g. 4–5–6 or 6–5–4.",card:"g5"},
+  {pt:"Bloqueio e inversão",en:"Skip and reverse",descPt:"Bloqueios acumulam. Duas inversões se anulam. Em duelos de dois, a inversão comum permite jogar de novo.",descEn:"Skips stack. Two reverse cards cancel out. In a two-player match, an ordinary reverse lets you go again.",card:"yS"},
+  {pt:"Compras e rebatidas",en:"Draw penalties and stacking",descPt:"+2 e +4 podem ser rebatidos com qualquer compra permitida, sem restrição de cor. O somatório passa ao próximo.",descEn:"+2 and +4 may be countered with any allowed draw card, regardless of color. The sum passes to the next player.",card:"W4"},
+  {pt:"+2 Volta",en:"+2 Reverse",descPt:"Soma +2 e inverte o sentido, inclusive ao rebater. Em partidas com dois jogadores, funciona como +2 normal, sem repetir a vez.",descEn:"Adds 2 and reverses direction, including while countering. With two players, it works like a regular +2 and does not give an extra turn.",card:"bT"},
+  {pt:"Coringa +5",en:"Wild +5",descPt:"Soma cinco cartas e permite escolher uma cor. Só outro +5 pode rebatê-lo.",descEn:"Adds five cards and lets you choose a color. Only another +5 can counter it.",card:"W5"},
+  {pt:"Coringa Detetive",en:"Detective Wild",descPt:"Há um único no baralho. Escolha um jogador e veja as cartas dele por dez segundos.",descEn:"Only one per deck. Pick a player and view their cards for ten seconds.",card:"X"},
+  {pt:"Desafio do 9",en:"The 9 challenge",descPt:"Com três ou mais jogadores, só vale se o descarte terminar em 9. Quem for último a apertar compra uma carta por cada 9 final.",descEn:"With 3+ players, the top discarded card must be 9. The last to press draws a card for every consecutive 9 at the end.",card:"r9"},
+  {pt:"Corte",en:"Jump-in",descPt:"Se tiver exatamente a carta do topo, pode cortar fora da vez e roubar a jogada. O jogo não indica cortes possíveis.",descEn:"If you hold the exact top card, you can jump in out of turn. The game does not reveal jump-in opportunities.",icon:MousePointer2},
+  {pt:"Gritar e denunciar UNO",en:"Call and catch UNO",descPt:"Com uma carta, grite UNO discretamente. Depois de oito segundos, um adversário pode denunciar segurando o botão por cinco segundos. A punição é +2.",descEn:"At one card, call UNO quietly. After eight seconds, an opponent can hold the catch button for five seconds. Penalty: +2.",icon:ShieldAlert},
+  {pt:"Organizar as cartas",en:"Sort your hand",descPt:"Alterne entre ordenar por cor e por valor. A segunda linha continua a sequência da primeira.",descEn:"Switch between color and number ordering. The second row continues the ordering from the first.",icon:ArrowDownUp},
+  {pt:"Tempo limite",en:"Turn timer",descPt:"Você tem 50 segundos para a jogada. Se já lançou cartas, elas ficam; se não, compra uma carta e passa.",descEn:"You have 50 seconds. Already-played cards stay; if you played nothing, draw one and pass.",icon:Timer},
+  {pt:"Bots",en:"Bots",descPt:"O anfitrião pode adicionar bots fáceis e difíceis. Eles jogam, cortam, gritam e denunciam UNO.",descEn:"The host can add easy or hard bots. They play, jump in, call and catch UNO.",icon:Crown},
 ];
 
-export function HowToPlayDialog({ trigger }: { trigger?: React.ReactNode }) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="glass" size="sm" className="h-10 rounded-xl">
-            <BookOpen /> <span className="hidden sm:inline">Como jogar</span>
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent className="glass-strong max-h-[88dvh] overflow-y-auto rounded-3xl border-glass-border sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Como jogar</DialogTitle>
-          <DialogDescription>Regras opcionais podem ser ativadas ou desativadas pelo anfitrião antes da partida.</DialogDescription>
-        </DialogHeader>
-        <ul className="space-y-3">
-          {RULES.map((r) => (
-            <li key={r.title} className="flex items-start gap-3 rounded-2xl bg-navy/40 p-3">
-              {r.card ? <UnoCard card={r.card} size="sm" /> : <span className="mt-1 size-2.5 shrink-0 rounded-full bg-cyan" aria-hidden />}
-              <div>
-                <p className="font-display text-sm font-bold">{r.title}</p>
-                <p className="text-sm text-muted-foreground">{r.text}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </DialogContent>
-    </Dialog>
-  );
+export function HowToPlayDialog({trigger}:{trigger?:React.ReactNode}){
+  const {language}=useLanguage();
+  const en=language==="en";
+  return <Dialog>
+    <DialogTrigger asChild>{trigger??<Button variant="glass" size="sm" className="h-10 rounded-xl" aria-label={en?"How to play":"Como jogar"}>
+      <BookOpen className="size-5"/><span className="hidden sm:inline">{en?"How to play":"Como jogar"}</span>
+    </Button>}</DialogTrigger>
+    <DialogContent className="glass-strong max-h-[86dvh] overflow-y-auto rounded-3xl border-glass-border sm:max-w-xl">
+      <DialogHeader>
+        <DialogTitle className="font-display text-2xl">{en?"How to play":"Como jogar"}</DialogTitle>
+        <DialogDescription>{en?"Optional rules are configured when the room is created.":"As regras opcionais podem ser ajustadas ao criar a sala."}</DialogDescription>
+      </DialogHeader>
+      <ul className="space-y-2.5">
+        {RULES.map((r,i)=>{
+          const Icon=r.icon;
+          return <li key={r.pt} className="flex min-h-[90px] items-center gap-3 rounded-2xl border border-glass-border/50 bg-navy/50 p-3">
+            <div className="flex h-[84px] w-[62px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan/20 bg-gradient-to-br from-brand/30 to-cyan/15">
+              {r.card?<UnoCard card={r.card} size="sm" className="!w-[53px] !rounded-lg"/>:
+                Icon?<Icon className="size-9 text-cyan drop-shadow-[0_0_12px_rgba(34,211,238,.5)]" strokeWidth={1.8}/>:<Zap className="size-9 text-cyan"/>}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-sm font-bold text-foreground"><span className="mr-1.5 text-cyan/80">{i+1}.</span>{en?r.en:r.pt}</p>
+              <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{en?r.descEn:r.descPt}</p>
+            </div>
+          </li>;
+        })}
+      </ul>
+    </DialogContent>
+  </Dialog>;
 }

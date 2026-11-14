@@ -9,6 +9,8 @@ type Status = "loading" | "needs-name" | "ready";
 type GuestCtx = {
   status: Status;
   guest: Guest | null;
+  isDev: boolean;
+  activateDev: (key:string)=>Promise<void>;
   register: (nickname: string) => Promise<void>;
   rename: (nickname: string) => Promise<void>;
   /** Call when the server says the session is invalid. */
@@ -40,6 +42,7 @@ function store(g: Guest | null) {
 
 export function GuestProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
+  const [isDev,setIsDev]=useState(false);
   const [guest, setGuest] = useState<Guest | null>(null);
   const [lastName, setLastName] = useState<string>("");
 
@@ -51,6 +54,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
     }
     setGuest(g);
     setStatus("ready");
+    api.devStatus(g.token).then(r=>setIsDev(r.is_dev)).catch(()=>setIsDev(false));
     // Validate in the background; a network failure keeps the stored identity.
     api
       .whoami(g.token)
@@ -75,6 +79,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
     const g = await api.registerGuest(nickname);
     store(g);
     setGuest(g);
+    setIsDev(false);
     setStatus("ready");
   }, []);
 
@@ -85,6 +90,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
       const next = { ...guest, nickname: r.nickname };
       store(next);
       setGuest(next);
+      if(next.nickname.toLocaleLowerCase("pt-BR")!=="toninho")setIsDev(false);
     },
     [guest],
   );
@@ -93,12 +99,17 @@ export function GuestProvider({ children }: { children: ReactNode }) {
     setLastName((n) => guest?.nickname ?? n);
     store(null);
     setGuest(null);
+    setIsDev(false);
     setStatus("needs-name");
   }, [guest]);
 
+  const activateDev=useCallback(async (key:string)=>{
+    if(!guest)throw Error("INVALID_SESSION");
+    await api.devAuth(guest.token,key);setIsDev(true);
+  },[guest]);
   const value = useMemo(
-    () => ({ status, guest, register, rename, resetSession, lastName }),
-    [status, guest, register, rename, resetSession, lastName],
+    () => ({ status, guest, register, rename, resetSession, lastName,isDev,activateDev }),
+    [status, guest, register, rename, resetSession, lastName,isDev,activateDev],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

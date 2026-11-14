@@ -19,7 +19,8 @@ const MAX_BODY = 8 * 1024;
 // Generous per-IP buckets: friends on the same Wi-Fi share one IP.
 const ipLimiter = new TokenBucket({ capacity: 150, refillPerSec: 40 });
 const registerLimiter = new TokenBucket({ capacity: 15, refillPerSec: 15 / 600 }); // ~15 new nicknames / 10 min / IP
-const createLimiter = new TokenBucket({ capacity: 10, refillPerSec: 10 / 60 }); // ~10 rooms / min / IP
+const createLimiter = new TokenBucket({ capacity: 10, refillPerSec: 10 / 60 });
+const developerLimiter = new TokenBucket({ capacity: 5, refillPerSec: 5 / 600 }); // ~10 rooms / min / IP
 const SSE_PER_IP = 40;
 const sseCount = new Map();
 
@@ -142,6 +143,9 @@ async function handleRpc(req, res, url) {
   if (!RPC_NAMES.includes(fn)) return json(res, 404, { error: { code: "UNKNOWN_FUNCTION", message: "UNKNOWN_FUNCTION" } });
   if (fn === "register_guest" && !registerLimiter.take(ip)) {
     return json(res, 429, { error: { code: "RATE_LIMITED", message: "Muitos apelidos criados. Tente de novo em alguns minutos." } });
+  }
+  if (fn === "dev_auth" && !developerLimiter.take(ip)) {
+    return json(res,429,{error:{code:"RATE_LIMITED",message:"Muitas tentativas de autenticação."}});
   }
   if (fn === "create_room" && !createLimiter.take(ip)) {
     return json(res, 429, { error: { code: "RATE_LIMITED", message: "Muitas salas criadas. Aguarde um minuto." } });

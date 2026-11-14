@@ -161,10 +161,10 @@ function RoomPage() {
   const finished = g?.status === "finished";
   const winner = finished && g.winner_id ? state.members.find((m) => m.id === g.winner_id) : undefined;
   const winnerName = winner?.nickname ?? (g?.winner_id ? "Alguém" : "");
-  const showWinner = !!(finished && g.winner_id && dismissedRound !== g.round && g.turn_order.includes(state.me));
+  const showWinner = !!(finished && g.winner_id && dismissedRound !== g.round);
 
   const actions: GameActions = {
-    play: (card, color) => act(() => api.playCard(token, code, card, color)),
+    play: (card, color, targetId) => act(() => api.playCard(token, code, card, color, targetId)),
     draw: () =>
       act(async () => {
         const r = await api.drawCard(token, code);
@@ -237,6 +237,8 @@ function RoomPage() {
         open={showWinner}
         winnerName={winnerName}
         isMe={g?.winner_id === state.me}
+        secondWinnerName={state.members.find(m=>m.id===g?.second_winner_id)?.nickname??""}
+        secondIsMe={g?.second_winner_id===state.me}
         isHost={isHost}
         busy={busy}
         canRematch={state.members.length >= 2}

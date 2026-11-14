@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import { ArrowDownWideNarrow, Hand, Loader2, Megaphone, RotateCcw, RotateCw, ShieldAlert, SkipForward, WifiOff } from "lucide-react";
+import { ArrowDownWideNarrow, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, ShieldAlert, SkipForward, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import type { RoomState } from "@/lib/uno/api";
 import { cardLabel, cardValue, COLOR_NAMES, isPlayable, isWild, type CardColor } from "@/lib/uno/cards";
 import { describeAction } from "@/lib/uno/describe";
@@ -15,7 +16,7 @@ const RING: Record<string, string> = { r: "ring-uno-r", y: "ring-uno-y", g: "rin
 const DOT: Record<string, string> = { r: "bg-uno-r", y: "bg-uno-y", g: "bg-uno-g", b: "bg-uno-b" };
 
 export type GameActions = {
-  play: (card: string, color?: CardColor) => void;
+  play: (card: string, color?: CardColor, targetId?: string) => void;
   draw: () => void;
   end: () => void;
   accept: () => void;
@@ -28,6 +29,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const game = state.game!;
   const me = state.me;
   const [pendingWild, setPendingWild] = useState<string | null>(null);
+  const [pendingDetective,setPendingDetective]=useState(false);
+  const [detectiveTarget,setDetectiveTarget]=useState<string|null>(null);
   const [sortMode,setSortMode] = useState<"color"|"number">("color");
   const [clock,setClock] = useState(Date.now());
   const [hold,setHold] = useState(0);
@@ -42,7 +45,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const myTurn = game.current_player === me;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","W","D","W4","W5"];
+    const colors=["b","y","g","r"], special=["R","S","W","D","T","W4","W5","X"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
@@ -78,9 +81,10 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const lockedByNotice=(game.effects||[]).some(e=>
     typeof e.show_at==="number" && clock>=e.show_at && clock<e.show_at+2000);
   const canPlay = (c:string) => {
-    if(busy || nine || lockedByNotice)return false;
-    if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"));
-    if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D";
+    if(busy || nine)return false;
+    if(lockedByNotice && (!myTurn || played.length===0))return false;
+    if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T"));
+    if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T";
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
     const first=played[0]!,last=played[played.length-1]!;
     const same=cardValue(first)===cardValue(c);
@@ -114,7 +118,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     return ()=>{observer.disconnect();window.removeEventListener("resize",measure);};
   },[myCount,sortMode]);
   const canUno = myCount===1||(myCount===2&&myTurn);
-  const remaining=Math.min(60,Math.max(0,Math.ceil((new Date(game.turn_started_at).getTime()+60000-clock)/1000)));
+  const myPlacement=game.placements?.find(p=>p.id===me);
+  const remaining=Math.min(50,Math.max(0,Math.ceil((new Date(game.turn_started_at).getTime()+50000-clock)/1000)));
   const nineRemaining=nine?Math.max(0,Math.ceil((new Date(nine.deadline).getTime()-clock)/1000)):0;
   const nineReady=!!nine&&nine.eligible.includes(me)&&!nine.pressed.includes(me);
   const feed = describeAction(game.last_action, me);
@@ -133,6 +138,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
   function onCard(c: string) {
     if (!canPlay(c)) {sfx("error");toast.error("Essa carta não pode ser jogada agora.");return;}
+    if(c==="X"){setPendingDetective(true);return;}
     if (isWild(c)) setPendingWild(c);
     else actions.play(c);
   }
@@ -186,7 +192,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           </div>
           {myTurn && !nine && (
             <Button variant="hero" className="h-9 shrink-0 rounded-xl px-3 text-xs sm:h-11 sm:px-4 sm:text-sm"
-              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy||lockedByNotice}>
+              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy}>
               {busy?<Loader2 className="size-4 animate-spin"/>:<SkipForward className="size-4"/>} Terminar vez
             </Button>
           )}
@@ -201,7 +207,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <p className="mt-2 text-sm text-muted-foreground">O último a apertar compra {nine.count} carta(s).</p>
           </div>
         )}
-        {myTurn && !!pending && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D")) && !nine && (
+        {myTurn && !!pending && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")) && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
             <p className="mt-1 text-sm text-muted-foreground">Escolha uma carta de compra permitida (+5 também pode rebater) ou aceite a penalidade.</p>
@@ -249,6 +255,11 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         )}
       </section>
 
+      {myPlacement&&game.status==="playing"&&(
+        <div className="mx-auto mb-2 w-fit rounded-xl border border-warning/50 bg-warning/10 px-4 py-2 text-center text-sm font-bold text-warning">
+          🏆 1º colocado! Aguardando o segundo colocado…
+        </div>
+      )}
       {/* My area */}
       <section aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
         <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
@@ -273,13 +284,13 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <Megaphone className="size-4 shrink-0"/><span>UNO</span>
           </Button>
         </div>
-        {myTurn && lockedByNotice && (
+        {myTurn && lockedByNotice && played.length===0 && (
           <p className="mt-1 text-center text-xs text-cyan">Aviso na mesa — jogadas liberadas após 2 segundos.</p>
         )}
         {myTurn && game.has_drawn && game.drawn_card && !played.length && (
           <p className="mt-2 px-2 text-center text-sm text-cyan">Você comprou {cardLabel(game.drawn_card)} — jogue qualquer carta válida ou termine a vez.</p>
         )}
-        {!myTurn && state.room.rules.cut && <p className="mt-1 text-center text-xs text-muted-foreground">Corte: jogue uma carta idêntica à do descarte para roubar a vez.</p>}
+        
         <div ref={handViewportRef} className="uno-hand-scroll no-scrollbar mt-1 min-w-0 overflow-x-auto overflow-y-hidden px-2 pb-1 pt-1">
           <div className="uno-hand-grid mx-auto grid w-max grid-flow-row gap-x-1.5 gap-y-1"
             style={{gridTemplateColumns:`repeat(${columnCount}, var(--uno-hand-col))`,gridTemplateRows:`repeat(${handRows}, calc(var(--uno-hand-col) * 1.5))`}}>
@@ -287,7 +298,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
               const ok=canPlay(c);
               return (
                 <button key={c+"-"+i} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(myTurn&&ok?" — jogável":"")} aria-disabled={!ok}
-                  className={cn("uno-hand-button relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",played.length===0 ? (ok ? "shadow-glow-cyan" : "opacity-65") : "",i===freshIndex&&recentDraw&&clock-recentDraw.at<8000&&"uno-recently-drawn")}>
+                  className={cn("uno-hand-button relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",myTurn && played.length===0 ? (ok ? "shadow-glow-cyan" : "opacity-65") : "",i===freshIndex&&recentDraw&&clock-recentDraw.at<8000&&"uno-recently-drawn")}>
                   <UnoCard card={c} size="md" className="uno-hand-card"/>
                 </button>
               );
@@ -301,13 +312,44 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           <CardBack size="md"/>
         </div>
       )}
+      <Dialog open={pendingDetective} onOpenChange={setPendingDetective}>
+        <DialogContent className="glass-strong rounded-3xl border-glass-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Eye className="size-5 text-cyan"/> Coringa Detetive</DialogTitle>
+            <DialogDescription>Escolha um jogador para ver as cartas dele por 10 segundos.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {game.turn_order.filter(id=>id!==me).map(id=>{
+              const player=byId.get(id);
+              return <Button key={id} type="button" variant="glass" className="h-12 justify-start rounded-xl"
+                onClick={()=>{setDetectiveTarget(id);setPendingDetective(false);setPendingWild("X")}}>
+                <Eye className="size-4"/> {player?.nickname??"Jogador"}
+              </Button>;
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+      {game.detective && clock<new Date(game.detective.expires_at).getTime()&&(
+        <div className="pointer-events-none fixed inset-x-0 top-[4.5rem] z-40 flex justify-center px-3">
+          <div className="pointer-events-auto w-full max-w-xl rounded-2xl border border-cyan/50 bg-navy/95 p-3 shadow-glow backdrop-blur">
+            <div className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-cyan sm:text-sm">
+              <span className="flex items-center gap-1.5"><Eye className="size-4"/> Detetive · {game.detective.target_name}</span>
+              <span>{Math.max(0,Math.ceil((new Date(game.detective.expires_at).getTime()-clock)/1000))}s</span>
+            </div>
+            <div className="flex max-h-32 flex-wrap justify-center gap-1.5 overflow-auto">
+              {game.detective.cards.map((card,i)=><UnoCard key={i} card={card} size="sm" className="!w-10 sm:!w-12"/>)}
+            </div>
+          </div>
+        </div>
+      )}
       <ColorPicker
         open={!!pendingWild}
-        onClose={() => setPendingWild(null)}
+        onClose={() => {setPendingWild(null);setDetectiveTarget(null)}}
         onPick={(color) => {
           const c = pendingWild!;
           setPendingWild(null);
-          actions.play(c, color);
+          actions.play(c, color, c==="X"?(detectiveTarget??undefined):undefined);
+          setDetectiveTarget(null);
         }}
       />
     </main>

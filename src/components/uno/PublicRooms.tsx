@@ -1,5 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Crown, RefreshCw, Users, WifiOff } from "lucide-react";
+import { Crown, RefreshCw, Users, WifiOff, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { api } from "@/lib/uno/api";
+import { useReadyGuest } from "@/lib/uno/guest";
+import { useLanguage } from "@/lib/uno/i18n";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLobby } from "@/lib/uno/useLobby";
@@ -8,6 +12,13 @@ import { cn } from "@/lib/utils";
 
 export function PublicRooms({ onCreate }: { onCreate: () => void }) {
   const { rooms, offline, refresh } = useLobby();
+  const {guest,isDev}=useReadyGuest();
+  const {tr}=useLanguage();
+  const deletePublic=async(code:string,name:string)=>{
+    if(!window.confirm(tr("Excluir esta sala pública?")+" "+name))return;
+    try{await api.devDeletePublicRoom(guest.token,code);toast.success(tr("Sala excluída"));void refresh()}
+    catch(e){toast.error(String((e as Error).message))}
+  };
 
   return (
     <section aria-labelledby="public-rooms-title" className="glass rounded-3xl p-4 sm:p-6">
@@ -74,6 +85,9 @@ export function PublicRooms({ onCreate }: { onCreate: () => void }) {
                     </span>
                   </p>
                 </div>
+                {isDev&&<Button variant="glass" size="icon" aria-label={`Excluir sala ${r.name}`}
+                  title="Excluir sala" onClick={()=>void deletePublic(r.code,r.name)}
+                  className="shrink-0 text-destructive hover:bg-destructive/15"><Trash2 className="size-4"/></Button>}
                 {playing || full ? (
                   <Button variant="soft" disabled className="h-11 rounded-xl">{playing ? "Em jogo" : "Cheia"}</Button>
                 ) : (

@@ -67,8 +67,8 @@ export function cleanText(p) {
 }
 const cleanCode = (c) => cleanText(c).toUpperCase();
 
-const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5)$/;
-const isWild = (c) => c === "W" || c === "W4" || c === "W5";
+const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5|X)$/;
+const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X";
 export const cardValue = (c) => (isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
   return isWild(c) || c[0] === color || (!isWild(top) && c.slice(1) === top.slice(1));
@@ -95,6 +95,7 @@ export function newDeck() {
   }
   for (let i = 0; i < 10; i++) d.push("W", "W4");
   for (let i = 0; i < 2; i++) d.push("W5");
+  d.push("X"); // A single Detective Wild in every fresh deck.
   for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T");
   return shuffle(d);
 }
@@ -193,7 +194,7 @@ function removeMember(room, gid) {
   if (room.members.length === 0) {
     deleteRoom(room);
   } else if (room.host_id === gid) {
-    room.host_id = room.members[0].guest_id; // earliest joiner
+    room.host_id = room.members.find(m=>!m.spectator && !store.guestsById.get(m.guest_id)?.bot)?.guest_id ?? null; // a bot cannot host
     touch(room);
   } else {
     touch(room);
@@ -318,7 +319,7 @@ const handlers = {
       status: r.status,
       max_players: r.max_players,
       host_name: nick(r.host_id),
-      player_count: r.members.length,
+      player_count: r.members.filter(m=>!m.spectator).length,
     }));
   },
 
@@ -359,11 +360,12 @@ const handlers = {
     const r = findRoom(p_code);
     if (isMember(r, me.id)) return { code: r.code, already: true };
     if (r.status === "playing") fail("GAME_STARTED");
-    if (r.members.length >= r.max_players) fail("ROOM_FULL");
+    if (r.members.filter(m=>!m.spectator).length >= r.max_players) fail("ROOM_FULL");
     leaveOtherRooms(me.id, r.id);
     // joined_at strictly increasing keeps host succession deterministic
     const last = r.members[r.members.length - 1]?.joined_at ?? 0;
     r.members.push({ guest_id: me.id, joined_at: Math.max(now(), last + 1) });
+    if (!r.host_id || store.guestsById.get(r.host_id)?.bot) r.host_id = me.id;
     touch(r);
     bump(r);
     bumpLobby();
@@ -410,6 +412,8 @@ const handlers = {
         has_drawn: g.has_drawn,
         drawn_card: cur === me.id ? g.drawn_card : null, // only the drawer sees it
         winner_id: g.winner_id,
+        second_winner_id: g.second_winner_id ?? null,
+        placements: [...(g.placements ?? [])],
         last_action: g.last_action,
         round: g.round,
         seq: g.seq,
@@ -440,7 +444,7 @@ const handlers = {
     if (!isMember(r, me.id)) fail("NOT_MEMBER", 403);
     if (r.host_id !== me.id) fail("NOT_HOST", 403);
     if (r.status !== "waiting") fail("GAME_STARTED");
-    const players = r.members.map((m) => m.guest_id);
+    const players = r.members.filter(m=>!m.spectator).map((m) => m.guest_id);
     if (players.length < 2) fail("NOT_ENOUGH_PLAYERS");
     let dp = newDeck();
     r.hands = new Map();
@@ -463,6 +467,8 @@ const handlers = {
       has_drawn: false,
       drawn_card: null,
       winner_id: null,
+      second_winner_id: null,
+      placements: [],
       last_action: { type: "start" },
       turn_started_at: now(),
       round: (prev?.round ?? 0) + 1,

@@ -356,3 +356,23 @@
 @media (prefers-reduced-motion: reduce) {
   .uno-color-wave {animation:none;opacity:.3;clip-path:none;}
 }
+
+/* Expanded hand area makes use of lower-table whitespace without page scrolling. */
+.uno-game {--uno-hand-col:clamp(3rem,min(14vw,8.4dvh),4.75rem);}
+.uno-hand.uno-hand-single {height:min(32dvh,calc(var(--uno-hand-col)*1.5 + 85px));}
+.uno-hand.uno-hand-double {height:min(48dvh,calc(var(--uno-hand-col)*3 + 88px));}
+.uno-hand-toolbar {min-height:42px;}
+.uno-hand-toolbar button {min-height:40px;}
+@media(max-height:650px){
+ .uno-game {--uno-hand-col:clamp(2.35rem,min(13vw,7.2dvh),3.8rem);}
+ .uno-hand.uno-hand-double {height:min(46dvh,calc(var(--uno-hand-col)*3 + 62px));}
+ .uno-hand.uno-hand-single {height:min(31dvh,calc(var(--uno-hand-col)*1.5 + 62px));}
+}
+
+/* Taller phones: reclaim unused table whitespace for larger hand cards. */
+@media (min-height:651px) {
+  .uno-game {--uno-hand-col:clamp(3.25rem,min(15vw,9.7dvh),5.2rem);}
+  .uno-hand.uno-hand-double {height:min(49dvh,calc(var(--uno-hand-col)*3 + 94px));}
+  .uno-hand.uno-hand-single {height:min(34dvh,calc(var(--uno-hand-col)*1.5 + 88px));}
+}
+.uno-hand-toolbar button {font-size:clamp(12px,2.8vw,15px);}
