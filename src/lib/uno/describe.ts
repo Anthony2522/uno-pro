@@ -10,12 +10,15 @@ export function describeAction(a: LastAction, me: string): string | null {
       return "A partida começou! Boa sorte.";
     case "play": {
       if (!a.card) return null;
-      let s = `${who} jogou ${cardLabel(a.card)}`;
+      // No text announcing that a penalty card or a wild was PLAYED.
+      // The chosen-color wave and the actual DRAW penalty are announced separately.
       const v = cardValue(a.card);
+      if (["W","W4","W5"].includes(a.card) || v==="D" || v==="T")return null;
+      let s = `${who} jogou ${cardLabel(a.card)}`;
       if ((v === "D" || v === "W4") && a.n) s += ` — ${target} compra ${a.n} e perde a vez`;
       else if (v === "S" || (v === "R" && a.target)) s += ` — ${target} perde a vez`;
       else if (v === "R") s += " — sentido invertido";
-      if ((a.card === "W" || a.card === "W4") && a.color) s += ` · cor: ${COLOR_NAMES[a.color as CardColor]}`;
+      if ((a.card === "W" || a.card === "W4" || a.card === "W5") && a.color) s += ` · cor: ${COLOR_NAMES[a.color as CardColor]}`;
       if (a.win) s = `${who} jogou a última carta!`;
       return s;
     }
