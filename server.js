@@ -236,7 +236,7 @@ if (isMain) {
   const server = createServer();
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
-  const sweeper = setInterval(sweep, 3_000);
+  const sweeper = setInterval(sweep, 250);
   const limiterGc = setInterval(() => {
     ipLimiter.gc();
     registerLimiter.gc();
