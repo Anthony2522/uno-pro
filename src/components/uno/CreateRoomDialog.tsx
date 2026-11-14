@@ -16,6 +16,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [max, setMax] = useState(6);
+  const [startingCards, setStartingCards] = useState(8);
   const [advanced, setAdvanced] = useState(false);
   const [rules, setRules] = useState<RuleSettings>({ repeat:true,sequence:true,nine:true,cut:true,stack:true });
   const [busy, setBusy] = useState(false);
@@ -26,6 +27,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
       setName(`Sala de ${guest.nickname}`.slice(0, 32));
       setError(null);
       setAdvanced(false);
+      setStartingCards(8);
       setRules({repeat:true,sequence:true,nine:true,cut:true,stack:true});
     }
   }, [open, guest.nickname]);
@@ -42,7 +44,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
     setBusy(true);
     setError(null);
     try {
-      const { code } = await api.createRoom(guest.token, clean, isPublic, max, rules);
+      const { code } = await api.createRoom(guest.token, clean, isPublic, max, rules, startingCards);
       onOpenChange(false);
       navigate({ to: "/sala/$code", params: { code } });
     } catch (err) {
@@ -55,7 +57,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-strong rounded-3xl border-glass-border sm:max-w-md">
+      <DialogContent onOpenAutoFocus={(event)=>event.preventDefault()} className="glass-strong rounded-3xl border-glass-border sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">Criar sala</DialogTitle>
           <DialogDescription>Você será o anfitrião e poderá iniciar a partida.</DialogDescription>
@@ -133,7 +135,15 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
               {advanced ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
             </button>
             {advanced && (
-              <div className="mt-3 space-y-2 border-t border-glass-border pt-3">
+              <div className="mt-3 space-y-3 border-t border-glass-border pt-3">
+                <label htmlFor="starting-cards" className="block rounded-xl border border-glass-border/60 bg-navy/40 p-3">
+                  <span className="block text-sm font-semibold">Cartas iniciais por jogador</span>
+                  <span className="mb-2 block text-xs text-muted-foreground">Quantidade distribuída no começo de cada partida (padrão: 8).</span>
+                  <select id="starting-cards" value={startingCards} onChange={(e)=>setStartingCards(Number(e.target.value))}
+                    className="h-11 w-full rounded-xl border border-glass-border bg-navy px-3 text-sm text-foreground">
+                    {Array.from({length:19},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} cartas</option>)}
+                  </select>
+                </label>
                 <p className="mb-3 text-xs text-muted-foreground">Todas as regras opcionais vêm ativadas. Desmarque as que não quiser usar nesta sala.</p>
                 {([
                   ["repeat","Cartas repetidas","Jogue duas ou mais cartas com o mesmo número ou símbolo, mesmo com cores diferentes."],

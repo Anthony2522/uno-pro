@@ -2,7 +2,7 @@ import { Bot, Crown, Globe, Loader2, Lock, Play, Trophy, UserPlus, X } from "luc
 import { Button } from "@/components/ui/button";
 import type { RoomState } from "@/lib/uno/api";
 import { PlayerAvatar } from "./PlayerAvatar";
-import { CopyCodeButton, CopyInviteButton } from "./RoomTopBar";
+import { CopyInviteButton } from "./RoomTopBar";
 import { cn } from "@/lib/utils";
 
 export function WaitingRoom({
@@ -59,7 +59,7 @@ export function WaitingRoom({
             </div>
             <div className="flex gap-2">
               <CopyInviteButton code={room.code} />
-              <CopyCodeButton code={room.code} />
+
             </div>
           </div>
         </div>

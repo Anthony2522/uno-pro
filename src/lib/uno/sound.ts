@@ -31,7 +31,7 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = "
   o.stop(ctx.currentTime + start + dur + 0.02);
 }
 
-export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty";
+export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch";
 
 export function sfx(kind: Sfx) {
   if (typeof window === "undefined" || isMuted()) return;
@@ -71,6 +71,11 @@ export function sfx(kind: Sfx) {
       tone(940,0,.08,"square",.055);
       tone(640,.08,.11,"triangle",.09);
       tone(1180,.18,.19,"sine",.075);
+      break;
+    case "catch":
+      tone(730,0,.08,"square",.06);
+      tone(480,.09,.15,"triangle",.06);
+      tone(980,.22,.16,"sine",.06);
       break;
     case "penalty":
       [460,340,270,190].forEach((f,i)=>tone(f,i*.09,.19,"triangle",.065));
