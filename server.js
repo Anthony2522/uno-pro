@@ -1,430 +1,253 @@
-const express = require('express');
-const http = require('http');
-const path = require('path');
-const { Server } = require('socket.io');
+// UNO Pro — Node server for Render (or any Node host).
+// Serves the built React app from dist/, the game API at /api/rpc and live updates at /api/events.
+// No database, no external services: rooms live in this process' memory.
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { rpc, RpcError, RPC_NAMES, onBump, sweep } from "./server/game.js";
+import { TokenBucket } from "./server/rateLimit.js";
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DIST = path.join(__dirname, "dist");
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || "0.0.0.0";
+const MAX_BODY = 8 * 1024;
 
-// Serve apenas os arquivos do site (nada do servidor fica exposto)
-for (const f of ['index.html', 'style.css', 'app.js']) {
-  app.get(f === 'index.html' ? '/' : '/' + f, (req, res) =>
-    res.sendFile(path.join(__dirname, f))
-  );
+// ---------- rate limits ----------
+// Generous per-IP buckets: friends on the same Wi-Fi share one IP.
+const ipLimiter = new TokenBucket({ capacity: 150, refillPerSec: 40 });
+const registerLimiter = new TokenBucket({ capacity: 15, refillPerSec: 15 / 600 }); // ~15 new nicknames / 10 min / IP
+const createLimiter = new TokenBucket({ capacity: 10, refillPerSec: 10 / 60 }); // ~10 rooms / min / IP
+const SSE_PER_IP = 40;
+const sseCount = new Map();
+
+function clientIp(req) {
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff) return xff.split(",")[0].trim();
+  return req.socket.remoteAddress || "unknown";
 }
 
-/* ------------------------------------------------------------------ */
-/* Baralho                                                             */
-/* ------------------------------------------------------------------ */
+// ---------- SSE (data-free "doorbell": clients re-fetch their own state) ----------
+const subs = { lobby: new Set(), room: new Map() };
 
-const COLORS = ['roxo', 'marinho', 'ciano', 'branco'];
-const COLOR_LABEL = {
-  roxo: 'Roxo',
-  marinho: 'Azul escuro',
-  ciano: 'Azul claro',
-  branco: 'Branco',
-};
-const VALUE_LABEL = {
-  skip: 'Pular',
-  reverse: 'Inverter',
-  '+2': '+2',
-  wild: 'Coringa',
-  '+4': 'Coringa +4',
-};
-
-let nextCardId = 0;
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+function send(res, event, data) {
+  try {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  } catch {
+    /* socket gone; close handler cleans up */
   }
-  return arr;
 }
 
-function buildDeck() {
-  const deck = [];
-  const add = (color, value) => deck.push({ id: ++nextCardId, color, value });
-  for (const c of COLORS) {
-    add(c, '0');
-    for (let n = 1; n <= 9; n++) {
-      add(c, String(n));
-      add(c, String(n));
-    }
-    for (const v of ['skip', 'reverse', '+2']) {
-      add(c, v);
-      add(c, v);
-    }
+onBump((scope, code) => {
+  if (scope === "lobby") for (const res of subs.lobby) send(res, "bump", { scope: "lobby" });
+  else {
+    const set = subs.room.get(code);
+    if (set) for (const res of set) send(res, "bump", { scope: "room" });
   }
-  for (let i = 0; i < 4; i++) {
-    add(null, 'wild');
-    add(null, '+4');
-  }
-  return shuffle(deck);
-}
-
-function cardName(card) {
-  const v = VALUE_LABEL[card.value] || card.value;
-  return card.color ? `${v} ${COLOR_LABEL[card.color]}` : v;
-}
-
-/* ------------------------------------------------------------------ */
-/* Estado                                                              */
-/* ------------------------------------------------------------------ */
-
-const users = new Map(); // socket.id -> { name, roomId }
-const rooms = new Map(); // roomId -> room
-
-function addLog(room, text) {
-  room.log.push(text);
-  if (room.log.length > 30) room.log.shift();
-}
-
-function topCard(room) {
-  return room.discard[room.discard.length - 1] || null;
-}
-
-function isPlayable(room, card) {
-  const top = topCard(room);
-  return (
-    card.color === null ||
-    card.color === room.currentColor ||
-    (top && card.value === top.value)
-  );
-}
-
-function advance(room, steps) {
-  const n = room.players.length;
-  room.turn = (((room.turn + room.dir * steps) % n) + n) % n;
-}
-
-function drawFromDeck(room) {
-  if (room.deck.length === 0 && room.discard.length > 1) {
-    const top = room.discard.pop();
-    room.deck = shuffle(room.discard);
-    room.discard = [top];
-  }
-  return room.deck.pop() || null;
-}
-
-function drawCards(room, player, count) {
-  let drawn = 0;
-  for (let i = 0; i < count; i++) {
-    const c = drawFromDeck(room);
-    if (!c) break;
-    player.hand.push(c);
-    drawn++;
-  }
-  return drawn;
-}
-
-function startGame(room) {
-  room.deck = buildDeck();
-  room.discard = [];
-  room.players.forEach((p) => (p.hand = []));
-  for (let i = 0; i < 7; i++) {
-    for (const p of room.players) p.hand.push(room.deck.pop());
-  }
-  // Primeira carta da mesa: sempre uma carta numerada
-  const idx = room.deck.findIndex((c) => /^\d$/.test(c.value));
-  const first = room.deck.splice(idx, 1)[0];
-  room.discard.push(first);
-  room.currentColor = first.color;
-  room.turn = Math.floor(Math.random() * room.players.length);
-  room.dir = 1;
-  room.drawn = false;
-  room.winner = null;
-  room.status = 'playing';
-  room.log = [];
-  addLog(room, `Partida iniciada! Carta inicial: ${cardName(first)}.`);
-  addLog(room, `${room.players[room.turn].name} começa.`);
-}
-
-function finish(room, winner, extra) {
-  room.status = 'finished';
-  room.winner = winner.name;
-  room.drawn = false;
-  addLog(room, `🏆 ${winner.name} venceu${extra || ''}!`);
-}
-
-/* ------------------------------------------------------------------ */
-/* Envio de estado                                                     */
-/* ------------------------------------------------------------------ */
-
-function roomList() {
-  return [...rooms.values()].map((r) => ({
-    id: r.id,
-    name: r.name,
-    host: (r.players.find((p) => p.id === r.hostId) || {}).name || '?',
-    count: r.players.length,
-    max: r.max,
-    status: r.status === 'playing' ? 'playing' : 'open',
-  }));
-}
-
-function stateFor(room, sid) {
-  const me = room.players.find((p) => p.id === sid);
-  return {
-    id: room.id,
-    name: room.name,
-    hostId: room.hostId,
-    max: room.max,
-    status: room.status,
-    you: sid,
-    players: room.players.map((p) => ({ id: p.id, name: p.name, count: p.hand.length })),
-    hand: me ? me.hand : [],
-    top: topCard(room),
-    color: room.currentColor,
-    turnId: room.status === 'playing' ? room.players[room.turn].id : null,
-    dir: room.dir,
-    deckCount: room.deck.length,
-    drawn: room.drawn,
-    log: room.log.slice(-6),
-    winner: room.winner,
-  };
-}
-
-function pushRoom(room) {
-  for (const p of room.players) io.to(p.id).emit('room', stateFor(room, p.id));
-}
-
-function pushRooms() {
-  io.emit('rooms', roomList());
-}
-
-/* ------------------------------------------------------------------ */
-/* Sair da sala                                                        */
-/* ------------------------------------------------------------------ */
-
-function removeFromRoom(sid) {
-  const user = users.get(sid);
-  if (!user || !user.roomId) return;
-  const room = rooms.get(user.roomId);
-  user.roomId = null;
-  if (!room) return;
-
-  const idx = room.players.findIndex((p) => p.id === sid);
-  if (idx < 0) return;
-  const [leaving] = room.players.splice(idx, 1);
-
-  if (room.players.length === 0) {
-    rooms.delete(room.id);
-    pushRooms();
-    return;
-  }
-  if (room.hostId === sid) room.hostId = room.players[0].id;
-
-  if (room.status === 'playing') {
-    room.deck.unshift(...leaving.hand);
-    addLog(room, `${leaving.name} saiu da partida.`);
-    if (room.players.length < 2) {
-      finish(room, room.players[0], ' porque os outros saíram');
-    } else {
-      const n = room.players.length;
-      if (idx < room.turn) {
-        room.turn--;
-      } else if (idx === room.turn) {
-        room.turn = room.dir === 1 ? room.turn % n : (room.turn - 1 + n) % n;
-        room.drawn = false;
-      }
-      room.turn = ((room.turn % n) + n) % n;
-    }
-  }
-  pushRoom(room);
-  pushRooms();
-}
-
-/* ------------------------------------------------------------------ */
-/* Sockets                                                             */
-/* ------------------------------------------------------------------ */
-
-function handle(socket, event, fn) {
-  socket.on(event, (payload, cb) => {
-    const reply = typeof cb === 'function' ? cb : () => {};
-    try {
-      fn(payload && typeof payload === 'object' ? payload : {}, reply);
-    } catch (e) {
-      console.error(e);
-      reply({ error: 'Erro no servidor.' });
-    }
-  });
-}
-
-io.on('connection', (socket) => {
-  users.set(socket.id, { name: null, roomId: null });
-
-  const user = () => users.get(socket.id);
-  const roomOf = () => {
-    const u = user();
-    return u && u.roomId ? rooms.get(u.roomId) : null;
-  };
-
-  handle(socket, 'setName', ({ name }, reply) => {
-    const clean = String(name || '').trim().slice(0, 16);
-    if (!clean) return reply({ error: 'Digite seu nome.' });
-    user().name = clean;
-    reply({ ok: true });
-    socket.emit('rooms', roomList());
-  });
-
-  handle(socket, 'createRoom', ({ name, max }, reply) => {
-    const u = user();
-    if (!u.name) return reply({ error: 'Defina seu nome primeiro.' });
-    const roomName = String(name || '').trim().slice(0, 24);
-    if (!roomName) return reply({ error: 'Dê um nome para a sala.' });
-    const maxPlayers = Math.min(6, Math.max(2, parseInt(max, 10) || 4));
-
-    removeFromRoom(socket.id);
-
-    const room = {
-      id: Math.random().toString(36).slice(2, 8),
-      name: roomName,
-      hostId: socket.id,
-      max: maxPlayers,
-      status: 'waiting',
-      players: [{ id: socket.id, name: u.name, hand: [] }],
-      deck: [],
-      discard: [],
-      turn: 0,
-      dir: 1,
-      currentColor: null,
-      drawn: false,
-      winner: null,
-      log: [],
-    };
-    rooms.set(room.id, room);
-    u.roomId = room.id;
-    reply({ ok: true });
-    pushRoom(room);
-    pushRooms();
-  });
-
-  handle(socket, 'joinRoom', ({ roomId }, reply) => {
-    const u = user();
-    if (!u.name) return reply({ error: 'Defina seu nome primeiro.' });
-    const room = rooms.get(roomId);
-    if (!room) return reply({ error: 'Essa sala não existe mais.' });
-    if (u.roomId === room.id) return reply({ ok: true });
-    if (room.status === 'playing') return reply({ error: 'A partida já começou.' });
-    if (room.players.length >= room.max) return reply({ error: 'A sala está cheia.' });
-
-    removeFromRoom(socket.id);
-    room.players.push({ id: socket.id, name: u.name, hand: [] });
-    u.roomId = room.id;
-    reply({ ok: true });
-    pushRoom(room);
-    pushRooms();
-  });
-
-  handle(socket, 'leaveRoom', (_p, reply) => {
-    removeFromRoom(socket.id);
-    socket.emit('left');
-    reply({ ok: true });
-  });
-
-  handle(socket, 'startGame', (_p, reply) => {
-    const room = roomOf();
-    if (!room) return reply({ error: 'Você não está em uma sala.' });
-    if (room.hostId !== socket.id) return reply({ error: 'Só o anfitrião inicia a partida.' });
-    if (room.status === 'playing') return reply({ error: 'A partida já está rolando.' });
-    if (room.players.length < 2) return reply({ error: 'Precisa de pelo menos 2 jogadores.' });
-    startGame(room);
-    reply({ ok: true });
-    pushRoom(room);
-    pushRooms();
-  });
-
-  handle(socket, 'playCard', ({ cardId, color }, reply) => {
-    const room = roomOf();
-    if (!room || room.status !== 'playing') return reply({ error: 'Não há partida em andamento.' });
-    const player = room.players[room.turn];
-    if (player.id !== socket.id) return reply({ error: 'Não é a sua vez.' });
-    const card = player.hand.find((c) => c.id === cardId);
-    if (!card) return reply({ error: 'Carta inválida.' });
-    if (!isPlayable(room, card)) return reply({ error: 'Essa carta não pode ser jogada agora.' });
-    if (card.color === null && !COLORS.includes(color)) return reply({ error: 'Escolha uma cor.' });
-
-    player.hand.splice(player.hand.indexOf(card), 1);
-    room.discard.push(card);
-    room.currentColor = card.color || color;
-    room.drawn = false;
-    addLog(
-      room,
-      `${player.name} jogou ${cardName(card)}` +
-        (card.color === null ? ` (cor: ${COLOR_LABEL[color]})` : '')
-    );
-
-    if (player.hand.length === 0) {
-      finish(room, player);
-    } else {
-      if (player.hand.length === 1) addLog(room, `🔔 ${player.name} gritou UNO!`);
-      const n = room.players.length;
-      if (card.value === 'skip') {
-        const victim = room.players[(room.turn + room.dir + n) % n];
-        addLog(room, `${victim.name} perdeu a vez.`);
-        advance(room, 2);
-      } else if (card.value === 'reverse') {
-        room.dir *= -1;
-        addLog(room, 'O sentido do jogo foi invertido.');
-        advance(room, n === 2 ? 2 : 1);
-      } else if (card.value === '+2' || card.value === '+4') {
-        const victim = room.players[(room.turn + room.dir + n) % n];
-        const got = drawCards(room, victim, card.value === '+2' ? 2 : 4);
-        addLog(room, `${victim.name} comprou ${got} cartas e perdeu a vez.`);
-        advance(room, 2);
-      } else {
-        advance(room, 1);
-      }
-    }
-    reply({ ok: true });
-    pushRoom(room);
-    pushRooms();
-  });
-
-  handle(socket, 'drawCard', (_p, reply) => {
-    const room = roomOf();
-    if (!room || room.status !== 'playing') return reply({ error: 'Não há partida em andamento.' });
-    const player = room.players[room.turn];
-    if (player.id !== socket.id) return reply({ error: 'Não é a sua vez.' });
-    if (room.drawn) return reply({ error: 'Você já comprou nesta rodada.' });
-
-    const c = drawFromDeck(room);
-    if (!c) {
-      addLog(room, 'Não há mais cartas para comprar.');
-      advance(room, 1);
-    } else {
-      player.hand.push(c);
-      addLog(room, `${player.name} comprou uma carta.`);
-      if (isPlayable(room, c)) {
-        room.drawn = true;
-      } else {
-        addLog(room, `${player.name} não pôde jogar e passou a vez.`);
-        advance(room, 1);
-      }
-    }
-    reply({ ok: true });
-    pushRoom(room);
-  });
-
-  handle(socket, 'passTurn', (_p, reply) => {
-    const room = roomOf();
-    if (!room || room.status !== 'playing') return reply({ error: 'Não há partida em andamento.' });
-    const player = room.players[room.turn];
-    if (player.id !== socket.id) return reply({ error: 'Não é a sua vez.' });
-    if (!room.drawn) return reply({ error: 'Compre uma carta antes de passar.' });
-    room.drawn = false;
-    addLog(room, `${player.name} passou a vez.`);
-    advance(room, 1);
-    reply({ ok: true });
-    pushRoom(room);
-  });
-
-  socket.on('disconnect', () => {
-    removeFromRoom(socket.id);
-    users.delete(socket.id);
-  });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`UNO Pro rodando em http://localhost:${PORT}`));
+function handleEvents(req, res, url) {
+  const ip = clientIp(req);
+  const scope = url.searchParams.get("scope");
+  const code = (url.searchParams.get("code") || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (scope !== "lobby" && !(scope === "room" && code.length >= 4 && code.length <= 10)) {
+    return json(res, 400, { error: { code: "BAD_REQUEST", message: "BAD_REQUEST" } });
+  }
+  const open = sseCount.get(ip) || 0;
+  if (open >= SSE_PER_IP) return json(res, 429, { error: { code: "RATE_LIMITED", message: "Muitas conexões abertas. Feche algumas abas." } });
+  sseCount.set(ip, open + 1);
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write("retry: 3000\n\n");
+  send(res, "ready", { scope });
+
+  let set;
+  if (scope === "lobby") set = subs.lobby;
+  else {
+    set = subs.room.get(code);
+    if (!set) subs.room.set(code, (set = new Set()));
+  }
+  set.add(res);
+  const hb = setInterval(() => {
+    try {
+      res.write(`: ping ${Date.now()}\n\n`);
+    } catch {
+      /* ignore */
+    }
+  }, 20_000);
+
+  const cleanup = () => {
+    clearInterval(hb);
+    set.delete(res);
+    if (scope === "room" && set.size === 0) subs.room.delete(code);
+    const c = (sseCount.get(ip) || 1) - 1;
+    if (c <= 0) sseCount.delete(ip);
+    else sseCount.set(ip, c);
+  };
+  req.on("close", cleanup);
+}
+
+// ---------- RPC ----------
+function json(res, status, body) {
+  const s = JSON.stringify(body);
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Length": Buffer.byteLength(s),
+  });
+  res.end(s);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > MAX_BODY) {
+        reject(new RpcError("PAYLOAD_TOO_LARGE", 413));
+        req.destroy();
+      } else chunks.push(c);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+async function handleRpc(req, res, url) {
+  if (req.method !== "POST") return json(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "METHOD_NOT_ALLOWED" } });
+  const ip = clientIp(req);
+  if (!ipLimiter.take(ip)) {
+    return json(res, 429, { error: { code: "RATE_LIMITED", message: "Muitas ações em pouco tempo. Aguarde um instante." } });
+  }
+  let body;
+  try {
+    const raw = await readBody(req);
+    body = raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    const status = e instanceof RpcError ? e.status : 400;
+    return json(res, status, { error: { code: "BAD_REQUEST", message: "BAD_REQUEST" } });
+  }
+  // Accept POST /api/rpc/<fn> {args} or POST /api/rpc {fn, args}
+  const fromPath = url.pathname.slice("/api/rpc".length).replace(/^\//, "");
+  const fn = fromPath || (body && typeof body.fn === "string" ? body.fn : "");
+  const args = fromPath ? body : body?.args;
+  if (!RPC_NAMES.includes(fn)) return json(res, 404, { error: { code: "UNKNOWN_FUNCTION", message: "UNKNOWN_FUNCTION" } });
+  if (fn === "register_guest" && !registerLimiter.take(ip)) {
+    return json(res, 429, { error: { code: "RATE_LIMITED", message: "Muitos apelidos criados. Tente de novo em alguns minutos." } });
+  }
+  if (fn === "create_room" && !createLimiter.take(ip)) {
+    return json(res, 429, { error: { code: "RATE_LIMITED", message: "Muitas salas criadas. Aguarde um minuto." } });
+  }
+  try {
+    const data = rpc(fn, args);
+    return json(res, 200, { data });
+  } catch (e) {
+    if (e instanceof RpcError) return json(res, e.status, { error: { code: e.code, message: e.code } });
+    console.error(`[rpc ${fn}]`, e);
+    return json(res, 500, { error: { code: "INTERNAL", message: "Erro interno no servidor." } });
+  }
+}
+
+// ---------- static files + SPA fallback ----------
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".txt": "text/plain; charset=utf-8",
+  ".woff2": "font/woff2",
+  ".map": "application/json",
+};
+
+function serveFile(res, file, status = 200, req) {
+  const ext = path.extname(file).toLowerCase();
+  const immutable = file.includes(`${path.sep}assets${path.sep}`);
+  res.writeHead(status, {
+    "Content-Type": MIME[ext] || "application/octet-stream",
+    "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
+    "X-Content-Type-Options": "nosniff",
+  });
+  if (req?.method === "HEAD") return res.end();
+  fs.createReadStream(file).pipe(res);
+}
+
+function handleStatic(req, res, url) {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(405);
+    return res.end();
+  }
+  let rel;
+  try {
+    rel = decodeURIComponent(url.pathname);
+  } catch {
+    rel = "/";
+  }
+  const file = path.normalize(path.join(DIST, rel));
+  if (file.startsWith(DIST + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+    return serveFile(res, file, 200, req);
+  }
+  const index = path.join(DIST, "index.html");
+  if (!fs.existsSync(index)) {
+    res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("Build não encontrado. Rode `npm install` (que executa `npm run build`) antes de `npm start`.");
+  }
+  // Missing asset files are real 404s; every other path is an app route (/, /sala/ABC123, …).
+  if (rel.startsWith("/assets/")) {
+    res.writeHead(404);
+    return res.end();
+  }
+  return serveFile(res, index, 200, req);
+}
+
+// ---------- server ----------
+export function createServer() {
+  return http.createServer((req, res) => {
+    const url = new URL(req.url || "/", "http://localhost");
+    if (url.pathname === "/api/rpc" || url.pathname.startsWith("/api/rpc/")) {
+      handleRpc(req, res, url).catch((e) => {
+        console.error(e);
+        if (!res.headersSent) json(res, 500, { error: { code: "INTERNAL", message: "Erro interno no servidor." } });
+      });
+      return;
+    }
+    if (url.pathname === "/api/events") return handleEvents(req, res, url);
+    if (url.pathname === "/api/health") return json(res, 200, { ok: true, uptime: Math.round(process.uptime()) });
+    if (url.pathname.startsWith("/api/")) return json(res, 404, { error: { code: "NOT_FOUND", message: "NOT_FOUND" } });
+    return handleStatic(req, res, url);
+  });
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  const server = createServer();
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
+  const sweeper = setInterval(sweep, 3_000);
+  const limiterGc = setInterval(() => {
+    ipLimiter.gc();
+    registerLimiter.gc();
+    createLimiter.gc();
+  }, 60_000);
+  server.listen(PORT, HOST, () => console.log(`UNO Pro ouvindo em http://${HOST}:${PORT}`));
+  const stop = () => {
+    clearInterval(sweeper);
+    clearInterval(limiterGc);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 3000).unref();
+  };
+  process.on("SIGTERM", stop);
+  process.on("SIGINT", stop);
+}

@@ -1,128 +1,25 @@
 <!doctype html>
 <html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UNO Pro</title>
-  <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-  <div class="bg"></div>
-
-  <main>
-    <!-- 1. Nome -->
-    <section id="screen-name" class="screen active">
-      <div class="panel narrow center">
-        <div class="logo big">UNO<span>PRO</span></div>
-        <p class="muted">Como você quer ser chamado?</p>
-        <form id="name-form" class="stack">
-          <input id="name-input" maxlength="16" placeholder="Seu nome" autocomplete="off" autofocus>
-          <button class="btn" type="submit">Entrar</button>
-        </form>
-      </div>
-    </section>
-
-    <!-- 2. Início -->
-    <section id="screen-home" class="screen">
-      <div class="panel">
-        <header class="head">
-          <div class="logo">UNO<span>PRO</span></div>
-          <div class="muted">Olá, <strong id="hello"></strong></div>
-        </header>
-
-        <div class="tabs">
-          <button class="tab active" data-tab="join">Entrar em sala</button>
-          <button class="tab" data-tab="create">Criar sala</button>
-        </div>
-
-        <div id="pane-join" class="pane active">
-          <div id="room-list" class="room-list"></div>
-        </div>
-
-        <div id="pane-create" class="pane">
-          <form id="create-form" class="stack">
-            <label for="room-name">Nome da sala</label>
-            <input id="room-name" maxlength="24" placeholder="Ex.: Mesa da galera" autocomplete="off">
-            <label for="room-max">Máximo de jogadores</label>
-            <select id="room-max">
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4" selected>4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-            </select>
-            <button class="btn" type="submit">Criar sala</button>
-          </form>
-        </div>
-      </div>
-    </section>
-
-    <!-- 3. Sala (antes/depois da partida) -->
-    <section id="screen-room" class="screen">
-      <div class="panel">
-        <header class="head">
-          <div>
-            <h2 id="room-title"></h2>
-            <div class="muted" id="room-sub"></div>
-          </div>
-          <button id="btn-leave-room" class="btn ghost small">Sair da sala</button>
-        </header>
-        <div id="winner" class="winner" hidden></div>
-        <ul id="room-players" class="players"></ul>
-        <p id="wait-msg" class="muted center"></p>
-        <button id="btn-start" class="btn" hidden>Começar partida</button>
-      </div>
-    </section>
-
-    <!-- 4. Jogo -->
-    <section id="screen-game" class="screen">
-      <div class="game">
-        <header class="topbar">
-          <div class="logo small">UNO<span>PRO</span></div>
-          <span id="game-room" class="muted"></span>
-          <button id="btn-leave-game" class="btn ghost small">Sair</button>
-        </header>
-
-        <div id="opponents" class="opponents"></div>
-
-        <div class="table">
-          <button id="deck" class="deck" title="Comprar carta"></button>
-          <div id="pile"></div>
-          <div class="side">
-            <div id="color-dot" class="color-dot"></div>
-            <div id="color-name" class="muted"></div>
-            <div id="dir" class="dir"></div>
-          </div>
-        </div>
-
-        <div id="turn-msg" class="turn-msg"></div>
-        <div id="log" class="log"></div>
-
-        <div class="hand-wrap">
-          <button id="btn-pass" class="btn small" hidden>Passar a vez</button>
-          <div id="hand" class="hand"></div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- Escolha de cor (coringa) -->
-  <div id="color-modal" class="modal" hidden>
-    <div class="modal-box">
-      <h3>Escolha a cor</h3>
-      <div class="color-choices">
-        <button data-color="roxo" class="choice c-roxo">Roxo</button>
-        <button data-color="marinho" class="choice c-marinho">Azul escuro</button>
-        <button data-color="ciano" class="choice c-ciano">Azul claro</button>
-        <button data-color="branco" class="choice c-branco">Branco</button>
-      </div>
-      <button id="color-cancel" class="btn ghost small">Cancelar</button>
-    </div>
-  </div>
-
-  <div id="toast" class="toast"></div>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UNO Pro — jogue UNO online com amigos</title>
+    <meta name="description" content="Jogo de cartas multiplayer em tempo real. Crie uma sala, mande o link e jogue sem cadastro." />
+    <meta name="theme-color" content="#080F2C" />
+    <meta property="og:title" content="UNO Pro — jogue UNO online com amigos" />
+    <meta property="og:description" content="Jogo de cartas multiplayer em tempo real, sem cadastro." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@600;700;800;900&display=swap"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
