@@ -69,6 +69,7 @@ export type RoomState = {
     host_id: string;
     status: "waiting" | "playing";
     rules: RuleSettings;
+    initial_cards: number;
   };
   members: Member[];
   game: GameState | null;
@@ -122,13 +123,14 @@ export const api = {
   updateNickname: (token: string, nickname: string) =>
     call<{ guest_id: string; nickname: string }>("update_nickname", { p_token: token, p_nickname: nickname }),
   listPublicRooms: () => call<PublicRoom[]>("list_public_rooms"),
-  createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings) =>
+  createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8) =>
     call<{ code: string }>("create_room", {
       p_token: token,
       p_name: name,
       p_is_public: isPublic,
       p_max_players: maxPlayers,
       p_rules: rules,
+      p_starting_cards: startingCards,
     }),
   joinRoom: (token: string, code: string) =>
     call<{ code: string; already: boolean }>("join_room", { p_token: token, p_code: code }),
