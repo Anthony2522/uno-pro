@@ -24,6 +24,7 @@ export function WaitingRoom({
   const canStart = members.length >= 2;
   const empty = Math.max(0, room.max_players - members.length);
   const lastWinner = game?.status === "finished" && game.winner_id ? members.find((m) => m.id === game.winner_id)?.nickname ?? game.last_action?.name : null;
+  const secondWinner = game?.status==="finished" && game.second_winner_id ? members.find(m=>m.id===game.second_winner_id)?.nickname : null;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-32 pt-6 sm:px-6 sm:pt-10">
@@ -31,7 +32,7 @@ export function WaitingRoom({
         <div className="mb-4 flex items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm animate-pop">
           <Trophy className="size-5 shrink-0 text-warning" aria-hidden />
           <span>
-            <strong>{lastWinner}</strong> venceu a rodada {game!.round}! {isHost ? "Inicie a revanche quando quiser." : "Aguardando o anfitrião iniciar a revanche."}
+            <strong>{lastWinner}</strong> ficou em 1º e <strong>{secondWinner??"outro jogador"}</strong> em 2º na rodada {game!.round}! {isHost ? "Inicie a revanche quando quiser." : "Aguardando o anfitrião iniciar a revanche."}
           </span>
         </div>
       )}

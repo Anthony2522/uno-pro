@@ -1,18 +1,11 @@
 // Additional UNO Pro rules for the standalone Node/Render server.
 import crypto from "node:crypto";
+import { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
+export { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, LIMITS, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
-export const BOT_NAMES = Object.freeze([
-  "Sr. Batata", "Dona Pipoca", "Capitão Picles", "Rei da Coxinha",
-  "Mestre Mingau", "Tio Wi-Fi", "Baronesa Biscoito", "Zé Marmita",
-  "Doutor Pudim", "Professor Paçoca", "Ninja do Pastel", "Lady Farofa",
-  "Major Tapioca", "Tubarão de Chinelo", "Conde do Ketchup",
-  "Vovó Turbina", "Pinguim Atômico", "Mago do Miojo",
-  "Café Sem Filtro", "Lorde Abacaxi"
-]);
-export function chooseBotMoveDelay(difficulty, random=Math.random) {
-  const fast = random()< (difficulty==="hard" ? 0.80 : 0.20);
-  return fast?5000:11000;
+export function chooseBotMoveDelay(difficulty) {
+  return difficulty==="hard"?3000:5000;
 }
 const stateRules = input => Object.fromEntries(Object.keys(DEFAULT_RULES).map(k => [k,typeof input?.[k] === "boolean" ? input[k] : true]));
 const fail = (message, status=400) => {throw new RpcError(message,status)};
@@ -28,7 +21,7 @@ export function chooseCutDelay(difficulty, random=Math.random) {
 }
 const weight = c => c==="W5" ? 5 : c==="W4" ? 4 : c?.slice(1)==="D" || c?.slice(1)==="T" ? 2 : 0;
 const value = c => c==="W"||c==="W4"||c==="W5" ? c : c.slice(1);
-const wild = c => c==="W"||c==="W4"||c==="W5";
+const wild = c => c==="W"||c==="W4"||c==="W5"||c==="X";
 const playable=(c,g)=>wild(c)||c[0]===g.current_color||(!wild(top(g)) && value(c)===value(top(g)));
 const top=g=>g.discard_pile.at(-1);
 const advance=(idx,dir,steps,n)=>(idx+dir*steps%n+n*100)%n;
@@ -165,7 +158,7 @@ function effect(r,kind,by,card,color,details={}){
   // Keep previously elapsed turn time unchanged while the notification is visible.
   if(g.status==="playing") {
     g.turn_started_at=(g.turn_started_at??now)+5000;
-    if(g.bot_move)g.bot_move.due+=5000;
+    // Bot thinking and visual cooldown run independently.
   }
   const event={id:++g.event_seq,type:kind,by,name:name(by),card:card||null,color:color||null,at:now,show_at,...details};
   g.effects.push(event);if(g.effects.length>64)g.effects.shift();
@@ -189,7 +182,7 @@ function finishNine(r){const g=r.game,n=g?.nine;if(!n)return;
     : [n.pressed.at(-1)].filter(Boolean);
   for(const id of losers) {
     draw(r,id,n.count);
-    effect(r,"penalty",id,null,null,{target:id,target_name:name(id),n:n.count});
+    effect(r,"penalty",id,null,null,{target:id,target_name:name(id),n:n.count,reason:"nine"});
   }
   g.nine=null;
   g.last_action={type:"nine",by:n.source,name:name(n.source),target:losers[0]||null,
@@ -217,7 +210,7 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
   for(const card of cards){const v=value(card);
     if(v==="R"){if(n===2)skips++;else dir*=-1;}
     else if(v==="S")skips++;
-    else if(v==="T"){dir*=-1;added+=2;}
+    else if(v==="T"){if(n>2)dir*=-1;added+=2;}
     else if(isDraw(card)||card==="W5"){added+=weight(card);if(card==="W5")hasFive=true;}
   }
   if(g.pending_draw && !added)fail("MUST_COUNTER_OR_DRAW");
@@ -235,14 +228,14 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
     g.nine={source:actor,count:trailingNines,eligible,pressed:[],botTimes,started_at:start,deadline:start+9200};}
   bump(r);if(!g.nine&&!deferDebt)resolveDebt(r);
 }
-function play(r,id,card,color){
+function play(r,id,card,color,targetId){
   const g=game(r),rules=ready(r),h=hand(r,id);let series=g.turn_cards||[];
   const cutting=current(g)!==id;
   // The first card (or an out-of-turn cut) waits two seconds. Once a turn
   // has begun, its remaining cards and End Turn stay usable during the notice.
   if((cutting || series.length===0) && actionLocked(g))assertActionOpen(r);
   if(g.nine)fail("NINE_ACTIVE");
-  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5)$/).test(card))fail("CARD_NOT_IN_HAND");
+  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5|X)$/).test(card))fail("CARD_NOT_IN_HAND");
   const cutVictim=cutting?current(g):null;
   if(cutting){
     const debt=g.pending_draw>0;
@@ -267,10 +260,12 @@ function play(r,id,card,color){
     else fail("INVALID_COMBO");
   }
   if(wild(card)&&!["r","y","g","b"].includes(color))fail("COLOR_REQUIRED");
+  if(card==="X"&&(!targetId||targetId===id||!g.turn_order.includes(targetId)))fail("INVALID_DETECTIVE_TARGET");
   h.cards.splice(h.cards.indexOf(card),1);
   if(h.cards.length===1&&!h.uno_called){h.uno_since=clock();h.bot_uno_plan=null;}
   else if(h.cards.length!==1){h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;}
   g.discard_pile.push(card);g.current_color=wild(card)?color:card[0];
+  if(card==="X")g.detective={viewer:id,target:targetId,until:clock()+10000};
   g.turn_cards=[...series,card];
   g.last_action={type:cutting?"cut":"play",by:id,name:name(id),card,color:g.current_color,left:h.cards.length};
   g.seq++;
@@ -290,41 +285,89 @@ function play(r,id,card,color){
   }
   planBotCut(r,id);
   bump(r);
-  if(h.cards.length===0){g.status="finished";g.winner_id=id;g.last_action.win=true;g.pending_draw=0;g.nine=null;
-    r.status="waiting";bump(r,true);return {ok:true,won:true};}
+  if(h.cards.length===0){
+    g.placements??=[];
+    g.placements.push({id,rank:g.placements.length+1,name:name(id)});
+    g.winner_id=g.placements[0]?.id??id;
+    if(g.placements.length>=2||g.turn_order.length===2){
+      if(g.placements.length===1){
+        const runnerUp=g.turn_order.find(p=>p!==id);
+        if(runnerUp)g.placements.push({id:runnerUp,rank:2,name:name(runnerUp)});
+      }
+      g.second_winner_id=g.placements[1]?.id??null;
+      g.status="finished";
+      g.last_action={type:"placement",by:id,name:name(id),rank:g.placements[0]?.id===id?1:2,win:true};
+      g.pending_draw=0;g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
+    }
+    finish(r,false,true);
+    const target=current(g);
+    g.turn_order=g.turn_order.filter(p=>p!==id);
+    g.turn_idx=Math.max(0,g.turn_order.indexOf(target));
+    g.last_action={type:"placement",by:id,name:name(id),rank:1};
+    if(g.nine)g.nine.eligible=g.nine.eligible.filter(p=>p!==id);
+    resolveDebt(r);bump(r);return {ok:true,won:true,continued:true};
+  }
   return {ok:true};
 }
 function botTick(r){
   const g=r.game;
-  if(!g||g.status!=="playing"||g.nine||!isBot(current(g)))return;
+  if(!g || g.status!=="playing" || g.nine || !isBot(current(g)))return;
   const id=current(g),h=hand(r,id),bot=store.guestsById.get(id),rules=ready(r);
-  if(!g.bot_move || g.bot_move.id!==id) {
-    g.bot_move={id,due:g.turn_started_at+chooseBotMoveDelay(bot.difficulty)};
+  const hard=bot.difficulty==="hard";
+  if(!g.bot_move || g.bot_move.id!==id){
+    g.bot_move={id,due:clock()+chooseBotMoveDelay(bot.difficulty),played:0};
   }
-  if(clock()<g.bot_move.due || actionLocked(g))return;
-  if(g.pending_draw&&!counter(r,id)){finish(r,true);return;}
-  let options=h.cards.filter(c=>g.pending_draw?canCounter(g,c):playable(c,g));
-  if(!options.length&&!g.pending_draw){const drawn=draw(r,id,1)[0];g.has_drawn=true;g.drawn_card=drawn||null;rememberDraw(r,id,drawn);
-    if(drawn&&playable(drawn,g))options=[drawn];}
-  const score=c=>{const match=h.cards.filter(x=>x!==c&&value(x)===value(c)).length;
-    const run=h.cards.filter(x=>x[0]===c[0]&&/^[0-9]$/.test(value(x))&&/^[0-9]$/.test(value(c))&&Math.abs(Number(value(x))-Number(value(c)))===1).length;
-    return match*4+run*2+weight(c)*3+(value(c)==="S"?4:0)+(value(c)==="R"?2:0)-(wild(c)?2:0);};
-  options.sort((a,b)=>score(b)-score(a));
-  let pick=bot.difficulty==="hard"||Math.random()<0.6?options[0]:options[Math.floor(Math.random()*options.length)];
-  const chooseColor=()=>{const counts={r:0,y:0,g:0,b:0};h.cards.forEach(c=>{if(counts[c[0]]!==undefined)counts[c[0]]++});
-    return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];};
-  if(pick){play(r,id,pick,chooseColor());
-    for(let i=0;i<10&&g.status==="playing"&&!actionLocked(g);i++){const series=g.turn_cards,first=series[0],prev=series.at(-1);
-      const combos=h.cards.filter(c=>{const same=value(first)===value(c),delta=Number(value(c))-Number(value(prev));
-        const run=/^\d$/.test(value(c))&&/^\d$/.test(value(prev))&&c[0]===prev[0]&&Math.abs(delta)===1&&(!g.turn_step||Math.sign(delta)===g.turn_step);
-        return g.turn_mode==="repeat"?same:g.turn_mode==="sequence"?run:(same&&rules.repeat)||(run&&rules.sequence);});
-      if(!combos.length)break;combos.sort((a,b)=>score(b)-score(a));play(r,id,combos[0],chooseColor());
+  if(clock()<g.bot_move.due || (g.turn_cards.length===0 && actionLocked(g)))return;
+  if(g.pending_draw && g.turn_cards.length===0 && !counter(r,id)){finish(r,true);return;}
+  const score=c=>{
+    const match=h.cards.filter(x=>x!==c && value(x)===value(c)).length;
+    const run=h.cards.filter(x=>x[0]===c[0] && /^[0-9]$/.test(value(x)) && /^[0-9]$/.test(value(c)) &&
+      Math.abs(Number(value(x))-Number(value(c)))===1).length;
+    return match*4+run*2+weight(c)*3+(value(c)==="S"?4:0)+(value(c)==="R"?2:0)-(wild(c)?2:0);
+  };
+  const chooseColor=()=>{
+    const counts={r:0,y:0,g:0,b:0};
+    h.cards.forEach(c=>{if(counts[c[0]]!==undefined)counts[c[0]]++});
+    return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+  };
+  let options;
+  if(!g.turn_cards.length){
+    options=h.cards.filter(c=>g.pending_draw?canCounter(g,c):playable(c,g));
+    if(!options.length && !g.pending_draw){
+      const drawn=draw(r,id,1)[0];g.has_drawn=true;g.drawn_card=drawn||null;rememberDraw(r,id,drawn);
+      if(drawn && playable(drawn,g))options=[drawn];
     }
+  }else{
+    const series=g.turn_cards,first=series[0],prev=series.at(-1);
+    options=h.cards.filter(c=>{
+      const same=value(first)===value(c),delta=Number(value(c))-Number(value(prev));
+      const run=/^\d$/.test(value(c)) && /^\d$/.test(value(prev)) && c[0]===prev[0] &&
+        Math.abs(delta)===1 && (!g.turn_step || Math.sign(delta)===g.turn_step);
+      return g.turn_mode==="repeat"?same:g.turn_mode==="sequence"?run:
+        (same&&rules.repeat)||(run&&rules.sequence);
+    });
   }
-  if(g.status==="playing")finish(r);
+  if(!options.length){finish(r,true);return;}
+  options.sort((a,b)=>score(b)-score(a));
+  const pick=hard || Math.random()<.6 ? options[0] : options[Math.floor(Math.random()*options.length)];
+  const target=pick==="X"?g.turn_order.filter(p=>p!==id)
+    .sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0]:undefined;
+  play(r,id,pick,chooseColor(),target);
+  if(g.status!=="playing" || current(g)!==id)return;
+  g.bot_move={id,due:clock()+(hard?2000:5000),played:(g.bot_move?.played||0)+1};
+  // Keep the turn open for an additional card only when a valid combo exists.
+  const series=g.turn_cards,first=series[0],prev=series.at(-1);
+  const hasCombo=h.cards.some(c=>{
+    const same=value(first)===value(c),delta=Number(value(c))-Number(value(prev));
+    const run=/^\d$/.test(value(c))&&/^\d$/.test(value(prev))&&c[0]===prev[0]&&
+      Math.abs(delta)===1&&(!g.turn_step||Math.sign(delta)===g.turn_step);
+    return g.turn_mode==="repeat"?same:g.turn_mode==="sequence"?run:
+      (same&&rules.repeat)||(run&&rules.sequence);
+  });
+  if(!hasCombo)finish(r);
 }
 let lastBasicSweep=0;
-export function proSweep(){LIMITS.autoPassMs=60_000;const time=clock();
+export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
   for(const r of store.rooms.values()){
     for(const m of r.members){const b=store.guestsById.get(m.guest_id);if(b?.bot)b.last_seen=time;}
     const g=r.game;
@@ -354,12 +397,55 @@ export function proSweep(){LIMITS.autoPassMs=60_000;const time=clock();
       }
     }
     botTick(r);
-    if(g.status==="playing"&&time-g.turn_started_at>=60_000)finish(r,true);
+    if(g.status==="playing"&&time-g.turn_started_at>=50_000)finish(r,true);
   }
   if(time-lastBasicSweep>=3000){lastBasicSweep=time;basicSweep();}
 }
-export const RPC_NAMES=[...new Set([...basicNames,"end_turn","accept_draw","press_nine","add_bot","remove_bot"])];
+export const RPC_NAMES=[...new Set([...basicNames,"end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room"])];
 export function proRpc(fn,args={}){
+  if(fn==="dev_auth"){
+    const me=authenticate(args.p_token);
+    const configured=process.env.DEV_ACCESS_KEY;
+    if(me.nickname.trim().toLocaleLowerCase("pt-BR")!=="toninho")fail("DEV_NAME_REQUIRED",403);
+    // The nickname is not authentication. The Render secret must be configured.
+    if(!configured || configured.length<16)fail("DEV_NOT_CONFIGURED",503);
+    const input=typeof args.p_key==="string"?args.p_key:"";
+    const digestA=crypto.createHash("sha256").update(input).digest();
+    const digestB=crypto.createHash("sha256").update(configured).digest();
+    if(!crypto.timingSafeEqual(digestA,digestB))fail("DEV_INVALID_KEY",403);
+    me.is_dev=true;
+    for(const r of store.rooms.values())if(member(r,me.id)){r.host_id=me.id;bump(r,true);}
+    return {is_dev:true};
+  }
+  if(fn==="dev_status"){
+    const me=authenticate(args.p_token);
+    return {is_dev:!!me.is_dev && me.nickname.trim().toLocaleLowerCase("pt-BR")==="toninho"};
+  }
+  if(fn==="dev_delete_public_room"){
+    const me=authenticate(args.p_token);
+    if(!me.is_dev || me.nickname.trim().toLocaleLowerCase("pt-BR")!=="toninho")fail("DEV_ACCESS_DENIED",403);
+    const r=find(args.p_code);
+    if(!r.is_public)fail("ROOM_NOT_PUBLIC");
+    store.rooms.delete(r.id);store.roomsByCode.delete(r.code);
+    bump(r,true);
+    return {ok:true};
+  }
+  if(fn==="join_room"){
+    const me=authenticate(args.p_token);
+    const r=find(args.p_code);
+    if(me.is_dev && me.nickname.trim().toLocaleLowerCase("pt-BR")==="toninho" &&
+      r.status==="playing" && !member(r,me.id)){
+      // Developer may spectate a running room without receiving cards.
+      if(r.members.length>=r.max_players)fail("ROOM_FULL");
+      r.members.push({guest_id:me.id,joined_at:clock()});
+      r.host_id=me.id;bump(r,true);return {code:r.code,already:false};
+    }
+    const result=originalRpc(fn,args);
+    if(me.is_dev && me.nickname.trim().toLocaleLowerCase("pt-BR")==="toninho" && r.host_id!==me.id){
+      r.host_id=me.id;bump(r,true);
+    }
+    return result;
+  }
   if(fn==="create_room"){
     const count=args.p_starting_cards===undefined?8:args.p_starting_cards;
     if(!Number.isInteger(count)||count<2||count>20)fail("INVALID_STARTING_CARDS");
@@ -374,6 +460,7 @@ export function proRpc(fn,args={}){
     return result;
   }
   if(fn==="get_room_state"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;result.room.rules=ready(r);result.room.initial_cards=r.initial_cards??8;
+    result.is_dev=!!authenticate(args.p_token).is_dev;
     result.members=result.members.map(m=>({ ...m,bot:isBot(m.id),difficulty:store.guestsById.get(m.id)?.difficulty||null}));
     if(g&&result.game){result.game.turn_cards=[...(g.turn_cards||[])];result.game.pending_draw=g.pending_draw||0;
       result.game.nine=g.nine?{source:g.nine.source,count:g.nine.count,eligible:[...g.nine.eligible],pressed:[...g.nine.pressed],deadline:stamp(g.nine.deadline)}:null;
@@ -382,6 +469,9 @@ export function proRpc(fn,args={}){
         ? stamp(activeNotification(g).show_at+2000) : null;
       result.game.last_draw=g.last_draw_by_id?.[result.me]?{...g.last_draw_by_id[result.me],at:stamp(g.last_draw_by_id[result.me].at)}:null;
       result.game.pending_uncounterable=!!g.pending_uncounterable;
+      result.game.detective=g.detective?.viewer===result.me&&clock()<g.detective.until
+        ?{target:g.detective.target,target_name:name(g.detective.target),cards:[...(r.hands.get(g.detective.target)?.cards??[])],expires_at:stamp(g.detective.until)}:null;
+      result.members=result.members.map(m=>({...m,bot_name_en:isBot(m.id)?BOT_NAMES_EN[BOT_NAMES.indexOf(m.nickname)]??m.nickname:null}));
       result.game.can_catch_uno=r.members.some(m=>m.guest_id!==result.me&&r.hands.get(m.guest_id)?.cards.length===1&&!r.hands.get(m.guest_id)?.uno_called&&clock()-(r.hands.get(m.guest_id)?.uno_since||clock())>=8000);
       result.members=result.members.map(m=>({...m,uno_since:r.hands.get(m.id)?.uno_since?stamp(r.hands.get(m.id).uno_since):null}));}
     return result;
@@ -398,7 +488,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="remove_bot"){const {me,r}=guard(args);if(r.host_id!==me.id)fail("NOT_HOST");if(r.status!=="waiting")fail("GAME_STARTED");
     const id=args.p_bot_id;if(!member(r,id)||!isBot(id))fail("NOT_BOT");r.members=r.members.filter(m=>m.guest_id!==id);store.guestsById.delete(id);bump(r,true);return {ok:true};}
-  if(fn==="play_card"){const {me,r}=guard(args);return play(r,me.id,args.p_card,args.p_color);}
+  if(fn==="play_card"){const {me,r}=guard(args);return play(r,me.id,args.p_card,args.p_color,args.p_target_id);}
   if(fn==="end_turn"||fn==="pass_turn"){const {me,r}=guard(args),g=game(r);if(current(g)!==me.id)fail("NOT_YOUR_TURN");finish(r);return {ok:true};}
   if(fn==="draw_card"){const {me,r}=guard(args),g=game(r);if(current(g)!==me.id)fail("NOT_YOUR_TURN");assertActionOpen(r);
     if(g.nine)fail("NINE_ACTIVE");if(g.pending_draw)fail("MUST_COUNTER_OR_DRAW");

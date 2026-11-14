@@ -91,7 +91,8 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
 
 test("baralho 186 cartas, incluindo dois +2 Volta por cor e dois +5",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,186);
+  assert.equal(deck.length,187);
+  assert.equal(deck.filter(c=>c==="X").length,1);
   for(const col of ["r","y","g","b"])
     for(const value of ["0","1","2","3","4","5","6","7","8","9","S","R","D"])
       assert.equal(deck.filter(c=>c===col+value).length,3,col+value);
@@ -106,7 +107,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   room.hands.get(a.guest_id).cards=["b1","r5"];
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,185);
+  assert.equal(g.draw_pile.length,186);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -343,20 +344,13 @@ test("corte de W5 em batalha W5 só permite W5 idêntico",()=>{
 });
 
 
-test("movimento dos bots: fácil 20% 5s e 80% 11s, difícil 80% 5s",()=>{
-  assert.equal(chooseBotMoveDelay("easy",()=>0),5000);
-  assert.equal(chooseBotMoveDelay("easy",()=>0.19999),5000);
-  assert.equal(chooseBotMoveDelay("easy",()=>0.20),11000);
-  assert.equal(chooseBotMoveDelay("easy",()=>0.99),11000);
-  assert.equal(chooseBotMoveDelay("hard",()=>0),5000);
-  assert.equal(chooseBotMoveDelay("hard",()=>0.79999),5000);
-  assert.equal(chooseBotMoveDelay("hard",()=>0.80),11000);
-  assert.equal(chooseBotMoveDelay("hard",()=>0.95),11000);
+test("bots fazem primeira jogada em 3s (difícil) ou 5s (fácil)",()=>{
+  assert.equal(chooseBotMoveDelay("hard"),3000);
+  assert.equal(chooseBotMoveDelay("easy"),5000);
 });
-
-test("20 nomes de bots diferentes dentro da sala",()=>{
-  assert.equal(BOT_NAMES.length,20);
-  assert.equal(new Set(BOT_NAMES).size,20);
+test("100 nomes de bots diferentes dentro da sala",()=>{
+  assert.equal(BOT_NAMES.length,100);
+  assert.equal(new Set(BOT_NAMES).size,100);
   const owner=call("register_guest",{p_nickname:"Dono"});
   const code=call("create_room",{p_token:owner.token,p_name:"Nomes engraçados",p_max_players:8}).code;
   for(let i=0;i<7;i++)call("add_bot",{p_token:owner.token,p_code:code,p_difficulty:"easy"});
@@ -461,6 +455,9 @@ test("bot que joga ação especial não força segunda carta durante os 2s de av
   assert.ok(g.bot_move);
   g.bot_move.due=Date.now()-1;
   proSweep();
+  assert.equal(g.turn_order[g.turn_idx],s.bot,"o combo só ocorre após 2s adicionais");
+  assert.equal(g.turn_cards.length,1);
+  s.clearNotice();g.bot_move.due=Date.now()-1;proSweep();
   assert.notEqual(g.turn_order[g.turn_idx],s.bot);
   assert.ok(g.effects.some(e=>e.type==="reverse"));
 });
@@ -590,4 +587,150 @@ test("somente mudanças de cor geram onda, não anúncio de carta +2/+4 jogada",
   s.play(a,"W4","g");
   assert.equal(g.effects.at(-1).type,"color_wave");
   assert.equal(g.effects.at(-1).color,"g");
+});
+
+
+test("o limite é de 50 segundos, não 60",()=>{
+  const s=setup(),{g,a,room}=s;
+  s.setTurn(a.guest_id);g.turn_started_at=Date.now()-51_000;
+  room.hands.get(a.guest_id).cards=["b7","r5","y2"];
+  proSweep();
+  assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
+});
+
+test("coringa Detetive é único e só expõe a mão ao jogador autorizado por dez segundos",()=>{
+  const s=setup(),{g,a,b,room}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["g3"];g.current_color="g";
+  room.hands.get(a.guest_id).cards=["X","r4","y7"];
+  room.hands.get(b.guest_id).cards=["g1","W5","rT"];
+  assert.throws(()=>s.play(a,"X","b"),/INVALID_DETECTIVE_TARGET/);
+  call("play_card",{p_token:a.token,p_code:s.code,p_card:"X",p_color:"b",p_target_id:b.guest_id});
+  const authorized=call("get_room_state",{p_token:a.token,p_code:s.code}).game.detective;
+  const unauthorized=call("get_room_state",{p_token:b.token,p_code:s.code}).game.detective;
+  assert.deepEqual(authorized.cards,["g1","W5","rT"]);
+  assert.equal(unauthorized,null);
+  g.detective.until=Date.now()-1;
+  assert.equal(call("get_room_state",{p_token:a.token,p_code:s.code}).game.detective,null);
+});
+
+
+test("+2 Volta em duas pessoas atua como +2, sem a inversão especial",()=>{
+  const a=call("register_guest",{p_nickname:"Duelo A"});
+  const b=call("register_guest",{p_nickname:"Duelo B"});
+  const code=call("create_room",{p_token:a.token,p_name:"Duelo volta",p_max_players:2}).code;
+  call("join_room",{p_token:b.token,p_code:code});
+  call("start_game",{p_token:a.token,p_code:code});
+  const r=store.roomsByCode.get(code),g=r.game;
+  g.turn_idx=0;g.direction=1;g.discard_pile=["b1"];g.current_color="b";
+  r.hands.get(a.guest_id).cards=["bT","r3"];
+  r.hands.get(b.guest_id).cards=["r6","g2"];
+  call("play_card",{p_token:a.token,p_code:code,p_card:"bT"});
+  call("end_turn",{p_token:a.token,p_code:code});
+  assert.equal(g.direction,1);
+  assert.equal(r.hands.get(b.guest_id).cards.length,4);
+  assert.equal(g.pending_draw,0);
+});
+
+test("+4 pode receber rebatida de +2 Volta de outra cor; devolve a dívida",()=>{
+  const s=setup(),{a,b,g,room}=s;
+  s.setTurn(a.guest_id);g.direction=1;g.discard_pile=["b2"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","g2"];
+  room.hands.get(b.guest_id).cards=["yT","b1"];
+  s.play(a,"W4","r");s.end(a);
+  assert.equal(g.pending_draw,4);
+  s.play(b,"yT");s.end(b);
+  assert.equal(g.direction,-1);
+  assert.equal(g.pending_draw,0);
+  assert.equal(room.hands.get(a.guest_id).cards.length,7);
+});
+
+test("a primeira colocação continua a partida até o segundo chegar",()=>{
+  const ps=["Primeiro A","Segundo B","Terceiro C","Quarto D"].map(p=>call("register_guest",{p_nickname:p}));
+  const [a,b,c,d]=ps;
+  const code=call("create_room",{p_token:a.token,p_name:"Dois vencedores",p_max_players:4}).code;
+  [b,c,d].forEach(p=>call("join_room",{p_token:p.token,p_code:code}));
+  call("start_game",{p_token:a.token,p_code:code});
+  const room=store.roomsByCode.get(code),g=room.game;
+  g.turn_idx=0;g.direction=1;g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["b4"];
+  call("play_card",{p_token:a.token,p_code:code,p_card:"b4"});
+  assert.equal(g.status,"playing");
+  assert.equal(room.status,"playing");
+  assert.equal(g.placements[0].id,a.guest_id);
+  assert.equal(g.turn_order.includes(a.guest_id),false);
+  room.hands.get(b.guest_id).cards=["b4"];
+  call("play_card",{p_token:b.token,p_code:code,p_card:"b4"});
+  assert.equal(g.status,"finished");
+  assert.equal(room.status,"waiting");
+  assert.equal(g.winner_id,a.guest_id);
+  assert.equal(g.second_winner_id,b.guest_id);
+  assert.deepEqual(g.placements.map(x=>x.rank),[1,2]);
+});
+
+test("em duelo, o segundo lugar é decidido automaticamente ao vencer o primeiro",()=>{
+  const a=call("register_guest",{p_nickname:"Duelista A"});
+  const b=call("register_guest",{p_nickname:"Duelista B"});
+  const code=call("create_room",{p_token:a.token,p_name:"Duelo final",p_max_players:2}).code;
+  call("join_room",{p_token:b.token,p_code:code});
+  call("start_game",{p_token:a.token,p_code:code});
+  const r=store.roomsByCode.get(code),g=r.game;
+  g.turn_idx=0;g.direction=1;g.discard_pile=["g1"];g.current_color="g";
+  r.hands.get(a.guest_id).cards=["g1"];
+  call("play_card",{p_token:a.token,p_code:code,p_card:"g1"});
+  assert.equal(g.status,"finished");
+  assert.equal(g.placements[0].id,a.guest_id);
+  assert.equal(g.placements[1].id,b.guest_id);
+});
+
+test("100 nomes de bot diferentes e anfitrião sempre humano",()=>{
+  assert.equal(BOT_NAMES.length,100);
+  const host=call("register_guest",{p_nickname:"Humano host"});
+  const {code}=call("create_room",{p_token:host.token,p_name:"Sem host robô",p_max_players:4});
+  call("add_bot",{p_token:host.token,p_code:code,p_difficulty:"easy"});
+  call("leave_room",{p_token:host.token,p_code:code});
+  const room=store.roomsByCode.get(code);
+  assert.equal(room.host_id,null);
+  const newcomer=call("register_guest",{p_nickname:"Novo humano"});
+  call("join_room",{p_token:newcomer.token,p_code:code});
+  assert.equal(room.host_id,newcomer.guest_id);
+});
+
+test("acesso de desenvolvedor exige segredo e nome, não basta escrever Toninho",()=>{
+  const before=process.env.DEV_ACCESS_KEY;
+  process.env.DEV_ACCESS_KEY="um-segredo-longo-de-testes-2026";
+  try{
+    const admin=call("register_guest",{p_nickname:"Toninho"});
+    const other=call("register_guest",{p_nickname:"Outra pessoa"});
+    const code=call("create_room",{p_token:other.token,p_name:"Apagavel",p_max_players:3,p_is_public:true}).code;
+    assert.throws(()=>call("dev_delete_public_room",{p_token:admin.token,p_code:code}),/DEV_ACCESS_DENIED/);
+    assert.throws(()=>call("dev_auth",{p_token:admin.token,p_key:"errada"}),/DEV_INVALID_KEY/);
+    assert.throws(()=>call("dev_auth",{p_token:other.token,p_key:process.env.DEV_ACCESS_KEY}),/DEV_NAME_REQUIRED/);
+    call("dev_auth",{p_token:admin.token,p_key:process.env.DEV_ACCESS_KEY});
+    call("join_room",{p_token:admin.token,p_code:code});
+    assert.equal(store.roomsByCode.get(code).host_id,admin.guest_id);
+    call("dev_delete_public_room",{p_token:admin.token,p_code:code});
+    assert.equal(store.roomsByCode.has(code),false);
+  }finally{
+    if(before===undefined)delete process.env.DEV_ACCESS_KEY;
+    else process.env.DEV_ACCESS_KEY=before;
+  }
+});
+
+test("bot difícil espera 3 segundos e 2 segundos por carta consecutiva",()=>{
+  const s=setup(),{g,room,bot}=s;
+  s.setTurn(bot);g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(bot).cards=["b3","y3","r4"];
+  proSweep();
+  assert.ok(g.bot_move);
+  assert.equal(g.bot_move.due> Date.now(),true);
+  g.bot_move.due=Date.now()-1;
+  proSweep();
+  assert.equal(g.turn_order[g.turn_idx],bot);
+  assert.equal(g.turn_cards.length,1);
+  assert.equal(g.bot_move.due>=Date.now()+1500,true);
+  s.clearNotice();
+  g.bot_move.due=Date.now()-1;
+  proSweep();
+  assert.equal(g.turn_cards.length,0);
+  assert.notEqual(g.turn_order[g.turn_idx],bot);
 });

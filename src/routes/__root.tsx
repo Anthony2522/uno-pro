@@ -11,6 +11,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { NicknameScreen } from "@/components/uno/NicknameScreen";
 import { Logo } from "@/components/uno/Logo";
 import { GuestProvider, useGuest } from "@/lib/uno/guest";
+import { LanguageProvider } from "@/lib/uno/i18n";
 
 function NotFoundComponent() {
   return (
@@ -93,10 +94,12 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <HeadContent />
-      <GuestProvider>
-        <GuestGate />
-        <Toaster position="top-center" richColors />
-      </GuestProvider>
+      <LanguageProvider>
+        <GuestProvider>
+          <GuestGate />
+          <Toaster position="top-center" richColors duration={3000} />
+        </GuestProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }

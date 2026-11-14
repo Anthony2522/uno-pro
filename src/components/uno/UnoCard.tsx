@@ -1,4 +1,4 @@
-import { Ban, Repeat2 } from "lucide-react";
+import { Ban, Repeat2, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cardLabel, cardValue, isWild } from "@/lib/uno/cards";
 
@@ -27,6 +27,12 @@ function Symbol({ card, corner }: { card: string; corner?: boolean }) {
   const v = cardValue(card);
   if (v === "S") return <Ban className={corner ? "size-[16cqw]" : "size-[44cqw]"} strokeWidth={3} />;
   if (v === "R") return <Repeat2 className={corner ? "size-[16cqw]" : "size-[46cqw]"} strokeWidth={3} />;
+  if(v==="X")return (
+    <span className="flex flex-col items-center justify-center gap-0 leading-none">
+      <Eye className={corner?"size-[20cqw]":"size-[49cqw]"} strokeWidth={3}/>
+      {!corner&&<span className="text-[14cqw]">DET.</span>}
+    </span>
+  );
   if (v === "T") return (
     <span className="flex flex-col items-center justify-center leading-none">
       <Repeat2 className={corner ? "size-[15cqw]" : "size-[39cqw]"} strokeWidth={3}/>

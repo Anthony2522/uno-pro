@@ -12,6 +12,7 @@ export type Member = {
   uno_called: boolean;
   uno_since?: string | null;
   bot?: boolean;
+  bot_name_en?: string | null;
   difficulty?: "easy" | "hard" | null;
 };
 
@@ -42,6 +43,9 @@ export type GameState = {
   has_drawn: boolean;
   drawn_card: string | null;
   winner_id: string | null;
+  second_winner_id?: string | null;
+  placements?: Array<{id:string;rank:number;name:string}>;
+  detective?: {target:string;target_name:string;cards:string[];expires_at:string}|null;
   last_action: LastAction;
   round: number;
   seq: number;
@@ -59,6 +63,7 @@ export type GameState = {
 
 export type RoomState = {
   me: string;
+  is_dev?: boolean;
   server_now: string;
   room: {
     id: string;
@@ -123,6 +128,9 @@ export const api = {
   updateNickname: (token: string, nickname: string) =>
     call<{ guest_id: string; nickname: string }>("update_nickname", { p_token: token, p_nickname: nickname }),
   listPublicRooms: () => call<PublicRoom[]>("list_public_rooms"),
+  devStatus: (token:string)=>call<{is_dev:boolean}>("dev_status",{p_token:token}),
+  devAuth: (token:string,key:string)=>call<{is_dev:boolean}>("dev_auth",{p_token:token,p_key:key}),
+  devDeletePublicRoom: (token:string,code:string)=>call("dev_delete_public_room",{p_token:token,p_code:code}),
   createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8) =>
     call<{ code: string }>("create_room", {
       p_token: token,
@@ -138,8 +146,8 @@ export const api = {
   getRoomState: (token: string, code: string) =>
     call<RoomState>("get_room_state", { p_token: token, p_code: code }),
   startGame: (token: string, code: string) => call("start_game", { p_token: token, p_code: code }),
-  playCard: (token: string, code: string, card: string, color?: string) =>
-    call("play_card", { p_token: token, p_code: code, p_card: card, p_color: color ?? null }),
+  playCard: (token: string, code: string, card: string, color?: string, targetId?: string) =>
+    call("play_card", { p_token: token, p_code: code, p_card: card, p_color: color ?? null, p_target_id: targetId ?? null }),
   drawCard: (token: string, code: string) =>
     call<{ card: string | null; playable: boolean; auto_passed?: boolean }>("draw_card", { p_token: token, p_code: code }),
   passTurn: (token: string, code: string) => call("pass_turn", { p_token: token, p_code: code }),

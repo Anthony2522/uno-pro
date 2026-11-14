@@ -4,9 +4,9 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { UnoCard } from "./UnoCard";
 
 export function WinnerOverlay({
-  open, winnerName, isMe, isHost, busy, canRematch, onRematch, onClose,
+  open, winnerName, secondWinnerName, secondIsMe, isMe, isHost, busy, canRematch, onRematch, onClose,
 }: {
-  open: boolean; winnerName: string; isMe: boolean; isHost: boolean; busy: boolean; canRematch: boolean;
+  open: boolean; winnerName: string; secondWinnerName: string; secondIsMe: boolean; isMe: boolean; isHost: boolean; busy: boolean; canRematch: boolean;
   onRematch: () => void; onClose: () => void;
 }) {
   return (
@@ -21,6 +21,10 @@ export function WinnerOverlay({
           <Trophy className="size-10 text-primary-foreground" />
         </div>
         <DialogTitle className="font-display text-3xl font-black">{isMe ? "Você venceu!" : `${winnerName} venceu!`}</DialogTitle>
+        {secondWinnerName&&<div className="mt-2 flex flex-col items-center gap-1 rounded-xl border border-cyan/20 bg-navy/40 p-3">
+          <p className="font-display text-sm font-bold text-warning">🥇 1º {winnerName}</p>
+          <p className="font-display text-sm font-bold text-cyan">🥈 2º {secondIsMe?"Você":secondWinnerName}</p>
+        </div>}
         <DialogDescription>{isMe ? "Mão zerada. Que jogada!" : "Fim da rodada. Revanche?"}</DialogDescription>
         <div className="mt-2 flex flex-col gap-2">
           {isHost ? (
