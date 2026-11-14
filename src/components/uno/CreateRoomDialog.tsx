@@ -9,6 +9,7 @@ import { api, type RuleSettings } from "@/lib/uno/api";
 import { errorMessage, toGameError } from "@/lib/uno/errors";
 import { useReadyGuest } from "@/lib/uno/guest";
 import { cn } from "@/lib/utils";
+import { AdvancedRoomSettingsFields } from "./AdvancedRoomSettingsFields";
 
 export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { guest, resetSession } = useReadyGuest();
@@ -57,7 +58,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onOpenAutoFocus={(event)=>event.preventDefault()} className="glass-strong rounded-3xl border-glass-border sm:max-w-md">
+      <DialogContent onOpenAutoFocus={(event)=>event.preventDefault()} className="glass-strong max-h-[90dvh] overflow-y-auto overscroll-contain touch-pan-y rounded-3xl border-glass-border sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">Criar sala</DialogTitle>
           <DialogDescription>Você será o anfitrião e poderá iniciar a partida.</DialogDescription>
@@ -135,28 +136,9 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
               {advanced ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
             </button>
             {advanced && (
-              <div className="mt-3 space-y-3 border-t border-glass-border pt-3">
-                <label htmlFor="starting-cards" className="block rounded-xl border border-glass-border/60 bg-navy/40 p-3">
-                  <span className="block text-sm font-semibold">Cartas iniciais por jogador</span>
-                  <span className="mb-2 block text-xs text-muted-foreground">Quantidade distribuída no começo de cada partida (padrão: 8).</span>
-                  <select id="starting-cards" value={startingCards} onChange={(e)=>setStartingCards(Number(e.target.value))}
-                    className="h-11 w-full rounded-xl border border-glass-border bg-navy px-3 text-sm text-foreground">
-                    {Array.from({length:19},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} cartas</option>)}
-                  </select>
-                </label>
-                <p className="mb-3 text-xs text-muted-foreground">Todas as regras opcionais vêm ativadas. Desmarque as que não quiser usar nesta sala.</p>
-                {([
-                  ["repeat","Cartas repetidas","Jogue duas ou mais cartas com o mesmo número ou símbolo, mesmo com cores diferentes."],
-                  ["sequence","Sequências numéricas","Jogue números consecutivos da mesma cor em ordem crescente ou decrescente."],
-                  ["nine","Desafio do 9","Com 3 ou mais jogadores, o último a apertar 9 compra uma carta por 9 jogado."],
-                  ["cut","Corte de turno","Quem tiver a carta exatamente igual à mesa pode jogar fora da vez."],
-                  ["stack","Rebater +2 e +4","Acumule compras e permita que o próximo jogador rebata ou aceite a punição."],
-                ] as const).map(([key,label,description]) => (
-                  <label key={key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-glass-border/60 bg-navy/40 p-3 hover:border-cyan/40">
-                    <input type="checkbox" checked={rules[key]} onChange={e=>setRules(prev=>({...prev,[key]:e.target.checked}))} className="mt-1 size-4 accent-cyan" />
-                    <span><span className="block text-sm font-semibold">{label}</span><span className="mt-1 block text-xs text-muted-foreground">{description}</span></span>
-                  </label>
-                ))}
+              <div className="mt-3 border-t border-glass-border pt-3">
+                <AdvancedRoomSettingsFields startingCards={startingCards} rules={rules}
+                  onStartingCardsChange={setStartingCards} onRulesChange={setRules}/>
               </div>
             )}
           </div>

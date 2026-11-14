@@ -1,7 +1,7 @@
 name: UNO Pro - checagem
 on:
   push:
-    branches: [main, feature-desuno-bomb-motion-2026-11-14]
+    branches: [main, feature-room-settings-bot-finish-2026-11-14]
   workflow_dispatch:
 jobs:
   build-and-tests:

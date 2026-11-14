@@ -37,3 +37,11 @@ Entre no jogo com o apelido `Toninho`, abra o perfil e selecione **Acesso desenv
 - Coringa Detetive exibe cartas maiores, com identificação legível, apenas ao jogador autorizado pelo prazo de dez segundos.
 - Coringa Bomba: uma cópia no baralho, cada adversário compra duas cartas sem perder a vez.
 - Desconexão não força o avanço imediato: enquanto o participante está offline, há até trinta segundos de tolerância, limitada também pelo relógio normal de cinquenta segundos. Reconectar não reinicia o tempo gasto.
+
+## Configurações antes da partida e efeitos por sequência
+
+O anfitrião pode abrir **Configurações avançadas** também na sala de espera, inclusive após uma partida terminar, e alterar a quantidade inicial de cartas (2–20) ou as cinco regras opcionais. Configurações são somente leitura durante partidas em andamento. Os diálogos oferecem rolagem vertical no celular.
+
+O **Desuno** só pode ser acionado por participantes ainda ativos: vencedores e observadores não podem denunciar. A partida termina automaticamente quando somente bots continuam na disputa; se um humano foi o primeiro colocado, ele permanece em primeiro e um bot com menos cartas ocupa o segundo lugar para encerrar a classificação.
+
+Animações especiais de cartas (bloqueios, voltas, mudança de cor, Bomba) são agregadas e reproduzidas **uma vez ao terminar a jogada**, inclusive quando ela termina automaticamente. As animações individuais de cada carta viajando ao descarte continuam acontecendo ao jogá-las.

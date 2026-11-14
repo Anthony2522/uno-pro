@@ -189,6 +189,7 @@ test("corte com +4 enquanto o próximo decide, conserva dívida e aumenta a soma
   room.hands.get(b.guest_id).cards=["W4","g0"];
   s.play(a,"W4","r");s.end(a);
   assert.equal(g.pending_draw,4);
+  s.clearNotice(); // End Turn now creates the one color-wave announcement.
   call("play_card",{p_token:c.token,p_code:s.code,p_card:"W4",p_color:"g"});
   assert.equal(g.turn_order[g.turn_idx],c.guest_id);
   // C cut B's pending turn; when C finishes, total penalty becomes 8.
@@ -211,11 +212,13 @@ test("cada efeito especial e grito UNO ficam na fila de eventos para todos",()=>
   s.setTurn(a.guest_id);g.discard_pile=["b8"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["bR","r1","g0"];
   s.play(a,"bR");
+  assert.equal(g.effects.filter(e=>e.type==="reverse").length,0,"no effect before End Turn");
   call("call_uno",{p_token:a.token,p_code:s.code}); // two cards remain before ending
+  s.end(a);
   const events=call("get_room_state",{p_token:b.token,p_code:s.code}).game.effects;
-  assert.equal(events.at(-2).type,"reverse");
-  assert.equal(events.at(-1).type,"uno");
-  assert.equal(events.at(-1).name,"Alice");
+  assert.equal(events.at(-2).type,"uno");
+  assert.equal(events.at(-1).type,"reverse");
+  assert.equal(events.at(-2).name,"Alice");
 });
 
 test("timeout após rebater +4 finaliza a jogada sem cobrar o próprio jogador",()=>{
@@ -291,10 +294,11 @@ test("bloqueio avisa a vítima e penalidade informa quem comprou e quantas carta
   s.setTurn(a.guest_id);g.discard_pile=["b1"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["bS","r3","y6"];
   s.play(a,"bS");
+  assert.equal(g.effects.filter(e=>e.type==="skip").length,0);
+  s.end(a);
   const blocked=g.effects.find(e=>e.type==="skip");
   assert.equal(blocked.target,b.guest_id);
   assert.equal(blocked.target_name,"Bruno");
-  s.end(a);
   s.setTurn(a.guest_id);g.discard_pile=["b1"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["bD","r3","y6"];
   room.hands.get(b.guest_id).cards=["g1","r2","y3"];
@@ -318,6 +322,7 @@ test("coringa +5 pode rebater +2/+4 e somente outro +5 pode rebater +5",()=>{
   assert.equal(g.pending_uncounterable,true);
   assert.equal(g.turn_order[g.turn_idx],s.bot);
   // The bot can only answer with its own +5.
+  s.clearNotice();
   assert.throws(()=>call("play_card",{p_token:a.token,p_code:s.code,p_card:"r3"}),/CUT_NOT_ALLOWED/);
   const first=room.hands.get(s.bot).cards.length;
   s.clearNotice();
@@ -382,6 +387,7 @@ test("duas cartas de bloqueio pulam duas pessoas; duas voltas se anulam",()=>{
   g.turn_idx=0;g.direction=1;g.turn_cards=[];g.turn_mode=null;g.turn_step=0;
   g.discard_pile=["bR"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["bR","yR","r8"];
+  for(const e of g.effects)e.show_at=Date.now()-10000;
   call("play_card",{p_token:a.token,p_code:code,p_card:"bR"});
   for(const e of g.effects)e.show_at=Date.now()-10000;
   call("play_card",{p_token:a.token,p_code:code,p_card:"yR"});
@@ -391,22 +397,23 @@ test("duas cartas de bloqueio pulam duas pessoas; duas voltas se anulam",()=>{
   assert.equal(g.turn_order[g.turn_idx],b.guest_id);
 });
 
-test("aviso especial dura cinco segundos, permite jogar aos 2s sem gastar turno",()=>{
+test("efeito especial só aparece ao finalizar, cinco segundos sem consumir o turno seguinte",()=>{
   const s=setup(),{room,g,a}=s;
   s.setTurn(a.guest_id);g.discard_pile=["bR"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["bR","yR","r8"];
-  const start=g.turn_started_at;
+  const started=g.turn_started_at;
   s.play(a,"bR");
-  const notice=g.effects.at(-1);
-  assert.equal(notice.type,"reverse");
-  assert.equal(g.turn_started_at>=start+5000,true,"tempo da notificação não consome o turno");
-  // During the notice, the same player may complete a combo and end their turn.
+  assert.equal(g.effects.filter(e=>e.type==="reverse").length,0);
   call("play_card",{p_token:a.token,p_code:s.code,p_card:"yR"});
   assert.equal(g.turn_cards.length,2);
+  assert.equal(g.effects.filter(e=>e.type==="reverse").length,0);
   call("end_turn",{p_token:a.token,p_code:s.code});
   assert.equal(g.turn_cards.length,0);
+  const effects=g.effects.filter(e=>e.type==="reverse");
+  assert.equal(effects.length,1);
+  assert.equal(effects[0].n,2);
+  assert.equal(g.turn_started_at>=started+5000,true);
 });
-
 test("bot decide uma vez por turno e não joga antes da espera de 5/11 segundos",()=>{
   const s=setup(),{room,g}=s;
   g.turn_idx=g.turn_order.indexOf(s.bot);
@@ -508,11 +515,13 @@ test("duas cartas +2 Volta: acumulam, invertem, voltam ao atacante",()=>{
   assert.equal(g.direction,-1);
   assert.equal(g.pending_draw,2);
   assert.equal(g.turn_order[g.turn_idx],d.guest_id);
+  for(const e of g.effects)e.show_at=Date.now()-10000;
   call("play_card",{p_token:d.token,p_code:code,p_card:"rT"});
   call("end_turn",{p_token:d.token,p_code:code});
   assert.equal(g.direction,1);
   assert.equal(g.pending_draw,4);
   assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  for(const e of g.effects)e.show_at=Date.now()-10000;
   // An ordinary +2 response does not invert; the debt travels onward.
   r.hands.get(a.guest_id).cards=["yD","r1"];
   call("play_card",{p_token:a.token,p_code:code,p_card:"yD"});
@@ -561,8 +570,9 @@ test("o corte não é permitido durante os dois primeiros segundos do aviso, mas
   room.hands.get(a.guest_id).cards=["bR","yR","r1"];
   room.hands.get(b.guest_id).cards=["bR","g2"];
   s.play(a,"bR");
+  call("call_uno",{p_token:a.token,p_code:s.code}); // Call UNO still causes an immediate announcement.
   assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"bR"}),/ANNOUNCEMENT_WAIT/);
-  // A may play the rest of the combo and finish while the announcement is visible.
+  // A may play the rest of the combo and finish while another announcement is visible.
   call("play_card",{p_token:a.token,p_code:s.code,p_card:"yR"});
   call("end_turn",{p_token:a.token,p_code:s.code});
   assert.equal(g.turn_cards.length,0);
@@ -586,8 +596,10 @@ test("somente mudanças de cor geram onda, não anúncio de carta +2/+4 jogada",
   s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["W4","r1"];
   s.play(a,"W4","g");
-  assert.equal(g.effects.at(-1).type,"color_wave");
-  assert.equal(g.effects.at(-1).color,"g");
+  assert.equal(g.effects.filter(e=>e.type==="color_wave").length,0);
+  s.end(a);
+  assert.equal(g.effects.find(e=>e.type==="color_wave").type,"color_wave");
+  assert.equal(g.effects.find(e=>e.type==="color_wave").color,"g");
 });
 
 
@@ -786,12 +798,12 @@ test("bloqueios múltiplos exibem alvos corretos e não saltam gente além da se
     for(const ef of g.effects)ef.show_at=Date.now()-10000;
     call("play_card",{p_token:a.token,p_code:code,p_card:card});
   }
-  const notices=g.effects.filter(e=>e.type==="skip");
-  assert.deepEqual(notices.map(e=>e.n),[1,2,3]);
-  assert.deepEqual(notices[0].targets,[b.guest_id]);
-  assert.deepEqual(notices[1].targets,[b.guest_id,c.guest_id]);
-  assert.deepEqual(notices[2].targets,[b.guest_id,c.guest_id,d.guest_id]);
+  assert.equal(g.effects.filter(e=>e.type==="skip").length,0,"no early skip announcements");
   call("end_turn",{p_token:a.token,p_code:code});
+  const notices=g.effects.filter(e=>e.type==="skip");
+  assert.equal(notices.length,1,"one combined animation, not three");
+  assert.equal(notices[0].n,3);
+  assert.deepEqual(notices[0].targets,[b.guest_id,c.guest_id,d.guest_id]);
   assert.equal(g.turn_order[g.turn_idx],a.guest_id); // four seats, skip all three others
 });
 
@@ -888,4 +900,99 @@ test("Bomba jogada como última carta dá duas a todos antes da primeira coloca�
   assert.equal(room.hands.get(b.guest_id).cards.length,4);
   assert.equal(room.hands.get(bot).cards.length,4);
   assert.equal(g.placements[0].id,a.guest_id);
+});
+
+
+test("um vencedor não pode usar Desuno nem aparece como autorizado na interface",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["b4"];
+  s.play(a,"b4");
+  assert.equal(g.status,"playing","ainda há Bruno e o bot");
+  assert.equal(g.turn_order.includes(a.guest_id),false);
+  const h=room.hands.get(b.guest_id);
+  h.cards=["r5"];h.uno_called=false;h.uno_since=Date.now()-10000;
+  const state=call("get_room_state",{p_token:a.token,p_code:s.code});
+  assert.equal(state.game.can_catch_uno,false);
+  assert.throws(()=>call("catch_uno",{p_token:a.token,p_code:s.code}),/CATCH_NOT_ALLOWED/);
+  assert.equal(h.cards.length,1);
+});
+
+test("se um humano vencer contra dois bots, partida encerra imediatamente",()=>{
+  const a=call("register_guest",{p_nickname:"HeroBots"});
+  const code=call("create_room",{p_token:a.token,p_name:"Humano contra bots",p_max_players:4}).code;
+  const b=call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
+  const c=call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"hard"});
+  call("start_game",{p_token:a.token,p_code:code});
+  const room=store.roomsByCode.get(code),g=room.game;
+  g.direction=1;g.turn_idx=0;g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["b4"];
+  splay();
+  function splay(){call("play_card",{p_token:a.token,p_code:code,p_card:"b4"})}
+  assert.equal(g.status,"finished");
+  assert.equal(room.status,"waiting");
+  assert.equal(g.winner_id,a.guest_id);
+  assert.ok([b.id,c.id].includes(g.second_winner_id));
+  assert.equal(g.placements.length,2);
+});
+
+test("quando o último humano sai e ficam somente bots, o jogo termina",()=>{
+  const a=call("register_guest",{p_nickname:"Saiu"});
+  const code=call("create_room",{p_token:a.token,p_name:"Só robôs",p_max_players:4}).code;
+  call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
+  call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"hard"});
+  call("start_game",{p_token:a.token,p_code:code});
+  const r=store.roomsByCode.get(code);
+  call("leave_room",{p_token:a.token,p_code:code});
+  assert.equal(r.game.status,"finished");
+  assert.equal(r.status,"waiting");
+});
+
+test("o anfitrião edita regras e cartas antes da primeira partida e após uma rodada",()=>{
+  const a=call("register_guest",{p_nickname:"ConfigA"});
+  const b=call("register_guest",{p_nickname:"ConfigB"});
+  const code=call("create_room",{p_token:a.token,p_name:"Editar configurações",p_max_players:3}).code;
+  call("join_room",{p_token:b.token,p_code:code});
+  const r=store.roomsByCode.get(code);
+  const rules={repeat:false,sequence:true,nine:false,cut:false,stack:true};
+  assert.throws(()=>call("update_room_settings",{p_token:b.token,p_code:code,p_starting_cards:12,p_rules:rules}),/NOT_HOST/);
+  assert.throws(()=>call("update_room_settings",{p_token:a.token,p_code:code,p_starting_cards:100,p_rules:rules}),/INVALID_STARTING_CARDS/);
+  call("update_room_settings",{p_token:a.token,p_code:code,p_starting_cards:12,p_rules:rules});
+  let state=call("get_room_state",{p_token:b.token,p_code:code});
+  assert.equal(state.room.initial_cards,12);
+  assert.deepEqual(state.room.rules,rules);
+  call("start_game",{p_token:a.token,p_code:code});
+  assert.equal(r.hands.get(a.guest_id).cards.length,12);
+  assert.throws(()=>call("update_room_settings",{p_token:a.token,p_code:code,p_starting_cards:6,p_rules:rules}),/GAME_STARTED/);
+  assert.equal(r.initial_cards,12);
+  r.game.status="finished";r.status="waiting";
+  call("update_room_settings",{p_token:a.token,p_code:code,p_starting_cards:6,p_rules:{...rules,nine:true,cut:true}});
+  call("start_game",{p_token:a.token,p_code:code});
+  assert.equal(r.hands.get(a.guest_id).cards.length,6);
+  assert.equal(r.rules.nine,true);
+  assert.equal(r.rules.cut,true);
+});
+
+test("um clique de corte durante a sequência fecha o efeito do jogador anterior uma única vez",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["bS"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bS","rS","r1"];
+  room.hands.get(b.guest_id).cards=["bS","b2"];
+  s.play(a,"bS");
+  assert.equal(g.effects.filter(e=>e.type==="skip").length,0);
+  s.play(b,"bS"); // cut triggers finish() for Alice, then Bruno jumps in
+  assert.equal(g.effects.filter(e=>e.type==="skip").length,1);
+  assert.equal(g.effects.filter(e=>e.type==="skip")[0].n,1);
+});
+
+test("Bomba só anuncia efeito especial no fim da vez, ainda compra imediatamente",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b1"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["B","r3"];
+  room.hands.get(b.guest_id).cards=["y1","g2"];
+  s.play(a,"B","r");
+  assert.equal(room.hands.get(b.guest_id).cards.length,4);
+  assert.equal(g.effects.filter(e=>e.type==="bomb").length,0);
+  s.end(a);
+  assert.equal(g.effects.filter(e=>e.type==="bomb").length,1);
 });

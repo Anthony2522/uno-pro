@@ -149,6 +149,8 @@ export const api = {
   getRoomState: (token: string, code: string) =>
     call<RoomState>("get_room_state", { p_token: token, p_code: code }),
   startGame: (token: string, code: string) => call("start_game", { p_token: token, p_code: code }),
+  updateRoomSettings: (token:string,code:string,startingCards:number,rules:RuleSettings)=>
+    call("update_room_settings",{p_token:token,p_code:code,p_starting_cards:startingCards,p_rules:rules}),
   playCard: (token: string, code: string, card: string, color?: string, targetId?: string) =>
     call("play_card", { p_token: token, p_code: code, p_card: card, p_color: color ?? null, p_target_id: targetId ?? null }),
   drawCard: (token: string, code: string) =>
