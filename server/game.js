@@ -67,8 +67,8 @@ export function cleanText(p) {
 }
 const cleanCode = (c) => cleanText(c).toUpperCase();
 
-const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D)|W|W4)$/;
-const isWild = (c) => c === "W" || c === "W4";
+const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D)|W|W4|W5)$/;
+const isWild = (c) => c === "W" || c === "W4" || c === "W5";
 export const cardValue = (c) => (isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
   return isWild(c) || c[0] === color || (!isWild(top) && c.slice(1) === top.slice(1));
@@ -85,14 +85,15 @@ export function shuffle(arr) {
   return a;
 }
 
-/** 108 cards: per color one 0, two of 1-9, Skip, Reverse, Draw Two; plus 4 Wild and 4 Wild +4. */
+/** UNO Pro: 3 of every colored number/action, 10 each of wild, +4 and +5 = 186 cards. */
 export function newDeck() {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
-    d.push(col + "0");
-    for (const v of ["1", "2", "3", "4", "5", "6", "7", "8", "9", "S", "R", "D"]) d.push(col + v, col + v);
+    for (const v of ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "S", "R", "D"]) {
+      for (let i = 0; i < 3; i++) d.push(col + v);
+    }
   }
-  for (let i = 0; i < 4; i++) d.push("W", "W4");
+  for (let i = 0; i < 10; i++) d.push("W", "W4", "W5");
   return shuffle(d);
 }
 
@@ -130,10 +131,8 @@ function draw(room, gid, n) {
   const drawn = [];
   for (let k = 0; k < n; k++) {
     if (g.draw_pile.length === 0) {
-      if (g.discard_pile.length <= 1) break;
-      const top = g.discard_pile[g.discard_pile.length - 1];
-      g.draw_pile = shuffle(g.discard_pile.slice(0, -1));
-      g.discard_pile = [top];
+      // Endless fresh deck; keep discard history so the visible top card never changes.
+      g.draw_pile = newDeck();
     }
     drawn.push(g.draw_pile.shift());
   }
@@ -141,6 +140,7 @@ function draw(room, gid, n) {
   if (h) {
     h.cards.push(...drawn);
     h.uno_called = false;
+    h.uno_since = null;
   }
   return drawn;
 }

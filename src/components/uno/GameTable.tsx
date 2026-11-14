@@ -40,7 +40,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const myTurn = game.current_player === me;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","W","D","W4"];
+    const colors=["b","y","g","r"], special=["R","S","W","D","W4","W5"];
     const col=(c:string)=>colors.indexOf(c[0])===-1?4:colors.indexOf(c[0]);
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
@@ -56,13 +56,28 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
 
   const pending = game.pending_draw || 0;
+  const [recentDraw,setRecentDraw] = useState<{card:string;nonce:number;at:number}|null>(null);
+  const [drawFlight,setDrawFlight] = useState<number|null>(null);
+  const lastSeenDraw = useRef<number|null>(null);
+  useEffect(()=>{
+    const d=game.last_draw;
+    if(!d || lastSeenDraw.current===d.nonce)return;
+    lastSeenDraw.current=d.nonce;
+    const age=Date.now()-new Date(d.at).getTime();
+    if(age<0||age>8000)return;
+    setRecentDraw({card:d.card,nonce:d.nonce,at:new Date(d.at).getTime()});
+    if(age<1500)setDrawFlight(d.nonce);
+    const t=setTimeout(()=>setDrawFlight(v=>v===d.nonce?null:v),Math.max(100,750-age));
+    return ()=>clearTimeout(t);
+  },[game.last_draw?.nonce]);
+  const freshIndex=recentDraw?hand.lastIndexOf(recentDraw.card):-1;
   const played = game.turn_cards || [];
   const nine = game.nine;
   const canPlay = (c:string) => {
     if(busy || nine)return false;
-    if(!myTurn)return state.room.rules.cut && !pending && c===game.top_card;
-    if(pending&&!played.length)return c==="W4"||cardValue(c)==="D";
-    if(!played.length)return (!game.has_drawn||c===game.drawn_card)&&isPlayable(c,game.top_card,game.current_color);
+    if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (!game.pending_uncounterable && (c==="W4"||cardValue(c)==="D")));
+    if(pending&&!played.length)return !game.pending_uncounterable && (c==="W4"||cardValue(c)==="D");
+    if(!played.length)return isPlayable(c,game.top_card,game.current_color);
     const first=played[0],last=played[played.length-1];
     const same=cardValue(first)===cardValue(c);
     const diff=Number(cardValue(c))-Number(cardValue(last));
@@ -99,9 +114,9 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-2 sm:px-6">
+    <main className="uno-game mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col overflow-hidden px-2 sm:px-6">
       {/* Opponents */}
-      <section aria-label="Adversários" className="no-scrollbar -mx-2 flex gap-2 overflow-x-auto px-2 pb-2 pt-3 sm:justify-center">
+      <section aria-label="Adversários" className="uno-opponents no-scrollbar -mx-2 flex shrink-0 gap-2 overflow-x-auto px-2 pb-1 pt-1 sm:justify-center">
         {opponents.map((p) => {
           const turn = game.current_player === p.id;
 
@@ -138,7 +153,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       </section>
 
       {/* Table */}
-      <section aria-label="Mesa" className="relative flex flex-1 flex-col items-center justify-center gap-4 py-4">
+      <section aria-label="Mesa" className="uno-table relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 py-2">
         <div className="pointer-events-none absolute inset-x-0 top-1/2 mx-auto aspect-square w-[min(90vw,32rem)] -translate-y-1/2 rounded-full bg-felt" aria-hidden />
         <div
           role="status"
@@ -153,7 +168,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
 
         {nine && (
-          <div className="relative z-20 w-full max-w-md rounded-2xl border border-cyan/50 bg-navy/95 p-4 text-center shadow-glow-cyan">
+          <div className="uno-nine-panel relative z-20 w-full max-w-md rounded-2xl border border-cyan/50 bg-navy/95 p-4 text-center shadow-glow-cyan">
             <p className="font-display text-lg font-black">DESAFIO DO 9 · {nineRemaining}s</p>
             {nineReady ? (
               <button type="button" disabled={busy} onClick={actions.pressNine} className="mt-2 size-24 rounded-full bg-cyan font-display text-6xl font-black text-navy shadow-glow-cyan active:scale-95">9</button>
@@ -162,13 +177,13 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           </div>
         )}
         {myTurn && !!pending && (hand.some(c=>c==="W4"||cardValue(c)==="D")) && !nine && (
-          <div role="alert" className="relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
+          <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
             <p className="mt-1 text-sm text-muted-foreground">Escolha um +2 ou +4 da mão para rebater ou aceite a compra.</p>
             <Button variant="glass" className="mt-3 rounded-xl" onClick={actions.accept} disabled={busy}>Comprar {pending} e passar</Button>
           </div>
         )}
-        <div className="relative z-10 flex items-center gap-6 sm:gap-10">
+        <div className="uno-stack relative z-10 flex items-center gap-4 sm:gap-8">
           <button
             type="button"
             onClick={actions.draw}
@@ -179,20 +194,20 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
               myTurn && !game.has_drawn && "hover:-translate-y-1 hover:rotate-[-3deg]",
             )}
           >
-            <CardBack size="lg" className="absolute left-1 top-1 opacity-60" />
-            <CardBack size="lg" className="absolute left-0.5 top-0.5 opacity-80" />
-            <CardBack size="lg" className={cn("relative", myTurn && !game.has_drawn && "shadow-glow")} />
+            <CardBack size="lg" className="uno-center-card absolute left-1 top-1 opacity-60" />
+            <CardBack size="lg" className="uno-center-card absolute left-0.5 top-0.5 opacity-80" />
+            <CardBack size="lg" className={cn("uno-center-card relative", myTurn && !game.has_drawn && "shadow-glow")} />
             <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-navy px-2 py-0.5 font-display text-xs font-bold tabular-nums ring-1 ring-glass-border">
               {game.draw_count}
             </span>
           </button>
 
           <div className={cn("rounded-[14%] ring-4 ring-offset-4 ring-offset-navy transition-all", RING[game.current_color])}>
-            <UnoCard key={game.seq + game.top_card} card={game.top_card} size="lg" animate rotate={((game.seq * 37) % 14) - 7} />
+            <UnoCard key={game.seq + game.top_card} card={game.top_card} size="lg" className="uno-center-card" animate rotate={((game.seq * 37) % 14) - 7} />
           </div>
         </div>
 
-        <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 text-sm">
+        <div className="uno-table-status relative z-10 flex flex-wrap items-center justify-center gap-2 text-sm">
           <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1.5">
             <span className={cn("size-3 rounded-full", DOT[game.current_color])} aria-hidden /> Cor: <strong>{COLOR_NAMES[game.current_color as CardColor]}</strong>
           </span>
@@ -210,7 +225,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       </section>
 
       {/* My area */}
-      <section aria-label="Sua mão" className="sticky bottom-0 z-20 -mx-2 border-t border-glass-border bg-navy/85 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x">
+      <section aria-label="Sua mão" className="uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x">
         <div className="flex flex-wrap items-center gap-2 px-2">
           <p className="mr-auto text-sm text-muted-foreground"><strong className="text-foreground">Sua mão</strong> · {myCount} carta(s)</p>
           <button type="button" title="Alterar organização" onClick={()=>setSortMode(v=>v==="color"?"number":"color")} className="glass inline-flex h-9 items-center gap-1 rounded-xl px-2 text-xs">
@@ -235,17 +250,17 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           )}
         </div>
         {myTurn && game.has_drawn && game.drawn_card && !played.length && (
-          <p className="mt-2 px-2 text-center text-sm text-cyan">Você comprou {cardLabel(game.drawn_card)} — jogue-a ou passe a vez.</p>
+          <p className="mt-2 px-2 text-center text-sm text-cyan">Você comprou {cardLabel(game.drawn_card)} — jogue qualquer carta válida ou termine a vez.</p>
         )}
         {!myTurn && state.room.rules.cut && <p className="mt-1 text-center text-xs text-muted-foreground">Corte: jogue uma carta idêntica à do descarte para roubar a vez.</p>}
-        <div className="no-scrollbar mt-2 overflow-x-auto px-2 pb-2 pt-3">
-          <div className="grid w-max min-w-full grid-flow-col grid-rows-2 auto-cols-[4.25rem] justify-center gap-x-2 gap-y-1 sm:auto-cols-[5.25rem]">
+        <div className="uno-hand-scroll no-scrollbar mt-1 overflow-x-auto overflow-y-hidden px-2 pb-1 pt-1">
+          <div className="uno-hand-grid grid w-max min-w-full grid-flow-col grid-rows-2 justify-center gap-x-1.5 gap-y-1">
             {hand.map((c,i)=>{
               const ok=canPlay(c);
               return (
                 <button key={c+"-"+i} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(ok?" — jogável":"")} aria-disabled={!ok}
-                  className={cn("relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",ok?"shadow-glow-cyan":"opacity-65")}>
-                  <UnoCard card={c} size="md"/>
+                  className={cn("uno-hand-button relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",played.length===0 ? (ok ? "shadow-glow-cyan" : "opacity-65") : "",i===freshIndex&&recentDraw&&clock-recentDraw.at<8000&&"uno-recently-drawn")}>
+                  <UnoCard card={c} size="md" className="uno-hand-card"/>
                 </button>
               );
             })}
@@ -253,6 +268,11 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </div>
       </section>
 
+      {drawFlight!==null && (
+        <div key={drawFlight} className="uno-draw-flight pointer-events-none absolute z-40" aria-hidden>
+          <CardBack size="md"/>
+        </div>
+      )}
       <ColorPicker
         open={!!pendingWild}
         onClose={() => setPendingWild(null)}

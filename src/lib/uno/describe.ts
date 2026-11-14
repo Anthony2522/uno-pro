@@ -19,6 +19,16 @@ export function describeAction(a: LastAction, me: string): string | null {
       if (a.win) s = `${who} jogou a última carta!`;
       return s;
     }
+    case "cut":
+      return `${who} cortou a rodada com ${a.card ? cardLabel(a.card) : "uma carta"}!`;
+    case "end":
+      return `${who} encerrou a vez.`;
+    case "stack_take":
+      return `${who} comprou ${a.n} cartas e perdeu a vez.`;
+    case "auto_draw":
+      return `${who} não tinha carta válida e comprou automaticamente.`;
+    case "nine":
+      return `${target} perdeu o desafio do 9 e comprou ${a.n} carta(s)!`;
     case "draw":
       return `${who} comprou uma carta`;
     case "draw_pass":

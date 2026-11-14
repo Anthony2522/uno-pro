@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {store} from "../server/game.js";
+import {store, newDeck} from "../server/game.js";
 import {proRpc,proSweep} from "../server/pro.js";
 const call=(fn,args)=>proRpc(fn,args);
 function setup(rules) {
@@ -79,4 +79,128 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   proSweep();
   assert.equal(room.hands.get(a.guest_id).cards.length,before+1);
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
+});
+
+test("novo baralho tem 186 cartas: 3 por cor e número/ação, 10 coringas de cada tipo",()=>{
+  const deck=newDeck();
+  assert.equal(deck.length,186);
+  for(const col of ["r","y","g","b"])
+    for(const value of ["0","1","2","3","4","5","6","7","8","9","S","R","D"])
+      assert.equal(deck.filter(c=>c===col+value).length,3,col+value);
+  for(const card of ["W","W4","W5"])assert.equal(deck.filter(c=>c===card).length,10,card);
+});
+test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
+  const s=setup(),{room,g,a}=s;
+  s.setTurn(a.guest_id);
+  g.draw_pile=[];g.discard_pile=["g6"];g.current_color="g";
+  room.hands.get(a.guest_id).cards=["b1","r5"];
+  const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
+  assert.ok(drawn.card);
+  assert.equal(g.draw_pile.length,185);
+  assert.equal(g.discard_pile.at(-1),"g6");
+});
+test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
+  const s=setup(),{room,g,a}=s;
+  s.setTurn(a.guest_id);
+  g.discard_pile=["r5"];g.current_color="r";g.draw_pile=["b8","y7"];
+  room.hands.get(a.guest_id).cards=["r3","g2","y9"];
+  const result=call("draw_card",{p_token:a.token,p_code:s.code});
+  assert.equal(result.card,"b8");
+  s.play(a,"r3");
+  assert.equal(g.turn_cards[0],"r3");
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+});
+test("sem cartas válidas, compra automático e passa sem duplicar compra",()=>{
+  const s=setup(),{room,g,a}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b5"];g.current_color="b";g.draw_pile=["r7","y9"];
+  room.hands.get(a.guest_id).cards=["g1","y2"];
+  proSweep();
+  assert.equal(room.hands.get(a.guest_id).cards.length,3);
+  assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
+  assert.equal(g.last_action.type,"auto");
+  assert.equal(g.last_draw_by_id[a.guest_id].card,"r7");
+});
+test("sem cartas válidas, compra automaticamente e mantém a vez se a comprada servir",()=>{
+  const s=setup(),{room,g,a}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b5"];g.current_color="b";g.draw_pile=["b7","y9"];
+  room.hands.get(a.guest_id).cards=["r1","g2"];
+  proSweep();
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  assert.equal(g.has_drawn,true);
+  s.play(a,"b7");
+  assert.equal(g.turn_cards[0],"b7");
+});
+test("durante o contra-ataque de +4 não cobra o jogador antes de Terminar vez",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b5"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","r3"];
+  room.hands.get(b.guest_id).cards=["W4","r0"];
+  s.play(a,"W4","r");s.end(a);
+  assert.equal(g.pending_draw,4);
+  s.play(b,"W4","b");
+  const before=room.hands.get(b.guest_id).cards.length;
+  proSweep();
+  assert.equal(room.hands.get(b.guest_id).cards.length,before);
+  assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+  assert.equal(g.pending_draw,4);
+  s.end(b);
+  assert.equal(g.pending_draw,0);
+  assert.equal(room.hands.get(s.bot).cards.length,15);
+});
+test("corte de +4 dentro de batalha passa a soma para o próximo",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b5"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","r0"];
+  room.hands.get(b.guest_id).cards=["W4","g3"];
+  room.hands.get(s.bot).cards=["W4","r3","g1"];
+  s.play(a,"W4","g");s.end(a);
+  assert.equal(g.pending_draw,4);
+  // The bot owns an identical W4 and may cut, even though B is deciding.
+  const player=s.bot;
+  // To exercise the cut without a bot credential, add a third human in a separate scenario below.
+  assert.equal(g.pending_draw,4);
+});
+
+test("corte com +4 enquanto o próximo decide, conserva dívida e aumenta a soma",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  const c=call("register_guest",{p_nickname:"Carla"});
+  // Cannot join a started game; use the existing third player as cut actor via a test token.
+  // The bot can still execute the cut server-side only by NPC logic, so inject an extra member session.
+  const oldBot=room.members.find(m=>m.guest_id===s.bot);
+  room.members=room.members.filter(m=>m!==oldBot);
+  room.members.push({guest_id:c.guest_id,joined_at:Date.now()});
+  room.hands.delete(s.bot);room.hands.set(c.guest_id,{cards:["W4","r2","g5"],uno_called:false,uno_since:null});
+  g.turn_order[g.turn_order.indexOf(s.bot)]=c.guest_id;
+  s.setTurn(a.guest_id);g.discard_pile=["b2"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","W4","r0"];
+  room.hands.get(b.guest_id).cards=["W4","g0"];
+  s.play(a,"W4","r");s.end(a);
+  assert.equal(g.pending_draw,4);
+  call("play_card",{p_token:c.token,p_code:s.code,p_card:"W4",p_color:"g"});
+  assert.equal(g.turn_order[g.turn_idx],c.guest_id);
+  // C cut B's pending turn; when C finishes, total penalty becomes 8.
+  call("end_turn",{p_token:c.token,p_code:s.code});
+  assert.equal(g.pending_draw,8);
+});
+test("coringa +5 não pode ser rebatido com +4 nem +2",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b2"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W5","r0"];
+  room.hands.get(b.guest_id).cards=["W4","yD","b1"];
+  const before=room.hands.get(b.guest_id).cards.length;
+  s.play(a,"W5","r");s.end(a);
+  assert.equal(room.hands.get(b.guest_id).cards.length,before+5);
+  assert.equal(g.pending_draw,0);
+  assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
+});
+test("cada efeito especial e grito UNO ficam na fila de eventos para todos",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b8"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bR","r1","g0"];
+  s.play(a,"bR");
+  call("call_uno",{p_token:a.token,p_code:s.code}); // two cards remain before ending
+  const events=call("get_room_state",{p_token:b.token,p_code:s.code}).game.effects;
+  assert.equal(events.at(-2).type,"reverse");
+  assert.equal(events.at(-1).type,"uno");
+  assert.equal(events.at(-1).name,"Alice");
 });

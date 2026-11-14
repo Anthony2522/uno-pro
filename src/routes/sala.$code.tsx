@@ -8,7 +8,7 @@ import { ConnectionBanner, CopyInviteButton, LeaveButton } from "@/components/un
 import { WaitingRoom } from "@/components/uno/WaitingRoom";
 import { WinnerOverlay } from "@/components/uno/WinnerOverlay";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/uno/api";
+import { api, type GameState } from "@/lib/uno/api";
 import { errorMessage, toGameError } from "@/lib/uno/errors";
 import { sfx } from "@/lib/uno/sound";
 import { useRoom } from "@/lib/uno/useRoom";
@@ -34,6 +34,9 @@ function RoomPage() {
   const { state, fatal, connection, refresh, leave, token } = useRoom(code);
   const [busy, setBusy] = useState(false);
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
+  const [specialEffect,setSpecialEffect] = useState<GameState["effects"][number]|null>(null);
+  const lastEffectId = useRef<number|null>(null);
+  const specialTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const prev = useRef<{ seq: number; turn: string | null; status: string | null; members: number } | null>(null);
 
   const act = useCallback(
@@ -52,6 +55,27 @@ function RoomPage() {
     [refresh],
   );
 
+  // Effects are recorded by the server, so every connected player sees and hears them.
+  useEffect(()=>{
+    const events=state?.game?.effects;
+    if(!events?.length)return;
+    const currentMax=events[events.length-1].id;
+    if(lastEffectId.current===null){
+      lastEffectId.current=currentMax;
+      return;
+    }
+    const next=events.filter(e=>e.id>(lastEffectId.current??0));
+    lastEffectId.current=currentMax;
+    if(!next.length)return;
+    // The latest event is shown; each event gets its own distinct sound.
+    for(const event of next)sfx(event.type);
+    const event=next[next.length-1];
+    setSpecialEffect(event);
+    if(specialTimer.current)clearTimeout(specialTimer.current);
+    specialTimer.current=setTimeout(()=>setSpecialEffect(null),1900);
+  },[state?.game?.effects]);
+  useEffect(()=>()=>{if(specialTimer.current)clearTimeout(specialTimer.current);},[]);
+
   // Sounds on state transitions.
   useEffect(() => {
     if (!state) return;
@@ -63,9 +87,10 @@ function RoomPage() {
       if (g && cur.seq !== p.seq) {
         const a = g.last_action;
         if (g.status === "finished" && p.status === "playing") sfx("win");
-        else if (a?.type === "uno") sfx("uno");
-        else if (a?.type === "play") sfx("play");
-        else if (a?.type === "draw" || a?.type === "draw_pass" || a?.type === "catch") sfx("draw");
+        else if (a?.type === "play" || a?.type === "cut") {
+          if(a.card && !["W","W4","W5"].includes(a.card) && !["R","S","D"].includes(a.card.slice(1)))sfx("play");
+        }
+        else if (a?.type === "draw" || a?.type === "auto_draw" || a?.type === "draw_pass" || a?.type === "catch") sfx("draw");
         if (g.status === "playing" && cur.turn === state.me && p.turn !== state.me) setTimeout(() => sfx("turn"), 180);
         if (a?.target === state.me && a.n) toast(`${a.name} fez você comprar ${a.n}!`);
       }
@@ -129,7 +154,8 @@ function RoomPage() {
       act(async () => {
         const r = await api.drawCard(token, code);
         sfx("draw");
-        if (r.card && !r.playable) toast("Carta comprada. Você pode terminar a vez.");
+        if (r.auto_passed) toast("Sem jogada possível: você comprou e a vez passou automaticamente.");
+        else if (r.card) toast("Carta comprada. Você pode jogar qualquer carta compatível.");
         if (!r.card) toast("O baralho acabou.");
       }),
     end: () => act(() => api.endTurn(token, code)),
@@ -149,7 +175,7 @@ function RoomPage() {
     });
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className={playing ? "flex h-dvh min-h-0 flex-col overflow-hidden" : "flex min-h-dvh flex-col"}>
       <AppHeader>
         <div className="mr-1 hidden min-w-0 flex-col items-end text-right md:flex">
           <span className="max-w-[14rem] truncate text-sm font-semibold">{state.room.name}</span>
@@ -159,6 +185,17 @@ function RoomPage() {
         <LeaveButton inGame={playing} onConfirm={() => void doLeave()} />
       </AppHeader>
       <ConnectionBanner show={connection === "reconnecting"} />
+      {specialEffect && playing && (
+        <div key={specialEffect.id} className={"uno-special-overlay uno-effect-"+specialEffect.type} aria-live="assertive" role="status">
+          <div className="uno-special-badge">
+            <span className="uno-effect-title">{({
+              reverse:"↶ INVERSÃO!",skip:"⛔ BLOQUEIO!",draw2:"+2 CARTAS!",
+              draw4:"+4 CARTAS!",draw5:"+5 CARTAS!",wild:"✦ CORINGA!",uno:"UNO!"
+            } as Record<string,string>)[specialEffect.type]}</span>
+            <span className="uno-effect-player">{specialEffect.name}{specialEffect.type==="uno"?" gritou UNO!":" jogou a carta!"}</span>
+          </div>
+        </div>
+      )}
       {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))} />}
       <WinnerOverlay
         open={showWinner}
