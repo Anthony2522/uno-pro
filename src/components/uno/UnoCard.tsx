@@ -1,4 +1,4 @@
-import { Ban, Repeat2, Eye } from "lucide-react";
+import { Ban, Repeat2, Eye, Bomb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cardLabel, cardValue, isWild } from "@/lib/uno/cards";
 
@@ -28,9 +28,15 @@ function Symbol({ card, corner }: { card: string; corner?: boolean }) {
   if (v === "S") return <Ban className={corner ? "size-[16cqw]" : "size-[44cqw]"} strokeWidth={3} />;
   if (v === "R") return <Repeat2 className={corner ? "size-[16cqw]" : "size-[46cqw]"} strokeWidth={3} />;
   if(v==="X")return (
-    <span className="flex flex-col items-center justify-center gap-0 leading-none">
-      <Eye className={corner?"size-[20cqw]":"size-[49cqw]"} strokeWidth={3}/>
-      {!corner&&<span className="text-[14cqw]">DET.</span>}
+    <span className="flex w-[80cqw] flex-col items-center justify-center leading-none">
+      <Eye className={corner?"size-[19cqw]":"size-[42cqw]"} strokeWidth={3}/>
+      {!corner&&<span className="mt-[3cqw] whitespace-nowrap font-display text-[12.5cqw] font-black not-italic tracking-[-.04em]">DETETIVE</span>}
+    </span>
+  );
+  if(v==="B")return (
+    <span className="flex w-[85cqw] flex-col items-center justify-center leading-none">
+      <Bomb className={corner?"size-[18cqw]":"size-[45cqw]"} strokeWidth={3}/>
+      {!corner&&<span className="mt-[2cqw] whitespace-nowrap font-display text-[16cqw] font-black not-italic tracking-[-.02em]">BOMBA</span>}
     </span>
   );
   if (v === "T") return (

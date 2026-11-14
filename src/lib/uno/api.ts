@@ -47,6 +47,8 @@ export type GameState = {
   second_winner_id?: string | null;
   placements?: Array<{id:string;rank:number;name:string}>;
   detective?: {target:string;target_name:string;cards:string[];expires_at:string}|null;
+  card_moves?: Array<{id:number;by:string;name:string;card:string;previous_top:string;at:number}>;
+  offline_deadline_at?: string|null;
   last_action: LastAction;
   round: number;
   seq: number;
@@ -54,7 +56,7 @@ export type GameState = {
   my_hand: string[];
   pending_uncounterable: boolean;
   action_locked_until?: string | null;
-  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"|"catch"|"color_wave"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; target?:string; target_name?:string; n?:number }>;
+  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"|"catch"|"color_wave"|"bomb"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; reason?: "nine"; targets?:string[]; target_names?:string[]; target?:string; target_name?:string; n?:number }>;
   last_draw: { card: string; nonce: number; at: string } | null;
   turn_cards: string[];
   pending_draw: number;

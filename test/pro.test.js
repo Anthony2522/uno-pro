@@ -73,11 +73,11 @@ test("desafio do 9 com três jogadores penaliza último que apertou",()=>{
   assert.equal(g.nine,null);
   assert.equal(room.hands.get(s.bot).cards.length,before+3);
 });
-test("denúncia somente após oito segundos de UNO",()=>{
+test("Desuno denuncia todos após quatro segundos de UNO",()=>{
   const s=setup(),{room,a,b}=s; const h=room.hands.get(a.guest_id);
   h.cards=["b1"];h.uno_called=false;h.uno_since=Date.now();
   assert.throws(()=>call("catch_uno",{p_token:b.token,p_code:s.code}),/CATCH_NOT_ALLOWED/);
-  h.uno_since=Date.now()-9000;
+  h.uno_since=Date.now()-4100;
   call("catch_uno",{p_token:b.token,p_code:s.code});assert.equal(h.cards.length,3);
 });
 test("passagem automática após um minuto, mesmo com jogador online",()=>{
@@ -89,9 +89,10 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("baralho 186 cartas, incluindo dois +2 Volta por cor e dois +5",()=>{
+test("baralho 188 cartas incluindo Detetive, Bomba e dois +2 Volta por cor",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,187);
+  assert.equal(deck.length,188);
+  assert.equal(deck.filter(c=>c==="B").length,1);
   assert.equal(deck.filter(c=>c==="X").length,1);
   for(const col of ["r","y","g","b"])
     for(const value of ["0","1","2","3","4","5","6","7","8","9","S","R","D"])
@@ -107,7 +108,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   room.hands.get(a.guest_id).cards=["b1","r5"];
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,186);
+  assert.equal(g.draw_pile.length,187);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -756,4 +757,135 @@ test("desenvolvedor entra como observador numa sala cheia e não ocupa uma vaga"
     if(old===undefined)delete process.env.DEV_ACCESS_KEY;
     else process.env.DEV_ACCESS_KEY=old;
   }
+});
+
+
+test("Desuno denuncia simultaneamente todos os adversários em UNO há quatro segundos",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;
+  const h=room.hands.get(a.guest_id),hb=room.hands.get(bot);
+  h.cards=["b2"];h.uno_called=false;h.uno_since=Date.now()-4300;
+  hb.cards=["g3"];hb.uno_called=false;hb.uno_since=Date.now()-4400;
+  const response=call("catch_uno",{p_token:b.token,p_code:s.code});
+  assert.equal(response.count,2);
+  assert.equal(h.cards.length,3);
+  assert.equal(hb.cards.length,3);
+  assert.equal(call("get_room_state",{p_token:b.token,p_code:s.code}).game.can_catch_uno,false);
+  assert.equal(g.effects.filter(e=>e.type==="catch").length,2);
+});
+
+test("bloqueios múltiplos exibem alvos corretos e não saltam gente além da sequência",()=>{
+  const names=["P1sk","P2sk","P3sk","P4sk"].map(n=>call("register_guest",{p_nickname:n}));
+  const [a,b,c,d]=names;
+  const code=call("create_room",{p_token:a.token,p_name:"Bloqueio triplo",p_max_players:4}).code;
+  [b,c,d].forEach(p=>call("join_room",{p_token:p.token,p_code:code}));
+  call("start_game",{p_token:a.token,p_code:code});
+  const room=store.roomsByCode.get(code),g=room.game;
+  g.direction=1;g.turn_idx=0;g.discard_pile=["bS"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bS","yS","gS","r1"];
+  for(const card of ["bS","yS","gS"]){
+    for(const ef of g.effects)ef.show_at=Date.now()-10000;
+    call("play_card",{p_token:a.token,p_code:code,p_card:card});
+  }
+  const notices=g.effects.filter(e=>e.type==="skip");
+  assert.deepEqual(notices.map(e=>e.n),[1,2,3]);
+  assert.deepEqual(notices[0].targets,[b.guest_id]);
+  assert.deepEqual(notices[1].targets,[b.guest_id,c.guest_id]);
+  assert.deepEqual(notices[2].targets,[b.guest_id,c.guest_id,d.guest_id]);
+  call("end_turn",{p_token:a.token,p_code:code});
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id); // four seats, skip all three others
+});
+
+test("dois bloqueios em duelo pulam o adversário, nunca o próprio jogador",()=>{
+  const a=call("register_guest",{p_nickname:"Duel O"});
+  const b=call("register_guest",{p_nickname:"Duel P"});
+  const code=call("create_room",{p_token:a.token,p_name:"Duel skips",p_max_players:2}).code;
+  call("join_room",{p_token:b.token,p_code:code});call("start_game",{p_token:a.token,p_code:code});
+  const r=store.roomsByCode.get(code),g=r.game;g.turn_idx=0;g.direction=1;g.discard_pile=["bS"];g.current_color="b";
+  r.hands.get(a.guest_id).cards=["bS","yS","r3"];
+  call("play_card",{p_token:a.token,p_code:code,p_card:"bS"});
+  for(const e of g.effects)e.show_at=Date.now()-10000;
+  call("play_card",{p_token:a.token,p_code:code,p_card:"yS"});
+  call("end_turn",{p_token:a.token,p_code:code});
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  assert.deepEqual(g.effects.filter(e=>e.type==="skip").at(-1).targets,[b.guest_id,b.guest_id]);
+});
+
+test("coringa Bomba existe uma vez e cada adversário compra duas sem perder turno",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["r1"];g.current_color="r";
+  room.hands.get(a.guest_id).cards=["B","b4"];
+  room.hands.get(b.guest_id).cards=["r2","g4"];
+  room.hands.get(bot).cards=["y1","b5"];
+  s.play(a,"B","g");s.end(a);
+  assert.equal(room.hands.get(b.guest_id).cards.length,4);
+  assert.equal(room.hands.get(bot).cards.length,4);
+  assert.equal(g.pending_draw,0);
+  assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+  assert.equal(g.current_color,"g");
+  assert.equal(g.effects.find(e=>e.type==="bomb").n,2);
+  assert.equal(g.card_moves.at(-1).card,"B");
+});
+
+test("animação de carta inclui jogador, topo anterior e sequência para todos",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["b3","r4"];
+  s.play(a,"b3");
+  const e=g.card_moves.at(-1);
+  assert.equal(e.by,a.guest_id);
+  assert.equal(e.card,"b3");
+  assert.equal(e.previous_top,"b3");
+  const publicState=call("get_room_state",{p_token:b.token,p_code:s.code});
+  assert.equal(publicState.game.card_moves.at(-1).id,e.id);
+});
+
+test("desconectado tem trinta segundos de tolerância sem avanço antecipado, reconexão mantém relógio",()=>{
+  const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["b4","y7","r9"];
+  const guest=store.guestsById.get(a.guest_id);
+  guest.last_seen=Date.now()-28000;
+  g.turn_started_at=Date.now()-26000;
+  proSweep();
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id,"não avança assim que fica offline");
+  assert.ok(g.offline_since,"marca início do período de desconexão");
+  assert.ok(call("get_room_state",{p_token:a.token,p_code:s.code}).game.offline_deadline_at);
+  // whoami/get_room_state refreshed presence, so next sweep restores 50s total.
+  proSweep();
+  assert.equal(g.offline_since,null);
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+});
+
+
+test("offline com compra acumulada aguarda o limite reduzido antes de passar",()=>{
+  const s=setup(),{room,g,a}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["rD"];g.current_color="r";
+  room.hands.get(a.guest_id).cards=["r3","g6"];
+  g.pending_draw=4;g.pending_source=s.bot;
+  const guest=store.guestsById.get(a.guest_id);
+  guest.last_seen=Date.now()-60000;
+  g.turn_started_at=Date.now()-26000;
+  g.offline_since=Date.now()-5000;
+  proSweep();
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  assert.equal(g.pending_draw,4);
+  const before=room.hands.get(a.guest_id).cards.length;
+  g.offline_since=Date.now()-31000;
+  proSweep();
+  assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
+  assert.equal(g.pending_draw,0);
+  assert.equal(room.hands.get(a.guest_id).cards.length,before+4);
+});
+
+test("Bomba jogada como última carta dá duas a todos antes da primeira colocação",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["r2"];g.current_color="r";
+  room.hands.get(a.guest_id).cards=["B"];
+  room.hands.get(b.guest_id).cards=["r3","y4"];
+  room.hands.get(bot).cards=["r4","g5"];
+  s.play(a,"B","b");
+  assert.equal(g.status,"playing");
+  assert.equal(room.hands.get(b.guest_id).cards.length,4);
+  assert.equal(room.hands.get(bot).cards.length,4);
+  assert.equal(g.placements[0].id,a.guest_id);
 });

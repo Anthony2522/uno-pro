@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowDownWideNarrow, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, ShieldAlert, SkipForward, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,21 +31,22 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const [pendingWild, setPendingWild] = useState<string | null>(null);
   const [pendingDetective,setPendingDetective]=useState(false);
   const [detectiveTarget,setDetectiveTarget]=useState<string|null>(null);
-  const [sortMode,setSortMode] = useState<"color"|"number">("color");
+  const [sortMode,setSortMode] = useState<"color"|"number">("number");
   const [clock,setClock] = useState(Date.now());
-  const [hold,setHold] = useState(0);
-  const holdStart = useRef<number|null>(null);
-  const interval = useRef<ReturnType<typeof setInterval>|null>(null);
-  const holdTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
+
+  const lastMoveId=useRef<number|null>(null);
+  const motionTimers=useRef(new Map<number,ReturnType<typeof setTimeout>>());
+  const [flights,setFlights]=useState<Array<{id:number;card:string;fromX:number;fromY:number;toX:number;toY:number}>>([]);
+  const [pileCover,setPileCover]=useState<{id:number;card:string}|null>(null);
   const handViewportRef=useRef<HTMLDivElement|null>(null);
   const [fitColumns,setFitColumns]=useState(6);
   useEffect(()=>{const t=setInterval(()=>setClock(Date.now()),350);return()=>clearInterval(t);},[]);
-  useEffect(()=>()=>{if(interval.current)clearInterval(interval.current);if(holdTimer.current)clearTimeout(holdTimer.current);},[]);
+  useEffect(()=>()=>{for(const timer of motionTimers.current.values())clearTimeout(timer);},[]);
   const byId = useMemo(() => new Map(state.members.map((m) => [m.id, m])), [state.members]);
   const myTurn = game.current_player === me;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","W","D","T","W4","W5","X"];
+    const colors=["b","y","g","r"], special=["R","S","W","D","T","W4","W5","X","B"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
@@ -119,25 +120,50 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   },[myCount,sortMode]);
   const canUno = myCount===1||(myCount===2&&myTurn);
   const myPlacement=game.placements?.find(p=>p.id===me);
-  const remaining=Math.min(50,Math.max(0,Math.ceil((new Date(game.turn_started_at).getTime()+50000-clock)/1000)));
+  const normalDeadline=new Date(game.turn_started_at).getTime()+50000;
+  const deadline=game.offline_deadline_at ? Math.min(normalDeadline,new Date(game.offline_deadline_at).getTime()) : normalDeadline;
+  const remaining=Math.min(50,Math.max(0,Math.ceil((deadline-clock)/1000)));
   const nineRemaining=nine?Math.max(0,Math.ceil((new Date(nine.deadline).getTime()-clock)/1000)):0;
   const nineReady=!!nine&&nine.eligible.includes(me)&&!nine.pressed.includes(me);
   const feed = describeAction(game.last_action, me);
-  const stopHold = () => {
-    if(interval.current)clearInterval(interval.current);
-    if(holdTimer.current)clearTimeout(holdTimer.current);
-    interval.current=null;holdTimer.current=null;holdStart.current=null;setHold(0);
-  };
-  const beginHold=(e:PointerEvent<HTMLButtonElement>)=>{
-    if(!game.can_catch_uno||busy)return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    stopHold();holdStart.current=Date.now();
-    interval.current=setInterval(()=>setHold(Math.min(100,(Date.now()-(holdStart.current||Date.now()))/50)),50);
-    holdTimer.current=setTimeout(()=>{actions.catchUno();stopHold();},5000);
-  };
 
+  // Server-authoritative card moves are sent to every player. Animate a
+  // one-second flight from the player's seat/hand to the discard pile.
+  useEffect(()=>{
+    const moves=game.card_moves||[];
+    const newest=moves.at(-1)?.id??0;
+    if(lastMoveId.current===null){lastMoveId.current=newest;return;}
+    const arrivals=moves.filter(m=>m.id>lastMoveId.current!&&Date.now()-m.at<5000);
+    lastMoveId.current=newest;
+    if(!arrivals.length)return;
+    const discard=document.querySelector<HTMLElement>("[data-discard-pile]");
+    if(!discard)return;
+    const d=discard.getBoundingClientRect();
+    for(const m of arrivals){
+      let source:HTMLElement|null=null;
+      if(m.by===me){
+        source=Array.from(document.querySelectorAll<HTMLElement>("[data-hand-card]"))
+          .find(el=>el.dataset['handCard']===m.card)??document.querySelector<HTMLElement>("[data-my-hand]");
+      }else{
+        source=Array.from(document.querySelectorAll<HTMLElement>("[data-player-seat]"))
+          .find(el=>el.dataset['playerSeat']===m.by)?.querySelector<HTMLElement>("[data-seat-cards]")??null;
+      }
+      const r=source?.getBoundingClientRect()??discard.getBoundingClientRect();
+      const item={id:m.id,card:m.card,
+        fromX:r.left+r.width/2-35,fromY:r.top+r.height/2-52,
+        toX:d.left+d.width/2-35,toY:d.top+d.height/2-52};
+      setFlights(v=>[...v,item]);
+      setPileCover({id:m.id,card:m.previous_top});
+      const timer=setTimeout(()=>{
+        setFlights(v=>v.filter(x=>x.id!==m.id));
+        setPileCover(v=>v?.id===m.id?null:v);
+        motionTimers.current.delete(m.id);
+      },1000);
+      motionTimers.current.set(m.id,timer);
+    }
+  },[game.card_moves,me]);
   function onCard(c: string) {
-    if (!canPlay(c)) {sfx("error");toast.error("Essa carta não pode ser jogada agora.");return;}
+    if (!canPlay(c)) {sfx("error");toast.error("Essa carta não pode ser jogada agora.",{duration:3000});return;}
     if(c==="X"){setPendingDetective(true);return;}
     if (isWild(c)) setPendingWild(c);
     else actions.play(c);
@@ -153,6 +179,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           return (
             <div
               key={p.id}
+              data-player-seat={p.id}
               className={cn(
                 "glass relative flex min-w-[8.5rem] shrink-0 flex-col gap-2 rounded-2xl p-2.5 transition-all",
                 turn && "shadow-glow-cyan",
@@ -171,7 +198,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                   </p>
                 </div>
               </div>
-              <div className="flex h-9 items-center" aria-label={`${p.card_count} cartas`}>
+              <div data-seat-cards className="flex h-9 items-center" aria-label={`${p.card_count} cartas`}>
                 {Array.from({ length: Math.min(p.card_count, 8) }).map((_, i) => (
                   <CardBack key={i} size="xs" className={cn(i > 0 && "-ml-4")} />
                 ))}
@@ -207,7 +234,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <p className="mt-2 text-sm text-muted-foreground">O último a apertar compra {nine.count} carta(s).</p>
           </div>
         )}
-        {myTurn && !!pending && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")) && !nine && (
+        {myTurn && !!pending && played.length===0 && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")) && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
             <p className="mt-1 text-sm text-muted-foreground">Escolha uma carta de compra permitida (+5 também pode rebater) ou aceite a penalidade.</p>
@@ -233,8 +260,11 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             </span>
           </button>
 
-          <div className={cn("rounded-[14%] ring-4 ring-offset-4 ring-offset-navy transition-all", RING[game.current_color])}>
-            <UnoCard key={game.seq + game.top_card} card={game.top_card} size="lg" className="uno-center-card" animate rotate={((game.seq * 37) % 14) - 7} />
+          <div data-discard-pile className={cn("relative rounded-[14%] ring-4 ring-offset-4 ring-offset-navy transition-all", RING[game.current_color])}>
+            <UnoCard key={game.seq + game.top_card} card={game.top_card} size="lg" className="uno-center-card" rotate={((game.seq * 37) % 14) - 7} />
+            {pileCover&&(
+              <div className="absolute inset-0 z-10"><UnoCard card={pileCover.card} size="lg" className="uno-center-card" /></div>
+            )}
           </div>
         </div>
 
@@ -261,7 +291,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </div>
       )}
       {/* My area */}
-      <section aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
+      <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
         <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
           <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}</span>
           <button type="button" title={sortMode==="color"?"Organizado por cor. Clique para organizar por número.":"Organizado por número. Clique para organizar por cor."}
@@ -270,16 +300,12 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             className="glass flex h-9 min-w-0 w-full max-w-44 items-center justify-center gap-1 rounded-xl px-1.5 text-xs sm:px-3">
             <ArrowDownWideNarrow className="size-4 shrink-0"/><span className="truncate">{sortMode==="color"?"Por cor":"Por número"}</span>
           </button>
-          <button type="button" onPointerDown={beginHold} onPointerUp={stopHold} onPointerCancel={stopHold} onLostPointerCapture={stopHold}
-            disabled={!game.can_catch_uno||busy} title="Segure 5 segundos para denunciar UNO"
-            aria-label="Segure 5 segundos para denunciar UNO"
-            className="glass flex h-9 shrink-0 items-center justify-center gap-1 rounded-xl px-2 text-xs disabled:opacity-45 sm:px-3">
-            <svg viewBox="0 0 24 24" width="21" height="21" className="-rotate-90 shrink-0" aria-hidden>
-              <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3"/>
-              <circle cx="12" cy="12" r="9" fill="none" stroke="#67e8f9" strokeWidth="3" strokeDasharray="56.55" strokeDashoffset={56.55*(1-hold/100)}/>
-            </svg>
-            <ShieldAlert className="hidden size-4 shrink-0 sm:block"/><span className="hidden md:inline">Denunciar</span>
-          </button>
+          <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3"
+            onClick={actions.catchUno} disabled={!game.can_catch_uno||busy}
+            title="Desuno: denuncie quem está há 4 segundos com uma carta sem gritar UNO."
+            aria-label="Desuno">
+            <ShieldAlert className="size-4 shrink-0"/><span>Desuno</span>
+          </Button>
           <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3" onClick={actions.uno} disabled={busy||!canUno} aria-label="Gritar UNO">
             <Megaphone className="size-4 shrink-0"/><span>UNO</span>
           </Button>
@@ -297,7 +323,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             {hand.map((c,i)=>{
               const ok=canPlay(c);
               return (
-                <button key={c+"-"+i} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(myTurn&&ok?" — jogável":"")} aria-disabled={!ok}
+                <button key={c+"-"+i} data-hand-card={c} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(myTurn&&ok?" — jogável":"")} aria-disabled={!ok}
                   className={cn("uno-hand-button relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",myTurn && played.length===0 ? (ok ? "shadow-glow-cyan" : "opacity-65") : "",i===freshIndex&&recentDraw&&clock-recentDraw.at<8000&&"uno-recently-drawn")}>
                   <UnoCard card={c} size="md" className="uno-hand-card"/>
                 </button>
@@ -307,6 +333,19 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </div>
       </section>
 
+      {flights.length>0&&(
+        <div className="pointer-events-none fixed inset-0 z-[60]" aria-hidden>
+          {flights.map(f=>(
+            <div key={f.id} className="uno-play-flight" style={{
+              "--start-x":f.fromX+"px","--start-y":f.fromY+"px",
+              "--mid-x":(f.fromX+f.toX)/2+"px","--mid-y":((f.fromY+f.toY)/2-52)+"px",
+              "--end-x":f.toX+"px","--end-y":f.toY+"px",
+            } as CSSProperties}>
+              <UnoCard card={f.card} size="md" className="!w-[70px] shadow-glow-cyan"/>
+            </div>
+          ))}
+        </div>
+      )}
       {drawFlight!==null && (
         <div key={drawFlight} className="uno-draw-flight pointer-events-none absolute z-40" aria-hidden>
           <CardBack size="md"/>
@@ -330,14 +369,21 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </DialogContent>
       </Dialog>
       {game.detective && clock<new Date(game.detective.expires_at).getTime()&&(
-        <div className="pointer-events-none fixed inset-x-0 top-[4.5rem] z-40 flex justify-center px-3">
-          <div className="pointer-events-auto w-full max-w-xl rounded-2xl border border-cyan/50 bg-navy/95 p-3 shadow-glow backdrop-blur">
-            <div className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-cyan sm:text-sm">
-              <span className="flex items-center gap-1.5"><Eye className="size-4"/> Detetive · {game.detective.target_name}</span>
+        <div className="pointer-events-none fixed inset-x-0 top-[4.5rem] z-[65] flex justify-center px-3">
+          <div className="pointer-events-auto max-h-[68dvh] w-full max-w-2xl overflow-auto rounded-2xl border border-cyan/70 bg-navy/95 p-3 shadow-glow backdrop-blur-xl sm:p-4">
+            <div className="mb-3 flex items-center justify-between gap-2 text-sm font-bold text-cyan">
+              <span className="flex items-center gap-1.5"><Eye className="size-5"/> Detetive · {game.detective.target_name}</span>
               <span>{Math.max(0,Math.ceil((new Date(game.detective.expires_at).getTime()-clock)/1000))}s</span>
             </div>
-            <div className="flex max-h-32 flex-wrap justify-center gap-1.5 overflow-auto">
-              {game.detective.cards.map((card,i)=><UnoCard key={i} card={card} size="sm" className="!w-10 sm:!w-12"/>)}
+            <div className="flex max-h-[52dvh] flex-wrap justify-center gap-2 overflow-y-auto p-1">
+              {game.detective.cards.map((card,i)=>(
+                <div key={i} className="flex w-[84px] shrink-0 flex-col items-center gap-1 rounded-lg bg-background/50 p-1 sm:w-[98px]">
+                  <UnoCard card={card} size="lg" className="!w-[72px] !min-w-[72px] !opacity-100 sm:!w-[84px] sm:!min-w-[84px]"/>
+                  <span className="max-w-full truncate text-center text-[10px] font-bold text-foreground sm:text-xs" title={cardLabel(card)}>
+                    {cardLabel(card)}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
