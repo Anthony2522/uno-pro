@@ -85,7 +85,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of every colored number/action, 10 each of wild, +4 and +5 = 186 cards. */
+/** UNO Pro: 3 of every colored number/action, 10 wilds, 10 +4 and 2 +5 = 178 cards. */
 export function newDeck() {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
@@ -93,7 +93,8 @@ export function newDeck() {
       for (let i = 0; i < 3; i++) d.push(col + v);
     }
   }
-  for (let i = 0; i < 10; i++) d.push("W", "W4", "W5");
+  for (let i = 0; i < 10; i++) d.push("W", "W4");
+  for (let i = 0; i < 2; i++) d.push("W5");
   return shuffle(d);
 }
 
