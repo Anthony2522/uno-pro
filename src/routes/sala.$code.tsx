@@ -243,7 +243,7 @@ function RoomPage() {
         busy={busy}
         canRematch={state.members.length >= 2}
         onRematch={start}
-        placements={g?.placements}
+        placements={g?.placements??[]}
         viewerId={state.me}
         onClose={() => g && setDismissedRound(g.round)}
       />
