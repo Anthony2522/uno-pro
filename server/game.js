@@ -67,8 +67,8 @@ export function cleanText(p) {
 }
 const cleanCode = (c) => cleanText(c).toUpperCase();
 
-const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5|X|B)$/;
-const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X" || c === "B";
+const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5|X|B|N|P|M)$/;
+const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X" || c === "B" || c === "N" || c === "P" || c === "M";
 export const cardValue = (c) => (isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
   return isWild(c) || c[0] === color || (!isWild(top) && c.slice(1) === top.slice(1));
@@ -85,7 +85,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb = 188 cards. */
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun = 191 cards. */
 export function newDeck() {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
@@ -95,7 +95,7 @@ export function newDeck() {
   }
   for (let i = 0; i < 10; i++) d.push("W", "W4");
   for (let i = 0; i < 2; i++) d.push("W5");
-  d.push("X", "B"); // A single Detective Wild and a single Bomb in every fresh deck.
+  d.push("X", "B", "N", "P", "M"); // One of each custom wild per fresh deck.
   for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T");
   return shuffle(d);
 }

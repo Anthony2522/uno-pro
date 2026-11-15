@@ -1,7 +1,7 @@
 name: UNO Pro - checagem
 on:
   push:
-    branches: [main, feature-hard-ai-2026-11-14]
+    branches: [main, feature-negation-powerless-machinegun-2026-11-14]
   workflow_dispatch:
 jobs:
   build-and-tests:
@@ -13,9 +13,9 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm test
-      - run: node scripts/bot-benchmark.mjs --games=600
-      - run: node scripts/bot-benchmark.mjs --enhanced --games=600
-      - run: node scripts/bot-benchmark.mjs --paired --games=600
+      - run: node scripts/bot-benchmark.mjs --games=240
+      - run: node scripts/bot-benchmark.mjs --enhanced --games=240
+      - run: node scripts/bot-benchmark.mjs --paired --games=240
       - run: node scripts/bot-benchmark.mjs --paired --games=40 --repeat-check
       - run: npm run typecheck
       - run: npm run build

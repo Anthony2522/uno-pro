@@ -23,6 +23,8 @@ export type GameActions = {
   pressNine: () => void;
   uno: () => void;
   catchUno: () => void;
+  negate: (color:CardColor)=>void;
+  acceptSkip: ()=>void;
 };
 
 export function GameTable({ state, busy, actions }: { state: RoomState; busy: boolean; actions: GameActions }) {
@@ -30,6 +32,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const me = state.me;
   const [pendingWild, setPendingWild] = useState<string | null>(null);
   const [pendingDetective,setPendingDetective]=useState(false);
+  const [pendingNegation,setPendingNegation]=useState(false);
   const [detectiveTarget,setDetectiveTarget]=useState<string|null>(null);
   const [sortMode,setSortMode] = useState<"color"|"number">("number");
   const [clock,setClock] = useState(Date.now());
@@ -43,10 +46,11 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   useEffect(()=>{const t=setInterval(()=>setClock(Date.now()),350);return()=>clearInterval(t);},[]);
   useEffect(()=>()=>{for(const timer of motionTimers.current.values())clearTimeout(timer);},[]);
   const byId = useMemo(() => new Map(state.members.map((m) => [m.id, m])), [state.members]);
-  const myTurn = game.current_player === me;
+  const reactingToSkip=!!game.skip_reaction && game.skip_reaction.target===me;
+  const myTurn = game.current_player === me && !game.skip_reaction;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","W","D","T","W4","W5","X","B"];
+    const colors=["b","y","g","r"], special=["R","S","W","D","T","W4","W5","X","B","N","P","M"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
@@ -62,6 +66,15 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
 
   const pending = game.pending_draw || 0;
+  const hasNegation=game.my_hand.includes("N");
+  const lastPrivateNotice=useRef<number|null>(null);
+  useEffect(()=>{
+    const notice=game.private_notice;
+    if(!notice||lastPrivateNotice.current===notice.nonce)return;
+    lastPrivateNotice.current=notice.nonce;
+    if(Date.now()-new Date(notice.at).getTime()<9000)
+      toast.info(notice.message,{duration:4600});
+  },[game.private_notice?.nonce]);
   const [recentDraw,setRecentDraw] = useState<{card:string;nonce:number;at:number}|null>(null);
   const [drawFlight,setDrawFlight] = useState<number|null>(null);
   const lastSeenDraw = useRef<number|null>(null);
@@ -79,11 +92,9 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const freshIndex=recentDraw?hand.lastIndexOf(recentDraw.card):-1;
   const played = game.turn_cards || [];
   const nine = game.nine;
-  const lockedByNotice=(game.effects||[]).some(e=>
-    typeof e.show_at==="number" && clock>=e.show_at && clock<e.show_at+2000);
   const canPlay = (c:string) => {
     if(busy || nine)return false;
-    if(lockedByNotice && (!myTurn || played.length===0))return false;
+    if(game.powerless_target && !/^[rygb][0-9]$/.test(c))return false;
     if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T"));
     if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T";
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
@@ -238,14 +249,44 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
             <p className="mt-1 text-sm text-muted-foreground">Escolha uma carta de compra permitida (+5 também pode rebater) ou aceite a penalidade.</p>
-            <Button variant="glass" className="mt-3 rounded-xl" onClick={actions.accept} disabled={busy||lockedByNotice}>Comprar {pending} e passar</Button>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Button variant="glass" className="rounded-xl" onClick={actions.accept} disabled={busy}>Comprar {pending} e passar</Button>
+              {hasNegation&&<Button variant="hero" className="rounded-xl" disabled={busy} onClick={()=>setPendingNegation(true)}>Usar Negação</Button>}
+            </div>
           </div>
         )}
+        {reactingToSkip&&(
+          <div role="alert" className="relative z-20 max-w-md rounded-2xl border border-warning/50 bg-navy/95 p-3 text-center shadow-glow">
+            <p className="font-display font-bold">Você foi bloqueado!</p>
+            <p className="mt-1 text-xs text-muted-foreground">Aceite o bloqueio, use sua Negação ou corte se tiver exatamente a carta do descarte.</p>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
+              <Button variant="glass" onClick={actions.acceptSkip} disabled={busy}>Aceitar bloqueio</Button>
+              {hasNegation&&<Button variant="hero" onClick={()=>setPendingNegation(true)} disabled={busy}>Usar Negação</Button>}
+            </div>
+          </div>
+        )}
+        {game.skip_reaction && !reactingToSkip&&(
+          <p className="relative z-10 rounded-xl border border-warning/30 bg-navy/80 px-3 py-2 text-xs text-warning">
+            Aguardando a decisão de bloqueio…
+          </p>
+        )}
+        {myTurn&&game.powerless_target===me&&(
+          <div role="status" className="relative z-20 rounded-xl border border-warning/30 bg-navy/95 px-3 py-2 text-center text-xs text-warning">
+            Sem poderes nesta vez: só números podem ser jogados.
+            {hasNegation&&<Button variant="glass" className="ml-2 h-9 rounded-lg" disabled={busy} onClick={()=>setPendingNegation(true)}>Negar efeito</Button>}
+          </div>
+        )}
+        {myTurn&&pending>0&&hasNegation&&played.length===0&&
+          !hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")&&(
+            <Button variant="hero" className="relative z-20 rounded-xl" onClick={()=>setPendingNegation(true)} disabled={busy}>
+              Anular +{pending} com Negação
+            </Button>
+          )}
         <div className="uno-stack relative z-10 flex items-center gap-4 sm:gap-8">
           <button
             type="button"
             onClick={actions.draw}
-            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || lockedByNotice || busy}
+            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || busy}
             aria-label={`Comprar carta. ${game.draw_count} cartas no baralho`}
             className={cn(
               "group relative rounded-[12%] transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:cursor-default",
@@ -287,7 +328,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
       {myPlacement&&game.status==="playing"&&(
         <div className="mx-auto mb-2 w-fit rounded-xl border border-warning/50 bg-warning/10 px-4 py-2 text-center text-sm font-bold text-warning">
-          🏆 1º colocado! Aguardando o segundo colocado…
+          🏆 {myPlacement.rank}º colocado! Aguardando os demais vencedores…
         </div>
       )}
       {/* My area */}
@@ -310,9 +351,6 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <Megaphone className="size-4 shrink-0"/><span>UNO</span>
           </Button>
         </div>
-        {myTurn && lockedByNotice && played.length===0 && (
-          <p className="mt-1 text-center text-xs text-cyan">Aviso na mesa — jogadas liberadas após 2 segundos.</p>
-        )}
         {myTurn && game.has_drawn && game.drawn_card && !played.length && (
           <p className="mt-2 px-2 text-center text-sm text-cyan">Você comprou {cardLabel(game.drawn_card)} — jogue qualquer carta válida ou termine a vez.</p>
         )}
@@ -389,9 +427,12 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </div>
       )}
       <ColorPicker
-        open={!!pendingWild}
-        onClose={() => {setPendingWild(null);setDetectiveTarget(null)}}
+        open={!!pendingWild||pendingNegation}
+        onClose={() => {setPendingWild(null);setDetectiveTarget(null);setPendingNegation(false)}}
         onPick={(color) => {
+          if(pendingNegation){
+            setPendingNegation(false);actions.negate(color);return;
+          }
           const c = pendingWild!;
           setPendingWild(null);
           actions.play(c, color, c==="X"?(detectiveTarget??undefined):undefined);

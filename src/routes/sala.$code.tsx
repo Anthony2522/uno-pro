@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, ShieldAlert, ShieldOff, ZapOff, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
@@ -34,10 +34,10 @@ function RoomPage() {
   const { state, fatal, connection, refresh, leave, token } = useRoom(code);
   const [busy, setBusy] = useState(false);
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
-  const [specialEffect,setSpecialEffect] = useState<GameState["effects"][number]|null>(null);
+  const [effectsClock,setEffectsClock] = useState(Date.now());
   const lastEffectId = useRef<number|null>(null);
   const lastEffectRound = useRef<number|null>(null);
-  const specialTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
+  useEffect(()=>{const timer=setInterval(()=>setEffectsClock(Date.now()),250);return()=>clearInterval(timer);},[]);
   const prev = useRef<{ seq: number; turn: string | null; status: string | null; members: number } | null>(null);
 
   const act = useCallback(
@@ -56,40 +56,20 @@ function RoomPage() {
     [refresh],
   );
 
-  // Every special card event is queued; spectators see all effects, including fast combos.
-  const effectQueue=useRef<GameState["effects"]>([]);
-  const effectShowing=useRef(false);
-  const showNextEffect=useCallback(()=>{
-    const event=effectQueue.current.shift();
-    if(!event){effectShowing.current=false;setSpecialEffect(null);return;}
-    effectShowing.current=true;
-    setSpecialEffect(event);
-    sfx(event.type==="color_wave"?"wild":event.type);
-    if(specialTimer.current)clearTimeout(specialTimer.current);
-    specialTimer.current=setTimeout(showNextEffect,5000);
-  },[]);
+  // One shared five-second window. More than two notifications appear
+  // together in a compact stack; no event blocks the player's actions.
   useEffect(()=>{
-    const events=state?.game?.effects;
-    const round=state?.game?.round ?? null;
+    const events=state?.game?.effects||[];
+    const round=state?.game?.round??null;
     if(round!==lastEffectRound.current){
       lastEffectRound.current=round;
-      lastEffectId.current=events?.at(-1)?.id ?? 0;
-      effectQueue.current=[];
-      effectShowing.current=false;
-      setSpecialEffect(null);
-      if(specialTimer.current)clearTimeout(specialTimer.current);
+      lastEffectId.current=events.at(-1)?.id??0;
       return;
     }
-    if(!events?.length)return;
-    const currentMax=events.at(-1)?.id ?? 0;
     const next=events.filter(e=>e.id>(lastEffectId.current??0));
-    lastEffectId.current=currentMax;
-    if(next.length){
-      effectQueue.current.push(...next);
-      if(!effectShowing.current)showNextEffect();
-    }
-  },[state?.game?.effects,state?.game?.round,showNextEffect]);
-  useEffect(()=>()=>{if(specialTimer.current)clearTimeout(specialTimer.current);},[]);
+    if(events.length)lastEffectId.current=events.at(-1)?.id??0;
+    for(const event of next)sfx(event.type==="color_wave"?"wild":event.type);
+  },[state?.game?.effects,state?.game?.round]);
 
   // Sounds on state transitions.
   useEffect(() => {
@@ -157,6 +137,7 @@ function RoomPage() {
 
   const g = state.game;
   const playing = state.room.status === "playing" && g?.status === "playing";
+  const visibleEffects=playing?(g?.effects||[]).filter(e=>effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
   const isHost = state.room.host_id === state.me;
   const finished = g?.status === "finished";
   const winner = finished && g.winner_id ? state.members.find((m) => m.id === g.winner_id) : undefined;
@@ -178,7 +159,10 @@ function RoomPage() {
     pressNine: () => act(() => api.pressNine(token, code)),
     uno: () => act(() => api.callUno(token, code)),
     catchUno: () => act(() => api.catchUno(token, code)),
+    negate: (color) => act(() => api.negateEffect(token,code,color)),
+    acceptSkip: () => act(() => api.acceptSkip(token,code)),
   };
+  const updateWinners=(n:number)=>act(()=>api.updateWinners(token,code,n));
   const start = () =>
     act(async () => {
       try {
@@ -200,64 +184,51 @@ function RoomPage() {
         <LeaveButton inGame={playing} onConfirm={() => void doLeave()} />
       </AppHeader>
       <ConnectionBanner show={connection === "reconnecting"} />
-      {specialEffect && playing && (
-        specialEffect.type==="color_wave" ? (
-          <div key={specialEffect.id}
-            className={"uno-color-wave uno-color-wave-"+(specialEffect.color || "b")}
-            role="status" aria-label="Uma nova cor foi escolhida" />
-        ) : (
-          <div key={specialEffect.id} className={"uno-special-overlay uno-effect-"+specialEffect.type} aria-live="assertive" role="status">
-            <div className="uno-special-badge">
-              <div className="uno-effect-title" aria-hidden>
-                {specialEffect.type==="skip" ? <Ban className="size-16 sm:size-24" strokeWidth={3.2}/> :
-                 specialEffect.type==="reverse" ? <Repeat2 className="size-16 sm:size-24" strokeWidth={3}/> :
-                 specialEffect.type==="cut" ? <Scissors className="size-16 sm:size-24" strokeWidth={3}/> :
-                 specialEffect.type==="catch" ? <ShieldAlert className="size-16 sm:size-24" strokeWidth={3}/> :
-                 specialEffect.type==="bomb" ? <Bomb className="size-16 sm:size-24" strokeWidth={3}/> :
-                 specialEffect.type==="penalty" ? <span className="text-6xl sm:text-8xl">+{specialEffect.n ?? 2}</span> :
-                 specialEffect.type==="uno" ? <Megaphone className="size-16 sm:size-24" strokeWidth={3}/> :
-                 <span className="text-5xl">↶</span>}
-              </div>
-              {specialEffect.type==="bomb" ? (
-                <span className="uno-effect-player">BOMBA! Todos os adversários compram 2 cartas</span>
-              ) : specialEffect.type==="skip" ? (
-                <>
-                  {(specialEffect.n??1)>1&&(
-                    <span className="text-xl font-black text-warning">
-                      {(specialEffect.n??1)===2?"Bloqueio em dobro":
-                       (specialEffect.n??1)===3?"Bloqueio triplo":
-                       `Bloqueio ×${specialEffect.n}`}
-                    </span>
-                  )}
-                  <span className="uno-effect-player">
-                    {specialEffect.name} <span className="mx-1 text-cyan">→</span>{" "}
-                    {(specialEffect.target_names?.length?specialEffect.target_names:[specialEffect.target_name??"Jogador"]).join(" · ")}
-                  </span>
-                </>
-              ) : (specialEffect.type==="penalty" || specialEffect.type==="cut" || specialEffect.type==="catch") ? (
-                <span className="uno-effect-player">
-                  {specialEffect.reason==="nine"
-                    ? `${specialEffect.target_name??specialEffect.name} +${specialEffect.n??1} · Regra do 9`
-                    : <>{specialEffect.name} <span className="mx-1 text-cyan">→</span> {specialEffect.target_name??"Jogador"}</>}
-                </span>
-              ) : (
-                <span className="uno-effect-player">
-                  {specialEffect.type==="uno" ? specialEffect.name+" gritou UNO!" :
-                  specialEffect.type==="reverse" ? (
-                    (specialEffect.n??1)>1
-                      ? `${specialEffect.name} jogou ${specialEffect.n} Voltas! ${(specialEffect.n??1)%2===0?"Sentido mantido.":"Sentido invertido."}`
-                      : (g?.turn_order.length===2
-                        ? specialEffect.name+" jogou Volta!"
-                        : specialEffect.name+" inverteu o sentido!")
-                  ) :
-                  specialEffect.name}
-                </span>
-              )}
+
+      {visibleEffects.length>0&&(
+        <div className="pointer-events-none fixed inset-x-0 top-[4.5rem] z-[54] mx-auto flex w-full max-w-lg flex-col gap-2 px-3" role="status" aria-live="polite">
+          {visibleEffects.map(e=>(
+            <div key={e.id}
+              className={"glass-strong flex min-h-12 items-center gap-3 rounded-2xl border border-cyan/40 bg-navy/95 px-3 py-2 text-sm shadow-glow animate-pop uno-notice-"+e.type}>
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand/25 text-cyan">
+                {e.type==="skip"?<Ban className="size-6"/>:
+                 e.type==="reverse"?<Repeat2 className="size-6"/>:
+                 e.type==="bomb"?<Bomb className="size-6"/>:
+                 e.type==="negation"?<ShieldOff className="size-6"/>:
+                 e.type==="powerless"?<ZapOff className="size-6"/>:
+                 e.type==="machinegun"?<Crosshair className="size-6"/>:
+                 e.type==="uno"?<Megaphone className="size-6"/>:
+                 e.type==="cut"?<Scissors className="size-6"/>:
+                 e.type==="catch"?<ShieldAlert className="size-6"/>:
+                 e.type==="penalty"?<span className="font-bold">+{e.n??2}</span>:
+                 <span className="size-6 rounded-full" style={{background:({r:"#e94b58",y:"#ffd34c",g:"#2fc18c",b:"#48beff"} as Record<string,string>)[e.color??"b"]}}/>}
+              </span>
+              <p className="min-w-0 flex-1 text-balance font-display font-bold leading-snug">
+                {e.type==="skip"?(
+                  (e.n??1)>1?`Bloqueio ×${e.n}: ${(e.target_names||[e.target_name]).filter(Boolean).join(" · ")}`:
+                  `${e.name} → ${e.target_name??"Jogador"}`
+                ):
+                e.type==="penalty"?e.reason==="nine"?
+                  `${e.target_name??"Jogador"} +${e.n} · Regra do 9`:
+                  `${e.target_name??"Jogador"} comprou ${e.n??2} cartas`:
+                e.type==="color_wave"?"Nova cor escolhida":
+                e.type==="reverse"?
+                  `${e.name}: ${e.n??1} Volta(s)`:
+                e.type==="bomb"?"Bomba: adversários compraram +2":
+                e.type==="machinegun"?"Metralhadora: especiais substituídos":
+                e.type==="powerless"?"Sem Poderes: próximo turno só com números":
+                e.type==="negation"?"Negação: efeito anulado":
+                e.type==="uno"?`${e.name} gritou UNO!`:
+                e.type==="cut"?`${e.name} cortou ${e.target_name??"um jogador"}`:
+                e.type==="catch"?`${e.target_name??"Jogador"} denunciado!`:
+                e.name}
+              </p>
             </div>
-          </div>
-        )
+          ))}
+        </div>
       )}
       {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))}
+        onUpdateWinners={updateWinners}
         onUpdateSettings={async (startingCards:number,rules:RuleSettings)=>{
           await api.updateRoomSettings(token,code,startingCards,rules);
           void refresh();
@@ -272,6 +243,8 @@ function RoomPage() {
         busy={busy}
         canRematch={state.members.length >= 2}
         onRematch={start}
+        placements={g?.placements}
+        viewerId={state.me}
         onClose={() => g && setDismissedRound(g.round)}
       />
     </div>

@@ -4,10 +4,11 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { UnoCard } from "./UnoCard";
 
 export function WinnerOverlay({
-  open, winnerName, secondWinnerName, secondIsMe, isMe, isHost, busy, canRematch, onRematch, onClose,
+  open, winnerName, secondWinnerName, secondIsMe, isMe, isHost, busy, canRematch, onRematch, onClose, placements, viewerId,
 }: {
   open: boolean; winnerName: string; secondWinnerName: string; secondIsMe: boolean; isMe: boolean; isHost: boolean; busy: boolean; canRematch: boolean;
   onRematch: () => void; onClose: () => void;
+  placements?: Array<{id:string;name:string;rank:number}>;viewerId?:string;
 }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -21,7 +22,12 @@ export function WinnerOverlay({
           <Trophy className="size-10 text-primary-foreground" />
         </div>
         <DialogTitle className="font-display text-3xl font-black">{isMe ? "Você venceu!" : `${winnerName} venceu!`}</DialogTitle>
-        {secondWinnerName&&<div className="mt-2 flex flex-col items-center gap-1 rounded-xl border border-cyan/20 bg-navy/40 p-3">
+        {!!placements?.length&&<div className="mt-2 flex flex-col items-center gap-1 rounded-xl border border-cyan/20 bg-navy/40 p-3">
+          {placements.map(p=><p key={p.id} className="font-display text-sm font-bold">
+            {p.rank===1?"🥇":p.rank===2?"🥈":p.rank===3?"🥉":"🏆"} {p.rank}º {p.id===viewerId?"Você":p.name}
+          </p>)}
+        </div>}
+        {!placements?.length&&secondWinnerName&&<div className="mt-2 flex flex-col items-center gap-1 rounded-xl border border-cyan/20 bg-navy/40 p-3">
           <p className="font-display text-sm font-bold text-warning">🥇 1º {winnerName}</p>
           <p className="font-display text-sm font-bold text-cyan">🥈 2º {secondIsMe?"Você":secondWinnerName}</p>
         </div>}

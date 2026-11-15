@@ -1,4 +1,4 @@
-import { Ban, Repeat2, Eye, Bomb } from "lucide-react";
+import { Ban, Repeat2, Eye, Bomb, ShieldOff, ZapOff, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cardLabel, cardValue, isWild } from "@/lib/uno/cards";
 
@@ -39,6 +39,14 @@ function Symbol({ card, corner }: { card: string; corner?: boolean }) {
       {!corner&&<span className="mt-[2cqw] whitespace-nowrap font-display text-[16cqw] font-black not-italic tracking-[-.02em]">BOMBA</span>}
     </span>
   );
+  if(["N","P","M"].includes(v)){
+    const Icon=v==="N"?ShieldOff:v==="P"?ZapOff:Crosshair;
+    const text=v==="N"?"NEGAÇÃO":v==="P"?"SEM PODERES":"METRALHADORA";
+    return <span className="flex w-[88cqw] flex-col items-center justify-center leading-none">
+      <Icon className={corner?"size-[18cqw]":"size-[42cqw]"} strokeWidth={3}/>
+      {!corner&&<span className="mt-[3cqw] whitespace-nowrap font-display text-[10.5cqw] font-black not-italic tracking-[-.07em]">{text}</span>}
+    </span>;
+  }
   if (v === "T") return (
     <span className="flex flex-col items-center justify-center leading-none">
       <Repeat2 className={corner ? "size-[15cqw]" : "size-[39cqw]"} strokeWidth={3}/>

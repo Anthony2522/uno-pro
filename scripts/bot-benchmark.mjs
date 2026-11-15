@@ -13,8 +13,8 @@ const nArg=args.find(a=>a.startsWith("--games="));
 const games=Math.max(1,Math.min(1000,Number(nArg?.slice(8)||120)));
 const repeatCheck=args.some(a=>a.startsWith("--repeat-check"));
 const call=(fn,args)=>proRpc(fn,args);
-const val=c=>["W","W4","W5","X","B"].includes(c)?c:c.slice(1);
-const wild=c=>["W","W4","W5","X","B"].includes(c);
+const val=c=>["W","W4","W5","X","B","N","P","M"].includes(c)?c:c.slice(1);
+const wild=c=>["W","W4","W5","X","B","N","P","M"].includes(c);
 const drawCard=c=>c==="W4"||c==="W5"||c?.slice(1)==="D"||c?.slice(1)==="T";
 const canPlay=(c,g)=>wild(c)||c[0]===g.current_color||(!wild(g.discard_pile.at(-1))&&val(c)===val(g.discard_pile.at(-1)));
 const counter=(c,g)=>g.pending_uncounterable?c==="W5":drawCard(c);
@@ -33,7 +33,7 @@ function deck(seed){
     d.push(col+"T",col+"T");
   }
   for(let i=0;i<10;i++)d.push("W","W4");
-  d.push("W5","W5","X","B");
+  d.push("W5","W5","X","B","N","P","M");
   for(let k=d.length-1;k>0;k--){
     const j=Math.floor(seeded()*(k+1));[d[j],d[k]]=[d[k],d[j]];
   }
@@ -94,10 +94,14 @@ function runMatch(seed){
     if(g.nine?.eligible.includes(human.guest_id)&&!g.nine.pressed.includes(human.guest_id)){
       safe("press_nine",{p_token:human.token,p_code:code});
     }
-    if(id===human.guest_id&&!g.nine){
+    if(g.skip_reaction?.target===human.guest_id){
+      safe("accept_skip",{p_token:human.token,p_code:code});
+    }else if(id===human.guest_id&&!g.nine&&!g.skip_reaction){
       const h=room.hands.get(id);
       if(h.cards.length===1&&!h.uno_called)safe("call_uno",{p_token:human.token,p_code:code});
-      if(g.pending_draw&&!g.turn_cards.length){
+      if((g.pending_draw||g.powerless_target===id)&&h.cards.includes("N")&&!g.turn_cards.length&&random()<.8)
+        safe("negate_effect",{p_token:human.token,p_code:code,p_color:colorChoice(h.cards)});
+      else if(g.pending_draw&&!g.turn_cards.length){
         const choices=h.cards.filter(c=>counter(c,g));
         if(choices.length && random()<.75){
           const c=choices[Math.floor(random()*choices.length)];
@@ -105,10 +109,10 @@ function runMatch(seed){
           if(g.status==="playing"&&g.turn_order[g.turn_idx]===id)safe("end_turn",{p_token:human.token,p_code:code});
         }else safe("accept_draw",{p_token:human.token,p_code:code});
       } else if(!g.turn_cards.length){
-        let choices=h.cards.filter(c=>canPlay(c,g));
+        let choices=h.cards.filter(c=>canPlay(c,g)&&(!g.powerless_target||/^[rygb][0-9]$/.test(c)));
         if(!choices.length&&!g.has_drawn){
           safe("draw_card",{p_token:human.token,p_code:code});
-          choices=h.cards.filter(c=>canPlay(c,g));
+          choices=h.cards.filter(c=>canPlay(c,g)&&(!g.powerless_target||/^[rygb][0-9]$/.test(c)));
         }
         if(choices.length){
           const c=choices[Math.floor(random()*choices.length)];
