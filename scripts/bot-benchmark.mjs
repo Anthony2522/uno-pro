@@ -112,9 +112,9 @@ function runMatch(seed){
         let choices=h.cards.filter(c=>canPlay(c,g)&&(!g.powerless_target||/^[rygb][0-9]$/.test(c)));
         if(!choices.length&&!g.has_drawn){
           safe("draw_card",{p_token:human.token,p_code:code});
-          choices=h.cards.filter(c=>canPlay(c,g)&&(!g.powerless_target||/^[rygb][0-9]$/.test(c)));
+          choices=g.turn_order[g.turn_idx]===id?h.cards.filter(c=>canPlay(c,g)&&(!g.powerless_target||/^[rygb][0-9]$/.test(c))):[];
         }
-        if(choices.length){
+        if(choices.length&&g.turn_order[g.turn_idx]===id){
           const c=choices[Math.floor(random()*choices.length)];
           if(h.cards.length===2&&!h.uno_called)safe("call_uno",{p_token:human.token,p_code:code});
           const others=g.turn_order.filter(x=>x!==id);
