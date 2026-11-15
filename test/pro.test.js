@@ -90,9 +90,9 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("baralho de 191 cartas inclui Negação, Sem Poderes e Metralhadora",()=>{
+test("baralho de 199 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,191);
+  assert.equal(deck.length,199);
   for(const c of ["N","P","M"])assert.equal(deck.filter(x=>x===c).length,1);
   assert.equal(deck.filter(c=>c==="B").length,1);
   assert.equal(deck.filter(c=>c==="X").length,1);
@@ -101,7 +101,10 @@ test("baralho de 191 cartas inclui Negação, Sem Poderes e Metralhadora",()=>{
       assert.equal(deck.filter(c=>c===col+value).length,3,col+value);
   for(const card of ["W","W4"])assert.equal(deck.filter(c=>c===card).length,10,card);
   assert.equal(deck.filter(c=>c==="W5").length,2);
-  for(const col of ["r","y","g","b"])assert.equal(deck.filter(c=>c===col+"T").length,2);
+  for(const col of ["r","y","g","b"]){
+    assert.equal(deck.filter(c=>c===col+"T").length,2);
+    assert.equal(deck.filter(c=>c===col+"H").length,2);
+  }
 });
 test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   const s=setup(),{room,g,a}=s;
@@ -1324,4 +1327,130 @@ test("Negação no primeiro de três bloqueios preserva os demais sem bloquear o
   assert.equal(g.turn_order[g.turn_idx],bot);
   assert.equal(g.skip_reaction,null);
   assert.equal(g.skip_carry,null);
+});
+
+
+test("Detetive permite ver primeiro, exige cor depois e não expõe cartas a terceiros",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["X","r2","g4"];
+  room.hands.get(b.guest_id).cards=["r7","y8"];
+  call("play_card",{p_token:a.token,p_code:s.code,p_card:"X",p_target_id:b.guest_id});
+  assert.equal(g.current_color,"b","cor do descarte não muda antes da escolha");
+  assert.equal(g.detective_pending_color,a.guest_id);
+  const me=call("get_room_state",{p_token:a.token,p_code:s.code}).game;
+  const other=call("get_room_state",{p_token:b.token,p_code:s.code}).game;
+  assert.deepEqual(me.detective.cards,["r7","y8"]);
+  assert.equal(me.detective_pending_color,true);
+  assert.equal(other.detective,null);
+  assert.equal(other.detective_pending_color,false);
+  assert.throws(()=>s.end(a),/DETECTIVE_COLOR_PENDING/);
+  assert.throws(()=>call("play_card",{p_token:a.token,p_code:s.code,p_card:"r2"}),/DETECTIVE_COLOR_PENDING/);
+  call("resolve_detective",{p_token:a.token,p_code:s.code,p_color:"r"});
+  assert.equal(g.current_color,"r");
+  assert.equal(g.detective,null);
+  s.end(a);
+});
+
+test("Escudo é ativado ao jogar, impede Bloqueio e consome uma carga",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(b.guest_id);
+  g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(b.guest_id).cards=["bH","y2","r3"];
+  s.play(b,"bH");s.end(b);
+  assert.equal(g.shields[b.guest_id],1);
+  s.setTurn(a.guest_id);
+  room.hands.get(a.guest_id).cards=["bS","g1"];
+  s.play(a,"bS");s.end(a);
+  assert.equal(g.turn_order[g.turn_idx],b.guest_id,"bloqueio não remove a vez protegida");
+  assert.equal(g.shields[b.guest_id],undefined);
+  const event=g.effects.findLast(e=>e.type==="shield_defense");
+  assert.equal(event.target_name,"Bruno");
+  assert.equal(event.reason,"skip");
+});
+
+test("Escudo neutraliza toda a compra +2 e não gasta a vez do protegido",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.shields[b.guest_id]=1;
+  g.discard_pile=["b6"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bD","g3"];
+  room.hands.get(b.guest_id).cards=["r0","y2"];
+  s.play(a,"bD");s.end(a);
+  assert.equal(g.pending_draw,0);
+  assert.deepEqual(room.hands.get(b.guest_id).cards,["r0","y2"]);
+  assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+  assert.equal(g.shields[b.guest_id],undefined);
+  assert.equal(g.effects.findLast(e=>e.type==="shield_defense").reason,"draw");
+});
+
+test("Bomba não compra cartas de jogador com Escudo e continua atingindo os demais",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.shields[b.guest_id]=1;
+  g.discard_pile=["b1"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["B","r1"];
+  const beforeB=room.hands.get(b.guest_id).cards.length;
+  const beforeBot=room.hands.get(bot).cards.length;
+  s.play(a,"B","g");
+  assert.equal(room.hands.get(b.guest_id).cards.length,beforeB);
+  assert.equal(room.hands.get(bot).cards.length,beforeBot+2);
+  assert.equal(g.effects.findLast(e=>e.type==="shield_defense").reason,"bomb");
+});
+
+test("Escudo impede Detetive de visualizar as cartas do alvo",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.shields[b.guest_id]=1;
+  g.discard_pile=["b2"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["X","r1"];
+  room.hands.get(b.guest_id).cards=["W4","r5"];
+  call("play_card",{p_token:a.token,p_code:s.code,p_card:"X",p_target_id:b.guest_id});
+  assert.equal(g.detective,null);
+  assert.equal(g.detective_pending_color,a.guest_id);
+  assert.equal(g.effects.findLast(e=>e.type==="shield_defense").reason,"detective");
+  call("resolve_detective",{p_token:a.token,p_code:s.code,p_color:"y"});
+  assert.equal(g.current_color,"y");
+});
+
+test("Sem Poderes restringe a próxima vez de todos os rivais, não só a primeira",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b2"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["P","r3"];
+  room.hands.get(b.guest_id).cards=["b4","W4","N"];
+  s.play(a,"P","b");s.end(a);
+  assert.deepEqual(g.powerless_remaining,[b.guest_id,bot]);
+  assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"W4",p_color:"r"}),/POWERLESS_NUMBER_ONLY/);
+  s.play(b,"b4");s.end(b);
+  assert.deepEqual(g.powerless_remaining,[bot]);
+  assert.equal(g.powerless_target,bot);
+});
+
+test("Negação acaba com Sem Poderes para todos os jogadores",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b1"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["P","g3"];
+  room.hands.get(b.guest_id).cards=["N","r4"];
+  s.play(a,"P","r");s.end(a);
+  assert.ok(g.powerless_remaining.length>=2);
+  call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"r"});
+  assert.deepEqual(g.powerless_remaining,[]);
+  assert.equal(g.powerless_target,null);
+});
+
+test("Metralhadora mostra cartas recolhidas e as embaralha sem descarte",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b3"];g.current_color="b";g.draw_pile=["y0","r2","g4"];
+  room.hands.get(a.guest_id).cards=["M","r1"];
+  room.hands.get(b.guest_id).cards=["W4","r5"];
+  room.hands.get(bot).cards=["bD","g3"];
+  s.play(a,"M","r");
+  const details=g.machine_gun_hits;
+  assert.equal(details.length,2);
+  assert.ok(details.some(x=>x.target===b.guest_id&&x.card==="W4"));
+  assert.ok(details.some(x=>x.target===bot&&x.card==="bD"));
+  assert.ok(g.draw_pile.includes("W4"));
+  assert.ok(g.draw_pile.includes("bD"));
+  assert.equal(g.discard_pile.includes("W4"),false);
+  const replacement=call("get_room_state",{p_token:b.token,p_code:s.code}).game.machine_gun_new;
+  assert.ok(replacement.card.match(/^[rygb][0-9]$/));
+  assert.equal(call("get_room_state",{p_token:a.token,p_code:s.code}).game.machine_gun_new,null);
+  s.end(a);
+  assert.deepEqual(g.effects.findLast(e=>e.type==="machinegun").revealed,details);
 });
