@@ -13,6 +13,7 @@ export function WaitingRoom({
   onAddBot,
   onRemoveBot,
   onUpdateSettings,
+  onUpdateWinners,
 }: {
   state: RoomState;
   busy: boolean;
@@ -20,6 +21,7 @@ export function WaitingRoom({
   onAddBot: (difficulty: "easy" | "hard") => void;
   onRemoveBot: (id: string) => void;
   onUpdateSettings: (startingCards:number,rules:RuleSettings)=>Promise<void>;
+  onUpdateWinners: (number:number)=>Promise<void>;
 }) {
   const { room, members, me, game } = state;
   const isHost = room.host_id === me;
@@ -36,7 +38,7 @@ export function WaitingRoom({
         <div className="mb-4 flex items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm animate-pop">
           <Trophy className="size-5 shrink-0 text-warning" aria-hidden />
           <span>
-            <strong>{lastWinner}</strong> ficou em 1º e <strong>{secondWinner??"outro jogador"}</strong> em 2º na rodada {game!.round}! {isHost ? "Inicie a revanche quando quiser." : "Aguardando o anfitrião iniciar a revanche."}
+            {(game?.placements?.length?game.placements.map(p=>`${p.rank}º ${p.name}`).join(" · "):`${lastWinner} venceu!`)} na rodada {game!.round}! {isHost ? "Inicie a revanche quando quiser." : "Aguardando o anfitrião iniciar a revanche."}
           </span>
         </div>
       )}
@@ -54,8 +56,19 @@ export function WaitingRoom({
             </span>
           </div>
           <h1 className="mt-3 break-words text-2xl font-black sm:text-4xl">{room.name}</h1>
-          {isHost&&<EditRoomSettingsDialog room={room} onSave={onUpdateSettings}/>}
-          <p className="mt-2 text-xs text-muted-foreground">{room.initial_cards} cartas iniciais · {Object.values(room.rules).filter(Boolean).length} regras opcionais ativadas</p>
+          {isHost&&<div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="flex min-w-[12rem] flex-col gap-1 text-sm font-semibold">
+              Quantidade de vencedores
+              <select value={Math.min(room.winners_target,room.max_players-1)}
+                onChange={e=>void onUpdateWinners(Number(e.target.value))}
+                className="h-11 rounded-xl border border-glass-border bg-navy px-3 text-foreground">
+                {Array.from({length:room.max_players-1},(_,i)=>i+1).map(n=>
+                  <option key={n} value={n}>{n} {n===1?"vencedor":"vencedores"}</option>)}
+              </select>
+            </label>
+            <EditRoomSettingsDialog room={room} onSave={onUpdateSettings}/>
+          </div>}
+          <p className="mt-2 text-xs text-muted-foreground">{room.initial_cards} cartas iniciais · {Math.min(room.winners_target,Math.max(1,playerCount-1))} vencedor(es) nesta partida · {Object.values(room.rules).filter(Boolean).length} regras opcionais ativadas</p>
 
           <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-glass-border bg-navy/50 p-4 sm:flex-row sm:items-center">
             <div className="flex-1">

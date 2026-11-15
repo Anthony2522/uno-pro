@@ -56,3 +56,14 @@ Animações especiais de cartas (bloqueios, voltas, mudança de cor, Bomba) são
 - Testes independentes exercitam ameaças, proteção de especiais, combos, coringas, regras desativadas, sigilo de cartas ocultas e desempenho em partidas simuladas com sementes reproduzíveis.
 
 Para reproduzir os torneios: `node scripts/bot-benchmark.mjs --games=600` (bot difícil anterior vs fácil), `node scripts/bot-benchmark.mjs --enhanced --games=600` (novo difícil vs fácil) e `node scripts/bot-benchmark.mjs --paired --games=600` (novo difícil vs antigo difícil, com o mesmo conjunto de cartas e um jogador de referência).
+
+## Novas regras e cartas (novembro de 2026)
+
+- O baralho tem 191 cartas: 1 Negação (N), 1 Sem Poderes (P) e 1 Metralhadora (M), além das cartas existentes.
+- **Negação**: cancela +2, +4 ou +5 acumulados, um Bloqueio direcionado ao usuário ou a proibição do Sem Poderes. O portador escolhe uma nova cor e ainda pode jogar normalmente; uma decisão de bloqueio expira após nove segundos sem resposta.
+- **Sem Poderes**: impede cartas especiais na próxima vez, permitindo apenas números, salvo se o portador usar Negação.
+- **Metralhadora**: substitui uma carta especial de cada adversário por uma carta numérica, privilegiando coringas, depois compras, depois Bloqueio/Volta. Nenhum jogador perde a vez por isso.
+- **Bloqueios**: sempre percorrem apenas adversários, sem auto-bloquear o autor quando há voltas completas; Volta em partida de dois finaliza automaticamente para devolver a vez.
+- **Avisos**: aparecem juntos até três por vez, não bloqueiam ações. Compras automáticas com passagem de vez geram aviso privado.
+- **Vitórias**: quantidade configurável de 1 a N−1, ajustada ao número real de participantes no início. Anfitrião pode alterar na espera.
+- **Inatividade**: duas passagens de turno consecutivas pelo tempo esgotado e sem ação removem automaticamente o jogador.

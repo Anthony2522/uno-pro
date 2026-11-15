@@ -17,6 +17,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [max, setMax] = useState(6);
+  const [winners, setWinners] = useState(2);
   const [startingCards, setStartingCards] = useState(8);
   const [advanced, setAdvanced] = useState(false);
   const [rules, setRules] = useState<RuleSettings>({ repeat:true,sequence:true,nine:true,cut:true,stack:true });
@@ -29,6 +30,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
       setError(null);
       setAdvanced(false);
       setStartingCards(8);
+      setWinners(2);
       setRules({repeat:true,sequence:true,nine:true,cut:true,stack:true});
     }
   }, [open, guest.nickname]);
@@ -45,7 +47,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
     setBusy(true);
     setError(null);
     try {
-      const { code } = await api.createRoom(guest.token, clean, isPublic, max, rules, startingCards);
+      const { code } = await api.createRoom(guest.token, clean, isPublic, max, rules, startingCards, winners);
       onOpenChange(false);
       navigate({ to: "/sala/$code", params: { code } });
     } catch (err) {
@@ -117,7 +119,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
                   role="radio"
                   aria-checked={max === n}
                   aria-label={`${n} jogadores`}
-                  onClick={() => setMax(n)}
+                  onClick={() => {setMax(n);setWinners(v=>Math.min(v,n-1));}}
                   className={cn(
                     "h-11 rounded-xl border font-display font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     max === n ? "border-brand-soft bg-gradient-brand text-primary-foreground shadow-glow" : "border-glass-border bg-navy/40 hover:border-brand-soft/50",
@@ -130,6 +132,18 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
           </fieldset>
 
 
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Quantidade de vencedores</legend>
+            <select value={winners} onChange={e=>setWinners(Number(e.target.value))}
+              className="h-11 w-full rounded-xl border border-glass-border bg-navy px-3 text-foreground"
+              aria-label="Quantidade de vencedores">
+              {Array.from({length:max-1},(_,i)=>i+1).map(n=>
+                <option key={n} value={n}>{n} {n===1?"vencedor":"vencedores"}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              No início da partida, o limite é ajustado para N − 1, conforme o número de participantes.
+            </p>
+          </fieldset>
           <div className="rounded-2xl border border-glass-border bg-navy/40 p-3">
             <button type="button" className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 font-semibold text-cyan" onClick={() => setAdvanced(v => !v)} aria-expanded={advanced}>
               <span className="flex items-center gap-2"><SlidersHorizontal className="size-5" /> Configurações avançadas</span>

@@ -31,7 +31,7 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = "
   o.stop(ctx.currentTime + start + dur + 0.02);
 }
 
-export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch" | "bomb";
+export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch" | "bomb" | "negation" | "machinegun" | "powerless";
 
 export function sfx(kind: Sfx) {
   if (typeof window === "undefined" || isMuted()) return;
@@ -77,6 +77,12 @@ export function sfx(kind: Sfx) {
       tone(480,.09,.15,"triangle",.06);
       tone(980,.22,.16,"sine",.06);
       break;
+    case "negation":
+      [780,510,960].forEach((f,i)=>tone(f,i*.08,.23,"triangle",.065));break;
+    case "machinegun":
+      [450,530,480,610].forEach((f,i)=>tone(f,i*.07,.14,"square",.04));break;
+    case "powerless":
+      [640,390,230].forEach((f,i)=>tone(f,i*.14,.24,"triangle",.06));break;
     case "bomb":
       tone(190,0,.23,"sawtooth",.095);
       tone(85,.09,.45,"sawtooth",.075);

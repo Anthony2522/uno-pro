@@ -1,9 +1,10 @@
 // Deterministic tournament against the real UNO Pro turn engine.
 // Uses public state and virtual time; never delays a real multiplayer session.
 import {store,setClock} from "../server/game.js";
+import crypto from "node:crypto";
 import {proRpc,proSweep} from "../server/pro.js";
 
-const origNow=Date.now,origRandom=Math.random;
+const origNow=Date.now,origRandom=Math.random,origRandomInt=crypto.randomInt;
 let fakeNow=1_800_000_000_000;
 Date.now=()=>fakeNow;
 setClock(()=>fakeNow);
@@ -13,8 +14,8 @@ const nArg=args.find(a=>a.startsWith("--games="));
 const games=Math.max(1,Math.min(1000,Number(nArg?.slice(8)||120)));
 const repeatCheck=args.some(a=>a.startsWith("--repeat-check"));
 const call=(fn,args)=>proRpc(fn,args);
-const val=c=>["W","W4","W5","X","B"].includes(c)?c:c.slice(1);
-const wild=c=>["W","W4","W5","X","B"].includes(c);
+const val=c=>["W","W4","W5","X","B","N","P","M"].includes(c)?c:c.slice(1);
+const wild=c=>["W","W4","W5","X","B","N","P","M"].includes(c);
 const drawCard=c=>c==="W4"||c==="W5"||c?.slice(1)==="D"||c?.slice(1)==="T";
 const canPlay=(c,g)=>wild(c)||c[0]===g.current_color||(!wild(g.discard_pile.at(-1))&&val(c)===val(g.discard_pile.at(-1)));
 const counter=(c,g)=>g.pending_uncounterable?c==="W5":drawCard(c);
@@ -33,7 +34,7 @@ function deck(seed){
     d.push(col+"T",col+"T");
   }
   for(let i=0;i<10;i++)d.push("W","W4");
-  d.push("W5","W5","X","B");
+  d.push("W5","W5","X","B","N","P","M");
   for(let k=d.length-1;k>0;k--){
     const j=Math.floor(seeded()*(k+1));[d[j],d[k]]=[d[k],d[j]];
   }
@@ -47,6 +48,7 @@ function colorChoice(hand){
 function runMatch(seed){
   let random=makeRandom(seed*19997+17);
   Math.random=random;
+  crypto.randomInt=(n)=>Math.floor(random()*n); // Only this offline benchmark overrides entropy.
   fakeNow=1_800_000_000_000+seed*100000000;
   const human=call("register_guest",{p_nickname:"Benchmark Humano"});
   const code=call("create_room",{p_token:human.token,p_name:"Torneio "+seed,p_max_players:3}).code;
@@ -71,6 +73,7 @@ function runMatch(seed){
   g.bot_cut=null;g.bot_move=null;g.public_history={};g.nine=null;
   random=makeRandom(seed*19997+17);
   Math.random=random; // Discard random draws made while creating the room.
+  crypto.randomInt=(n)=>Math.floor(random()*n);
   for(const id of g.turn_order){
     const h=room.hands.get(id);h.cards=d.splice(0,8);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;
   }
@@ -94,10 +97,14 @@ function runMatch(seed){
     if(g.nine?.eligible.includes(human.guest_id)&&!g.nine.pressed.includes(human.guest_id)){
       safe("press_nine",{p_token:human.token,p_code:code});
     }
-    if(id===human.guest_id&&!g.nine){
+    if(g.skip_reaction?.target===human.guest_id){
+      safe("accept_skip",{p_token:human.token,p_code:code});
+    }else if(id===human.guest_id&&!g.nine&&!g.skip_reaction){
       const h=room.hands.get(id);
       if(h.cards.length===1&&!h.uno_called)safe("call_uno",{p_token:human.token,p_code:code});
-      if(g.pending_draw&&!g.turn_cards.length){
+      if((g.pending_draw||g.powerless_target===id)&&h.cards.includes("N")&&!g.turn_cards.length&&random()<.8)
+        safe("negate_effect",{p_token:human.token,p_code:code,p_color:colorChoice(h.cards)});
+      else if(g.pending_draw&&!g.turn_cards.length){
         const choices=h.cards.filter(c=>counter(c,g));
         if(choices.length && random()<.75){
           const c=choices[Math.floor(random()*choices.length)];
@@ -105,12 +112,12 @@ function runMatch(seed){
           if(g.status==="playing"&&g.turn_order[g.turn_idx]===id)safe("end_turn",{p_token:human.token,p_code:code});
         }else safe("accept_draw",{p_token:human.token,p_code:code});
       } else if(!g.turn_cards.length){
-        let choices=h.cards.filter(c=>canPlay(c,g));
+        let choices=h.cards.filter(c=>canPlay(c,g)&&(!g.powerless_target||/^[rygb][0-9]$/.test(c)));
         if(!choices.length&&!g.has_drawn){
           safe("draw_card",{p_token:human.token,p_code:code});
-          choices=h.cards.filter(c=>canPlay(c,g));
+          choices=g.turn_order[g.turn_idx]===id?h.cards.filter(c=>canPlay(c,g)&&(!g.powerless_target||/^[rygb][0-9]$/.test(c))):[];
         }
-        if(choices.length){
+        if(choices.length&&g.turn_order[g.turn_idx]===id){
           const c=choices[Math.floor(random()*choices.length)];
           if(h.cards.length===2&&!h.uno_called)safe("call_uno",{p_token:human.token,p_code:code});
           const others=g.turn_order.filter(x=>x!==id);
@@ -156,4 +163,4 @@ try{
     avgTurnChanges:+(steps/games).toFixed(1),errors,failures:failures.slice(0,4)};
   console.log("UNO_BENCHMARK "+JSON.stringify({...data,repeatCheck}));
   if(finished<Math.ceil(.97*games)||errors>0)process.exitCode=1;
-}finally{Date.now=origNow;Math.random=origRandom;}
+}finally{Date.now=origNow;Math.random=origRandom;crypto.randomInt=origRandomInt;}

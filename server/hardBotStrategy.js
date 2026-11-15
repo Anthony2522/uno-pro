@@ -3,7 +3,7 @@
 // published turn order, the discard, optional rules and public observations.
 // Neither this module nor its callers pass opponents' hidden card identities.
 const COLORS=["b","y","g","r"];
-const WILDS=new Set(["W","W4","W5","X","B"]);
+const WILDS=new Set(["W","W4","W5","X","B","N","P","M"]);
 const number=c=>/^[0-9]$/.test(value(c));
 const value=c=>WILDS.has(c)?c:c.slice(1);
 const wild=c=>WILDS.has(c);
@@ -129,7 +129,8 @@ function evaluate(plan,color,context,remaining) {
     else if(c==="W4")score-=7.8*protectionScale;
     else if(c==="W5")score-=10*protectionScale;
     else if(c==="X")score-=2.6*protectionScale;
-    else if(c==="B")score-=3.3*protectionScale;
+    else if(c==="B"||c==="M"||c==="P")score-=3.3*protectionScale;
+    else if(c==="N")score-=4.6*protectionScale;
     else if(drawValue(c))score-=(2.8+drawValue(c)*.45)*protectionScale;
   }
   const nextDangerCount=Math.max(0,Math.min(1,(nextCount-1)/9));

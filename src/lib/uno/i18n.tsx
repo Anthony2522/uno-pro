@@ -225,7 +225,31 @@ const dictionary:Record<string,string>={
   "Sentido mantido.": "Direction unchanged.",
   "Sentido invertido.": "Direction reversed.",
   "jogou": "played",
-  "Voltas!": "Reverses!"
+  "Voltas!": "Reverses!",
+  "Quantidade de vencedores": "Number of winners",
+  "vencedores": "winners",
+  "vencedor": "winner",
+  "No início da partida, o limite é ajustado para N − 1, conforme o número de participantes.": "At match start, the limit is adjusted to N − 1 based on actual players.",
+  "Sem poderes nesta vez: só números podem ser jogados.": "Powerless this turn: only number cards can be played.",
+  "Negar efeito": "Negate effect",
+  "Negação": "Negation",
+  "Sem Poderes": "Powerless",
+  "Metralhadora": "Machine Gun",
+  "Você foi bloqueado!": "You've been skipped!",
+  "Você não tinha cartas para jogar. Comprou uma carta automaticamente e sua vez passou.": "You had no playable cards. A card was drawn automatically and your turn ended.",
+  "A carta comprada não podia ser jogada. Sua vez passou automaticamente.": "The drawn card wasn't playable. Your turn passed automatically.",
+  "Tempo esgotado: sua vez passou automaticamente. Duas vezes seguidas removem o jogador.": "Time's up: your turn passed automatically. Two consecutive inactive timeouts will remove you.",
+  "Você não tinha cartas para jogar.": "You had no playable cards.",
+  "Aguardando a decisão de bloqueio…": "Waiting for skip decision…",
+  "Aceitar bloqueio": "Accept skip",
+  "Usar Negação": "Use Negation",
+  "Negação: efeito anulado": "Negation: effect canceled",
+  "Metralhadora: especiais substituídos": "Machine Gun: special cards replaced",
+  "Sem Poderes: próximo turno só com números": "Powerless: next turn allows numbers only",
+  "Bomba: adversários compraram +2": "Bomb: opponents drew +2",
+  "Nova cor escolhida": "New color chosen",
+  "Nova carta": "New card",
+  "Você não pode jogar cartas especiais agora.": "You can't play special cards now."
 };
 const longPairs=Object.entries(dictionary).filter(([pt])=>pt.length>=10).sort((a,b)=>b[0].length-a[0].length);
 function translatePiece(value:string,lang:Language){

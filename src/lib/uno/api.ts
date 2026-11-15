@@ -1,4 +1,5 @@
 import { GameError, toGameError } from "./errors";
+import type { CardColor } from "./cards";
 
 export type RuleSettings = { repeat: boolean; sequence: boolean; nine: boolean; cut: boolean; stack: boolean };
 export type Guest = { guest_id: string; token: string; nickname: string };
@@ -46,6 +47,10 @@ export type GameState = {
   winner_id: string | null;
   second_winner_id?: string | null;
   placements?: Array<{id:string;rank:number;name:string}>;
+  winners_target?: number;
+  private_notice?: {nonce:number;kind:string;message:string;at:string}|null;
+  powerless_target?: string|null;
+  skip_reaction?: {target:string|null;expires_at:string}|null;
   detective?: {target:string;target_name:string;cards:string[];expires_at:string}|null;
   card_moves?: Array<{id:number;by:string;name:string;card:string;previous_top:string;at:number}>;
   offline_deadline_at?: string|null;
@@ -56,7 +61,7 @@ export type GameState = {
   my_hand: string[];
   pending_uncounterable: boolean;
   action_locked_until?: string | null;
-  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"|"catch"|"color_wave"|"bomb"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; reason?: "nine"; targets?:string[]; target_names?:string[]; target?:string; target_name?:string; n?:number }>;
+  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"|"catch"|"color_wave"|"bomb"|"negation"|"powerless"|"machinegun"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; reason?: "nine"|"skip"|"draw"|"powerless"; targets?:string[]; target_names?:string[]; target?:string; target_name?:string; n?:number }>;
   last_draw: { card: string; nonce: number; at: string } | null;
   turn_cards: string[];
   pending_draw: number;
@@ -78,6 +83,7 @@ export type RoomState = {
     status: "waiting" | "playing";
     rules: RuleSettings;
     initial_cards: number;
+    winners_target: number;
   };
   members: Member[];
   game: GameState | null;
@@ -134,7 +140,7 @@ export const api = {
   devStatus: (token:string)=>call<{is_dev:boolean}>("dev_status",{p_token:token}),
   devAuth: (token:string,key:string)=>call<{is_dev:boolean}>("dev_auth",{p_token:token,p_key:key}),
   devDeletePublicRoom: (token:string,code:string)=>call("dev_delete_public_room",{p_token:token,p_code:code}),
-  createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8) =>
+  createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8, winners = 2) =>
     call<{ code: string }>("create_room", {
       p_token: token,
       p_name: name,
@@ -142,6 +148,7 @@ export const api = {
       p_max_players: maxPlayers,
       p_rules: rules,
       p_starting_cards: startingCards,
+      p_winners: winners,
     }),
   joinRoom: (token: string, code: string) =>
     call<{ code: string; already: boolean }>("join_room", { p_token: token, p_code: code }),
@@ -149,6 +156,12 @@ export const api = {
   getRoomState: (token: string, code: string) =>
     call<RoomState>("get_room_state", { p_token: token, p_code: code }),
   startGame: (token: string, code: string) => call("start_game", { p_token: token, p_code: code }),
+  updateWinners: (token:string,code:string,winners:number)=>
+    call<{ok:boolean;winners_target:number}>("update_winners",{p_token:token,p_code:code,p_winners:winners}),
+  negateEffect: (token:string,code:string,color:CardColor)=>
+    call("negate_effect",{p_token:token,p_code:code,p_color:color}),
+  acceptSkip: (token:string,code:string)=>
+    call("accept_skip",{p_token:token,p_code:code}),
   updateRoomSettings: (token:string,code:string,startingCards:number,rules:RuleSettings)=>
     call("update_room_settings",{p_token:token,p_code:code,p_starting_cards:startingCards,p_rules:rules}),
   playCard: (token: string, code: string, card: string, color?: string, targetId?: string) =>
