@@ -517,7 +517,7 @@ function hardBotTick(r,id,h){
   const card=turn.plan.shift();
   if(!h.cards.includes(card))throw new Error("INVALID_HARD_BOT_PLAN");
   play(r,id,card,wild(card)?turn.color:undefined,card==="X"?turn.target:undefined);
-  if(g.status!=="playing"||current(g)!==id)return;
+  if(g.status!=="playing"||current(g)!==id||!g.turn_cards?.length)return;
   if(turn.plan.length===0){finish(r);return;}
   turn.due=clock()+2000;
 }
@@ -581,7 +581,7 @@ function botTick(r){
   const target=pick==="X"?g.turn_order.filter(p=>p!==id)
     .sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0]:undefined;
   play(r,id,pick,chooseColor(),target);
-  if(g.status!=="playing" || current(g)!==id)return;
+  if(g.status!=="playing" || current(g)!==id||!g.turn_cards?.length)return;
   g.bot_move={id,due:clock()+(hard?2000:5000),played:(g.bot_move?.played||0)+1};
   // Keep the turn open for an additional card only when a valid combo exists.
   const series=g.turn_cards,first=series[0],prev=series.at(-1);
