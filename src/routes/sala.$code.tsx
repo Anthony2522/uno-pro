@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair } from "lucide-react";
+import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair, Beer } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
@@ -201,6 +201,8 @@ function RoomPage() {
                  e.type==="negation"?<ShieldOff className="size-6"/>:
                  e.type==="powerless"?<ZapOff className="size-6"/>:
                  e.type==="machinegun"?<Crosshair className="size-6"/>:
+                 e.type==="vortex"?<img src="/vortice.svg" alt="" className="h-6 w-6 object-contain brightness-0 invert"/>:
+                 e.type==="beer"||e.type==="beer_forced"?<Beer className="size-6"/>:
                  e.type==="shield_armed"||e.type==="shield_defense"?<Shield className="size-6"/>:
                  e.type==="uno"?<Megaphone className="size-6"/>:
                  e.type==="cut"?<Scissors className="size-6"/>:
@@ -221,7 +223,10 @@ function RoomPage() {
                   `${e.name}: ${e.n??1} Volta(s)`:
                 e.type==="bomb"?"Bomba: adversários sem Escudo compraram +2":
                 e.type==="machinegun"?"Metralhadora: cartas especiais reveladas e devolvidas ao baralho":
-                 e.type==="shield_armed"?`${e.name} ativou Escudo ×${e.n??1}`:
+                 e.type==="shield_armed"?`${e.name} ativou Escudo`:
+                 e.type==="vortex"?`${e.name} ativou Vórtice: ${e.n??0} carta(s) puxada(s)`:
+                 e.type==="beer"?"Cerveja: os adversários jogarão automaticamente":
+                 e.type==="beer_forced"?`${e.name}: jogada aleatória pela Cerveja`:
                  e.type==="shield_defense"?`${e.target_name??e.name} foi defendido(a) pelo Escudo`:
                 e.type==="powerless"?"Sem Poderes: próxima vez de cada adversário só com números":
                 e.type==="negation"?"Negação: efeito anulado":
