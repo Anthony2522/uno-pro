@@ -31,7 +31,7 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = "
   o.stop(ctx.currentTime + start + dur + 0.02);
 }
 
-export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch" | "bomb" | "negation" | "machinegun" | "powerless";
+export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch" | "bomb" | "negation" | "machinegun" | "powerless" | "shield_armed" | "shield_defense";
 
 export function sfx(kind: Sfx) {
   if (typeof window === "undefined" || isMuted()) return;
@@ -77,6 +77,11 @@ export function sfx(kind: Sfx) {
       tone(480,.09,.15,"triangle",.06);
       tone(980,.22,.16,"sine",.06);
       break;
+    case "shield_armed":
+      [480,640,840].forEach((f,i)=>tone(f,i*.09,.24,"sine",.055));break;
+    case "shield_defense":
+      tone(170,0,.20,"triangle",.075);
+      [880,1060,1300].forEach((f,i)=>tone(f,.12+i*.08,.24,"sine",.075));break;
     case "negation":
       [780,510,960].forEach((f,i)=>tone(f,i*.08,.23,"triangle",.065));break;
     case "machinegun":

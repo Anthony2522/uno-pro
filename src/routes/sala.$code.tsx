@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, ShieldAlert, ShieldOff, ZapOff, Crosshair } from "lucide-react";
+import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
+import { UnoCard } from "@/components/uno/UnoCard";
+import { cardLabel } from "@/lib/uno/cards";
 import { ConnectionBanner, CopyInviteButton, LeaveButton } from "@/components/uno/RoomTopBar";
 import { WaitingRoom } from "@/components/uno/WaitingRoom";
 import { WinnerOverlay } from "@/components/uno/WinnerOverlay";
@@ -138,6 +140,7 @@ function RoomPage() {
   const g = state.game;
   const playing = state.room.status === "playing" && g?.status === "playing";
   const visibleEffects=playing?(g?.effects||[]).filter(e=>effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
+  const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+5000):[];
   const isHost = state.room.host_id === state.me;
   const finished = g?.status === "finished";
   const winner = finished && g.winner_id ? state.members.find((m) => m.id === g.winner_id) : undefined;
@@ -160,6 +163,7 @@ function RoomPage() {
     uno: () => act(() => api.callUno(token, code)),
     catchUno: () => act(() => api.catchUno(token, code)),
     negate: (color) => act(() => api.negateEffect(token,code,color)),
+    resolveDetective: (color) => act(() => api.resolveDetective(token,code,color)),
     acceptSkip: () => act(() => api.acceptSkip(token,code)),
   };
   const updateWinners=(n:number)=>act(()=>api.updateWinners(token,code,n));
@@ -189,7 +193,7 @@ function RoomPage() {
         <div className="pointer-events-none fixed inset-x-0 top-[4.5rem] z-[54] mx-auto flex w-full max-w-lg flex-col gap-2 px-3" role="status" aria-live="polite">
           {visibleEffects.map(e=>(
             <div key={e.id}
-              className={"glass-strong flex min-h-12 items-center gap-3 rounded-2xl border border-cyan/40 bg-navy/95 px-3 py-2 text-sm shadow-glow animate-pop uno-notice-"+e.type}>
+              className={"glass-strong flex min-h-12 flex-wrap items-center gap-3 rounded-2xl border border-cyan/40 bg-navy/95 px-3 py-2 text-sm shadow-glow animate-pop uno-notice-"+e.type}>
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand/25 text-cyan">
                 {e.type==="skip"?<Ban className="size-6"/>:
                  e.type==="reverse"?<Repeat2 className="size-6"/>:
@@ -197,6 +201,7 @@ function RoomPage() {
                  e.type==="negation"?<ShieldOff className="size-6"/>:
                  e.type==="powerless"?<ZapOff className="size-6"/>:
                  e.type==="machinegun"?<Crosshair className="size-6"/>:
+                 e.type==="shield_armed"||e.type==="shield_defense"?<Shield className="size-6"/>:
                  e.type==="uno"?<Megaphone className="size-6"/>:
                  e.type==="cut"?<Scissors className="size-6"/>:
                  e.type==="catch"?<ShieldAlert className="size-6"/>:
@@ -214,15 +219,38 @@ function RoomPage() {
                 e.type==="color_wave"?"Nova cor escolhida":
                 e.type==="reverse"?
                   `${e.name}: ${e.n??1} Volta(s)`:
-                e.type==="bomb"?"Bomba: adversários compraram +2":
-                e.type==="machinegun"?"Metralhadora: especiais substituídos":
-                e.type==="powerless"?"Sem Poderes: próximo turno só com números":
+                e.type==="bomb"?"Bomba: adversários sem Escudo compraram +2":
+                e.type==="machinegun"?"Metralhadora: cartas especiais reveladas e devolvidas ao baralho":
+                 e.type==="shield_armed"?`${e.name} ativou Escudo ×${e.n??1}`:
+                 e.type==="shield_defense"?`${e.target_name??e.name} foi defendido(a) pelo Escudo`:
+                e.type==="powerless"?"Sem Poderes: próxima vez de cada adversário só com números":
                 e.type==="negation"?"Negação: efeito anulado":
                 e.type==="uno"?`${e.name} gritou UNO!`:
                 e.type==="cut"?`${e.name} cortou ${e.target_name??"um jogador"}`:
                 e.type==="catch"?`${e.target_name??"Jogador"} denunciado!`:
                 e.name}
               </p>
+              {e.type==="machinegun" && !!e.revealed?.length && (
+                <div className="flex w-full flex-wrap justify-center gap-3 border-t border-cyan/20 pt-2">
+                  {e.revealed.map((entry,i)=>(
+                    <div key={entry.target+"-"+i} className="flex min-w-16 flex-col items-center gap-1">
+                      <UnoCard card={entry.card} size="sm" className="!w-12"/>
+                      <span className="text-center text-[10px] font-semibold text-cyan">{entry.target_name}</span>
+                      <span className="max-w-24 text-center text-[10px] text-muted-foreground">{cardLabel(entry.card)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {shieldDefenses.length>0 && (
+        <div className="pointer-events-none fixed inset-0 z-[76] flex flex-col items-center justify-center gap-3 px-3">
+          {shieldDefenses.map(e=>(
+            <div key={e.id} role="status" className="uno-shield-defense flex w-full max-w-lg flex-col items-center gap-2 rounded-3xl border-2 border-cyan/80 bg-navy/95 px-6 py-5 text-center shadow-glow-cyan">
+              <Shield className="size-16 text-cyan drop-shadow-[0_0_20px_#67e8f9]" strokeWidth={2.6}/>
+              <p className="font-display text-xl font-black text-white sm:text-2xl">{e.target_name??e.name} foi defendido(a) pelo Escudo</p>
             </div>
           ))}
         </div>

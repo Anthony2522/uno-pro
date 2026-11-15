@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowDownWideNarrow, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, ShieldAlert, SkipForward, WifiOff } from "lucide-react";
+import { ArrowDownWideNarrow, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
@@ -24,6 +24,7 @@ export type GameActions = {
   uno: () => void;
   catchUno: () => void;
   negate: (color:CardColor)=>void;
+  resolveDetective: (color:CardColor)=>void;
   acceptSkip: ()=>void;
 };
 
@@ -33,7 +34,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const [pendingWild, setPendingWild] = useState<string | null>(null);
   const [pendingDetective,setPendingDetective]=useState(false);
   const [pendingNegation,setPendingNegation]=useState(false);
-  const [detectiveTarget,setDetectiveTarget]=useState<string|null>(null);
+  const [detectiveDismissed,setDetectiveDismissed]=useState(false);
   const [sortMode,setSortMode] = useState<"color"|"number">("number");
   const [clock,setClock] = useState(Date.now());
 
@@ -50,7 +51,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const myTurn = game.current_player === me && !game.skip_reaction;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","W","D","T","W4","W5","X","B","N","P","M"];
+    const colors=["b","y","g","r"], special=["R","S","H","W","D","T","W4","W5","X","B","N","P","M"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
@@ -90,11 +91,18 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     return ()=>clearTimeout(t);
   },[game.last_draw?.nonce]);
   const freshIndex=recentDraw?hand.lastIndexOf(recentDraw.card):-1;
+  const replacement=game.machine_gun_new;
+  const replacementAt=replacement?new Date(replacement.at).getTime():0;
+  const replacementIndex=replacement&&clock-replacementAt<6500&&clock>=replacementAt
+    ?hand.lastIndexOf(replacement.card):-1;
+  const detectiveActive=!!game.detective&&clock<new Date(game.detective.expires_at).getTime()&&!detectiveDismissed;
+  const detectiveColorOpen=!!game.detective_pending_color&&
+    (!game.detective||clock>=new Date(game.detective.expires_at).getTime()||detectiveDismissed);
   const played = game.turn_cards || [];
   const nine = game.nine;
   const canPlay = (c:string) => {
-    if(busy || nine)return false;
-    if(game.powerless_target && !/^[rygb][0-9]$/.test(c))return false;
+    if(busy || nine || game.detective_pending_color)return false;
+    if(game.powerless_remaining?.includes(me) && !/^[rygb][0-9]$/.test(c))return false;
     if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T"));
     if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T";
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
@@ -175,7 +183,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   },[game.card_moves,me]);
   function onCard(c: string) {
     if (!canPlay(c)) {sfx("error");toast.error("Essa carta não pode ser jogada agora.",{duration:3000});return;}
-    if(c==="X"){setPendingDetective(true);return;}
+    if(c==="X"){setDetectiveDismissed(false);setPendingDetective(true);return;}
     if (isWild(c)) setPendingWild(c);
     else actions.play(c);
   }
@@ -202,6 +210,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                 <PlayerAvatar id={p.id} name={p.nickname} size="sm" online={p.online} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold">{p.nickname}</p>
+                  {(game.shields?.[p.id]||0)>0 && <p className="flex items-center gap-0.5 text-[10px] font-semibold text-cyan"><Shield className="size-3"/> Escudo ×{game.shields?.[p.id]}</p>}
                   <p className={cn("text-[0.7rem]", turn ? "font-semibold text-cyan" : "text-muted-foreground")}>
                     {turn ? "Jogando…" : p.online ? `${p.card_count} carta${p.card_count === 1 ? "" : "s"}` : (
                       <span className="inline-flex items-center gap-1"><WifiOff className="size-3" /> offline</span>
@@ -230,7 +239,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           </div>
           {myTurn && !nine && (
             <Button variant="hero" className="h-9 shrink-0 rounded-xl px-3 text-xs sm:h-11 sm:px-4 sm:text-sm"
-              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy}>
+              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy||!!game.detective_pending_color}>
               {busy?<Loader2 className="size-4 animate-spin"/>:<SkipForward className="size-4"/>} Terminar vez
             </Button>
           )}
@@ -286,7 +295,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           <button
             type="button"
             onClick={actions.draw}
-            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || busy}
+            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || !!game.detective_pending_color || busy}
             aria-label={`Comprar carta. ${game.draw_count} cartas no baralho`}
             className={cn(
               "group relative rounded-[12%] transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:cursor-default",
@@ -334,7 +343,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       {/* My area */}
       <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
         <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
-          <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}</span>
+          <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<span className="ml-1 text-cyan" title="Cargas do Escudo">🛡️×{game.shields?.[me]}</span>}</span>
           <button type="button" title={sortMode==="color"?"Organizado por cor. Clique para organizar por número.":"Organizado por número. Clique para organizar por cor."}
             aria-label={sortMode==="color"?"Ordenar por número":"Ordenar por cor"}
             onClick={()=>setSortMode(v=>v==="color"?"number":"color")}
@@ -362,7 +371,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
               const ok=canPlay(c);
               return (
                 <button key={c+"-"+i} data-hand-card={c} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(myTurn&&ok?" — jogável":"")} aria-disabled={!ok}
-                  className={cn("uno-hand-button relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",myTurn && played.length===0 ? (ok ? "shadow-glow-cyan" : "opacity-65") : "",i===freshIndex&&recentDraw&&clock-recentDraw.at<8000&&"uno-recently-drawn")}>
+                  className={cn("uno-hand-button relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",myTurn && played.length===0 ? (ok ? "shadow-glow-cyan" : "opacity-65") : "",i===freshIndex&&recentDraw&&clock-recentDraw.at<8000&&"uno-recently-drawn",i===replacementIndex&&"uno-machine-new-card")}>
                   <UnoCard card={c} size="md" className="uno-hand-card"/>
                 </button>
               );
@@ -393,22 +402,25 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         <DialogContent className="glass-strong rounded-3xl border-glass-border sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Eye className="size-5 text-cyan"/> Coringa Detetive</DialogTitle>
-            <DialogDescription>Escolha um jogador para ver as cartas dele por 10 segundos.</DialogDescription>
+            <DialogDescription>Primeiro escolha o adversário. Depois de inspecionar a mão dele por até 10 segundos, você poderá escolher a cor que mais o prejudica.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
             {game.turn_order.filter(id=>id!==me).map(id=>{
               const player=byId.get(id);
               return <Button key={id} type="button" variant="glass" className="h-12 justify-start rounded-xl"
-                onClick={()=>{setDetectiveTarget(id);setPendingDetective(false);setPendingWild("X")}}>
+                onClick={()=>{setPendingDetective(false);setDetectiveDismissed(false);actions.play("X",undefined,id)}}>
                 <Eye className="size-4"/> {player?.nickname??"Jogador"}
               </Button>;
             })}
           </div>
         </DialogContent>
       </Dialog>
-      {game.detective && clock<new Date(game.detective.expires_at).getTime()&&(
-        <div className="pointer-events-none fixed inset-x-0 top-[4.5rem] z-[65] flex justify-center px-3">
-          <div className="pointer-events-auto max-h-[68dvh] w-full max-w-2xl overflow-auto rounded-2xl border border-cyan/70 bg-navy/95 p-3 shadow-glow backdrop-blur-xl sm:p-4">
+      {detectiveActive&&game.detective&&(
+        <div role="button" tabIndex={0} aria-label="Finalizar inspeção e escolher cor"
+          onClick={()=>setDetectiveDismissed(true)}
+          onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setDetectiveDismissed(true);}}}
+          className="pointer-events-auto fixed inset-0 z-[65] flex justify-center bg-navy/70 px-3 pt-[4.5rem]">
+          <div className="h-fit max-h-[75dvh] w-full max-w-2xl overflow-auto rounded-2xl border border-cyan/70 bg-navy/95 p-3 shadow-glow backdrop-blur-xl sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-2 text-sm font-bold text-cyan">
               <span className="flex items-center gap-1.5"><Eye className="size-5"/> Detetive · {game.detective.target_name}</span>
               <span>{Math.max(0,Math.ceil((new Date(game.detective.expires_at).getTime()-clock)/1000))}s</span>
@@ -423,20 +435,23 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                 </div>
               ))}
             </div>
+            <p className="mt-3 text-center text-xs font-bold text-cyan">Clique em qualquer lugar para encerrar a visualização e escolher a cor.</p>
           </div>
         </div>
       )}
       <ColorPicker
-        open={!!pendingWild||pendingNegation}
-        onClose={() => {setPendingWild(null);setDetectiveTarget(null);setPendingNegation(false)}}
+        open={!!pendingWild||pendingNegation||detectiveColorOpen}
+        onClose={() => {setPendingWild(null);setPendingNegation(false)}}
         onPick={(color) => {
           if(pendingNegation){
             setPendingNegation(false);actions.negate(color);return;
           }
+          if(detectiveColorOpen){
+            setDetectiveDismissed(false);actions.resolveDetective(color);return;
+          }
           const c = pendingWild!;
           setPendingWild(null);
-          actions.play(c, color, c==="X"?(detectiveTarget??undefined):undefined);
-          setDetectiveTarget(null);
+          actions.play(c, color);
         }}
       />
     </main>

@@ -23,6 +23,7 @@ export function chooseCutDelay(difficulty, random=Math.random) {
 const weight = c => c==="W5" ? 5 : c==="W4" ? 4 : c?.slice(1)==="D" || c?.slice(1)==="T" ? 2 : 0;
 const value = c => wild(c) ? c : c.slice(1);
 const wild = c => c==="W"||c==="W4"||c==="W5"||c==="X"||c==="B"||c==="N"||c==="P"||c==="M";
+const COLORS = ["r","y","g","b"];
 const playable=(c,g)=>wild(c)||c[0]===g.current_color||(!wild(top(g)) && value(c)===value(top(g)));
 const top=g=>g.discard_pile.at(-1);
 const advance=(idx,dir,steps,n)=>(idx+dir*steps%n+n*100)%n;
@@ -84,6 +85,7 @@ function nextTurn(g,idx){
   g.turn_started_at=Math.max(now,g.visual_until||now);
   g.bot_move=null; // The next bot turn draws its delay exactly once.
   g.turn_start_color=g.current_color;
+  g.powerless_target=(g.powerless_remaining||[]).includes(current(g))?current(g):null;
 }
 function activeNotification(g,at=clock()) {
   return (g.effects||[]).find(e=>e.show_at<=at && at<e.show_at+5000);
@@ -173,6 +175,18 @@ function skipSequence(g,actor,dir,count){
   const remainder=count%others.length;
   return {targets,next:remainder===0?at:g.turn_order.indexOf(others[remainder])};
 }
+function consumeShield(r,id,reason){
+  const g=r.game;
+  if(!(g.shields?.[id]>0))return false;
+  g.shields[id]--;
+  if(!g.shields[id])delete g.shields[id];
+  effect(r,"shield_defense",id,null,null,{target:id,target_name:name(id),reason});
+  return true;
+}
+function completePowerlessTurn(g,id){
+  g.powerless_remaining=(g.powerless_remaining||[]).filter(p=>p!==id);
+  if(g.powerless_target===id)g.powerless_target=null;
+}
 function emitTurnEffect(r,actor,cards,finalDirection){
   if(!cards.length)return;
   const g=r.game,n=g.turn_order.length,topCard=cards.at(-1);
@@ -183,17 +197,19 @@ function emitTurnEffect(r,actor,cards,finalDirection){
     effect(r,"bomb",actor,"B",g.current_color,{n:2,targets,target_names:targets.map(name)});
   }else if(cards.includes("M")){
     effect(r,"machinegun",actor,"M",g.current_color,{
-      targets:g.machine_gun_hits||[],n:(g.machine_gun_hits||[]).length
+      targets:(g.machine_gun_hits||[]).map(hit=>hit.target),revealed:g.machine_gun_hits||[],n:(g.machine_gun_hits||[]).length
     });
     g.machine_gun_hits=[];
   }else if(cards.includes("P")){
-    effect(r,"powerless",actor,"P",g.current_color,{target:g.powerless_target});
+    effect(r,"powerless",actor,"P",g.current_color,{targets:[...(g.powerless_remaining||[])],target_names:(g.powerless_remaining||[]).map(name)});
   }else if(skips){
     const targets=skipSequence(g,actor,finalDirection,skips).targets;
     effect(r,"skip",actor,topCard,g.current_color,{n:skips,targets,target:targets[0],
       target_name:name(targets[0]),target_names:targets.map(name)});
   }else if(reverses){
     effect(r,"reverse",actor,topCard,g.current_color,{n:reverses,direction:finalDirection});
+  }else if(cards.some(c=>value(c)==="H")){
+    effect(r,"shield_armed",actor,topCard,g.current_color,{target:actor,target_name:name(actor),n:g.shields?.[actor]||0});
   }else if(cards.some(wild)){
     effect(r,"color_wave",actor,topCard,g.current_color);
   }
@@ -208,18 +224,18 @@ function observePublic(r,id,entry){
   if(events.length>5)events.splice(0,events.length-5);
 }
 function isNumberCard(card){return /^[rygb][0-9]$/.test(card);}
-function allowedDuringPowerless(g,card){
-  return !g.powerless_target || isNumberCard(card);
+function allowedDuringPowerless(g,card,id=current(g)){
+  return !((g.powerless_remaining||[]).includes(id)||g.powerless_target===id)||isNumberCard(card);
 }
 function machineGun(r,actor){
-  const g=r.game;const hits=[];
+  const g=r.game,hits=[],removed=[];
   const wildCards=c=>wild(c);
   const drawCards=c=>isDraw(c)||c==="W5";
   for(const victim of g.turn_order.filter(p=>p!==actor)){
     const h=hand(r,victim);
     let candidates=h.cards.filter(wildCards);
     if(!candidates.length)candidates=h.cards.filter(drawCards);
-    if(!candidates.length)candidates=h.cards.filter(c=>["S","R"].includes(value(c)));
+    if(!candidates.length)candidates=h.cards.filter(c=>["S","R","H"].includes(value(c)));
     if(!candidates.length)continue;
     const chosen=candidates[crypto.randomInt(candidates.length)];
     if(!g.draw_pile?.some(isNumberCard))g.draw_pile.push(...newDeck());
@@ -227,9 +243,14 @@ function machineGun(r,actor){
     const index=numbers[crypto.randomInt(numbers.length)];
     const replacement=g.draw_pile.splice(index,1)[0];
     h.cards.splice(h.cards.indexOf(chosen),1,replacement);
-    g.draw_pile.push(chosen);
-    hits.push(victim);
+    removed.push(chosen);
+    g.machine_gun_seq=(g.machine_gun_seq||0)+1;
+    g.machine_gun_new_by_id??={};
+    g.machine_gun_new_by_id[victim]={card:replacement,nonce:g.machine_gun_seq,at:clock()};
+    hits.push({target:victim,target_name:name(victim),card:chosen});
   }
+  // Revealed specials are returned to the DRAW deck, never played into discard.
+  if(removed.length)g.draw_pile=shuffle([...g.draw_pile,...removed]);
   return hits;
 }
 function privateNotice(r,id,kind,message){
@@ -274,6 +295,11 @@ function continueSkips(r,actor,remaining,cursor,declined=[]){
     idx=advance(idx,g.direction,1,n);
     if(g.turn_order[idx]===actor)continue;
     const target=g.turn_order[idx];
+    if(consumeShield(r,target,"skip")){
+      nextTurn(g,idx);
+      g.skip_carry=remaining>1?{source:actor,remaining:remaining-1}:null;
+      g.seq++;bump(r);return;
+    }
     if(!seen.has(target)&&hand(r,target).cards.includes("N")){
       nextTurn(g,idx);
       g.skip_reaction={actor,target,cursor:idx,remaining,declined:[...seen],
@@ -297,7 +323,7 @@ function negateEffect(r,id,color){
   if(!["r","y","g","b"].includes(color))fail("COLOR_REQUIRED");
   const reaction=g.skip_reaction?.target===id;
   const debt=g.pending_draw>0&&current(g)===id&&!g.turn_cards.length;
-  const powerless=g.powerless_target===id&&current(g)===id&&!g.turn_cards.length;
+  const powerless=(g.powerless_remaining||[]).includes(id)&&current(g)===id&&!g.turn_cards.length;
   if(!reaction&&!debt&&!powerless)fail("NEGATION_NOT_ALLOWED");
   const cause=reaction?"skip":debt?"draw":"powerless";
   if(reaction){
@@ -309,7 +335,7 @@ function negateEffect(r,id,color){
   if(debt){
     g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
   }
-  if(powerless)g.powerless_target=null;
+  if(powerless){g.powerless_remaining=[];g.powerless_target=null;}
   const result=play(r,id,"N",color);
   // Negation is a reaction, not the player's regular move. After defending,
   // the player may still start a legal play or draw from the new color.
@@ -325,8 +351,12 @@ function resolveDebt(r){const g=r.game;if(!g||!g.pending_draw||g.nine)return;
   // Disconnects preserve the seat for the reduced turn window. An
   // unresolved draw penalty is accepted only when that window expires.
   const actor=current(g),guest=store.guestsById.get(actor);
-  if(!isBot(actor)&&(!guest||guest.last_seen<clock()-LIMITS.onlineMs))return;
   if(g.turn_cards?.length)return; // A player already responded; never charge them during an unfinished combo.
+  if(consumeShield(r,actor,"draw")){
+    g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
+    g.seq++;bump(r);return;
+  }
+  if(!isBot(actor)&&(!guest||guest.last_seen<clock()-LIMITS.onlineMs))return;
   if(hand(r,current(g)).cards.includes("N"))return;
   if((g.pending_uncounterable || ready(r).stack) && counter(r,current(g)))return;
   const loser=current(g),n=g.pending_draw,attacker=g.pending_source||loser;
@@ -337,16 +367,18 @@ function resolveDebt(r){const g=r.game;if(!g||!g.pending_draw||g.nine)return;
   nextTurn(g,advance(g.turn_idx,g.direction,1,g.turn_order.length));bump(r);
 }
 function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fail("NINE_ACTIVE");
+  if(g.detective_pending_color)fail("DETECTIVE_COLOR_PENDING");
   const actor=current(g),cards=g.turn_cards||[],n=g.turn_order.length;
   if(!cards.length){
     if(g.skip_carry?.remaining){
+      completePowerlessTurn(g,actor);
       const pending=g.skip_carry;g.skip_carry=null;
       if(!g.has_drawn)draw(r,actor,1);
       g.last_action={type:automatic?"auto":"pass",by:actor,name:name(actor)};
       continueSkips(r,pending.source,pending.remaining,g.turn_idx);
       return;
     }
-    if(g.powerless_target===actor)g.powerless_target=null;
+    completePowerlessTurn(g,actor);
     if(g.pending_draw){const owed=g.pending_draw,attacker=g.pending_source||actor;
       observePublic(r,actor,{kind:"forced_draw",color:g.current_color,n:owed});draw(r,actor,owed);g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;g.last_action={type:"stack_take",by:actor,name:name(actor),n:owed};effect(r,"penalty",attacker,null,null,{target:actor,target_name:name(actor),n:owed});}
     else {if(!g.has_drawn)draw(r,actor,1);
@@ -369,6 +401,8 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
   g.direction=dir;g.pending_draw+=added;
   if(added>0)g.pending_source=actor;
   if(hasFive)g.pending_uncounterable=true;
+  const restrictNext=cards.includes("P");
+  if(restrictNext)g.powerless_remaining=g.turn_order.filter(id=>id!==actor);
   observePublic(r,actor,{kind:"play",color:g.turn_start_color??g.current_color,
     cards:[...cards],chosen_color:g.current_color});
   emitTurnEffect(r,actor,cards,dir);
@@ -376,21 +410,18 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
   g.last_action={type:"end",by:actor,name:name(actor),count:cards.length};g.seq++;
   // In a 2-player match, any number of Skip cards skips the one opponent.
   const nextIndex=skips?skipSequence(g,actor,dir,skips).next:advance(g.turn_idx,dir,1,n);
-  const restrictNext=cards.includes("P");
   if(inherited?.remaining && !skips){
-    if(g.powerless_target===actor)g.powerless_target=null;
+    completePowerlessTurn(g,actor);
     continueSkips(r,inherited.source,inherited.remaining,g.turn_idx);
-    if(restrictNext)g.powerless_target=current(g);
     bump(r);return;
   }
   if(inherited?.remaining)skips+=inherited.remaining;
-  if(g.powerless_target===actor)g.powerless_target=null;
+  completePowerlessTurn(g,actor);
   if(skips&&cards.some(c=>value(c)==="S")){
     continueSkips(r,actor,skips,g.turn_idx);
   }else{
     nextTurn(g,nextIndex);
   }
-  if(restrictNext)g.powerless_target=current(g);
   if(trailingNines && ready(r).nine && n>=3){const eligible=g.turn_order.filter(id=>id!==actor),start=clock();
     const botTimes={};
     for(const id of eligible)if(isBot(id))botTimes[id]=start+chooseNineDelay(store.guestsById.get(id)?.difficulty);
@@ -400,11 +431,12 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
 }
 function play(r,id,card,color,targetId){
   const g=game(r),rules=ready(r),h=hand(r,id);let series=g.turn_cards||[];
+  if(g.detective_pending_color)fail("DETECTIVE_COLOR_PENDING");
   const cutting=current(g)!==id||(g.skip_reaction?.target===id&&card===top(g));
   if(g.skip_reaction && !cutting)fail("SKIP_DECISION_PENDING");
   // No cooldown for initial plays or cuts while an announcement is shown.
   if(g.nine)fail("NINE_ACTIVE");
-  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T)|W|W4|W5|X|B|N|P|M)$/).test(card))fail("CARD_NOT_IN_HAND");
+  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T|H)|W|W4|W5|X|B|N|P|M)$/).test(card))fail("CARD_NOT_IN_HAND");
   const cutVictim=cutting?current(g):null;
   if(cutting){
     const debt=g.pending_draw>0;
@@ -416,7 +448,7 @@ function play(r,id,card,color,targetId){
     nextTurn(g,g.turn_order.indexOf(id));series=[];
   }
   if(g.pending_draw && !series.length && !canCounter(g,card))fail("MUST_COUNTER_OR_DRAW");
-  if(!allowedDuringPowerless(g,card))fail("POWERLESS_NUMBER_ONLY");
+  if(!allowedDuringPowerless(g,card,id))fail("POWERLESS_NUMBER_ONLY");
   // After buying, the player may select ANY compatible card from their hand.
   if(!series.length){if(!g.pending_draw && !playable(card,g))fail("INVALID_CARD");}
   else{
@@ -430,21 +462,32 @@ function play(r,id,card,color,targetId){
     else if(run&&rules.sequence){g.turn_mode="sequence";g.turn_step=Math.sign(delta);}
     else fail("INVALID_COMBO");
   }
-  if(wild(card)&&!["r","y","g","b"].includes(color))fail("COLOR_REQUIRED");
+  if(wild(card)&&!(card==="X"&&!color)&&!COLORS.includes(color))fail("COLOR_REQUIRED");
   if(card==="X"&&(!targetId||targetId===id||!g.turn_order.includes(targetId)))fail("INVALID_DETECTIVE_TARGET");
   h.cards.splice(h.cards.indexOf(card),1);
   if(h.cards.length===1&&!h.uno_called){h.uno_since=clock();h.bot_uno_plan=null;}
   else if(h.cards.length!==1){h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;}
 
   const previousTop=top(g);
-  g.discard_pile.push(card);g.current_color=wild(card)?color:card[0];
+  g.discard_pile.push(card);g.current_color=wild(card)?(color||g.current_color):card[0];
   g.card_moves??=[];g.card_move_seq=(g.card_move_seq||0)+1;
   g.card_moves.push({id:g.card_move_seq,by:id,name:name(id),card,previous_top:previousTop,at:clock()});
   if(g.card_moves.length>40)g.card_moves.shift();
-  if(card==="X")g.detective={viewer:id,target:targetId,until:clock()+10000};
+  if(card==="X"){
+    const defended=consumeShield(r,targetId,"detective");
+    g.detective=defended?null:{viewer:id,target:targetId,until:clock()+10000};
+    if(!color){
+      g.detective_pending_color=id;
+      // Inspection gets its own ten seconds and does not eat the turn clock.
+      g.turn_started_at+=10000;
+    }
+  }
   if(card==="B"){
-    const targets=g.turn_order.filter(pid=>pid!==id);
-    for(const victim of targets)draw(r,victim,2);
+    for(const victim of g.turn_order.filter(pid=>pid!==id))
+      if(!consumeShield(r,victim,"bomb"))draw(r,victim,2);
+  }
+  if(value(card)==="H"){
+    g.shields??={};g.shields[id]=(g.shields[id]||0)+1;
   }
   if(card==="M")g.machine_gun_hits=machineGun(r,id);
   g.turn_cards=[...series,card];
@@ -455,35 +498,53 @@ function play(r,id,card,color,targetId){
   planBotCut(r,id);
   bump(r);
   if(h.cards.length===0){
-    g.placements??=[];
-    g.placements.push({id,rank:g.placements.length+1,name:name(id)});
-    g.winner_id=g.placements[0]?.id??id;
-    const remaining=g.turn_order.filter(pid=>pid!==id);
-    const onlyBotsRemain=remaining.length>0&&remaining.every(isBot);
-    if(g.placements.length>=(g.winners_target??2)||g.turn_order.length===2||onlyBotsRemain){
-      if(g.placements.length===1){
-        const runnerUp=remaining.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0];
-        if(runnerUp)g.placements.push({id:runnerUp,rank:2,name:name(runnerUp)});
-      }
-      g.second_winner_id=g.placements[1]?.id??null;
-      observePublic(r,id,{kind:"play",color:g.turn_start_color??g.current_color,
-        cards:[...g.turn_cards],chosen_color:g.current_color});
-      emitTurnEffect(r,id,g.turn_cards||[],g.direction);
-      g.status="finished";
-      g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1,win:true};
-      g.pending_draw=0;g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
-    }
-    finish(r,false,true);
-    const target=current(g);
-    g.turn_order=g.turn_order.filter(p=>p!==id);
-    g.turn_idx=Math.max(0,g.turn_order.indexOf(target));
-    g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1};
-    if(g.nine)g.nine.eligible=g.nine.eligible.filter(p=>p!==id);
-    resolveDebt(r);bump(r);return {ok:true,won:true,continued:true};
+    // A final Detective cannot claim victory until its viewer chooses a color.
+    if(g.detective_pending_color)return {ok:true,pending_color:true};
+    return finishEmptyHand(r,id);
   }
   // In duels, Reverse returns to the same player immediately.
   if(g.turn_order.length===2&&card[1]==="R"&&g.turn_cards.length===1&&
      !g.pending_draw&&!cutting)finish(r);
+  return {ok:true};
+}
+function finishEmptyHand(r,id){
+  const g=game(r);
+  g.placements??=[];
+  g.placements.push({id,rank:g.placements.length+1,name:name(id)});
+  g.winner_id=g.placements[0]?.id??id;
+  const remaining=g.turn_order.filter(pid=>pid!==id);
+  const onlyBotsRemain=remaining.length>0&&remaining.every(isBot);
+  if(g.placements.length>=(g.winners_target??2)||g.turn_order.length===2||onlyBotsRemain){
+    if(g.placements.length===1){
+      const runnerUp=remaining.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0];
+      if(runnerUp)g.placements.push({id:runnerUp,rank:2,name:name(runnerUp)});
+    }
+    g.second_winner_id=g.placements[1]?.id??null;
+    observePublic(r,id,{kind:"play",color:g.turn_start_color??g.current_color,
+      cards:[...g.turn_cards],chosen_color:g.current_color});
+    emitTurnEffect(r,id,g.turn_cards||[],g.direction);
+    g.status="finished";
+    g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1,win:true};
+    g.pending_draw=0;g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
+  }
+  finish(r,false,true);
+  const target=current(g);
+  g.turn_order=g.turn_order.filter(p=>p!==id);
+  g.turn_idx=Math.max(0,g.turn_order.indexOf(target));
+  g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1};
+  if(g.nine)g.nine.eligible=g.nine.eligible.filter(p=>p!==id);
+  resolveDebt(r);bump(r);return {ok:true,won:true,continued:true};
+}
+function resolveDetective(r,id,color){
+  const g=game(r);
+  if(g.detective_pending_color!==id||current(g)!==id)fail("DETECTIVE_NOT_PENDING");
+  if(!COLORS.includes(color))fail("COLOR_REQUIRED");
+  g.current_color=color;
+  g.detective_pending_color=null;
+  g.detective=null;
+  g.last_action={type:"detective_color",by:id,name:name(id),color};
+  g.seq++;bump(r);
+  if(hand(r,id).cards.length===0)return finishEmptyHand(r,id);
   return {ok:true};
 }
 function hardBotTick(r,id,h){
@@ -523,14 +584,14 @@ function hardBotTick(r,id,h){
 }
 function botTick(r){
   const g=r.game;
-  if(!g || g.status!=="playing" || g.nine || g.skip_reaction || !isBot(current(g)))return;
+  if(!g || g.status!=="playing" || g.nine || g.skip_reaction || g.detective_pending_color || !isBot(current(g)))return;
   const id=current(g),h=hand(r,id),bot=store.guestsById.get(id),rules=ready(r);
   const hard=bot.difficulty==="hard";
   const colorForNegation=()=>{
     const counts=Object.fromEntries(["b","r","y","g"].map(c=>[c,h.cards.filter(x=>x[0]===c).length]));
     return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
   };
-  if(g.powerless_target===id&&h.cards.includes("N")){
+  if((g.powerless_remaining||[]).includes(id)&&h.cards.includes("N")){
     negateEffect(r,id,colorForNegation());return;
   }
   if(g.pending_draw>0&&h.cards.includes("N")&&!g.turn_cards.length&&
@@ -646,6 +707,8 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     const g=r.game;
     if(!g||g.status!=="playing")continue;
     if(finishWhenOnlyBots(r))continue;
+    if(g.detective_pending_color && time>=g.turn_started_at+50000 &&
+      g.detective_pending_color===current(g))resolveDetective(r,current(g),g.current_color);
     if(g.nine){
       for(const [id,due] of Object.entries(g.nine.botTimes||{})){
         if(!g.nine.pressed.includes(id) && time>=due && time<g.nine.deadline){
@@ -675,7 +738,8 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     if(!actionLocked(g)&&!g.pending_draw&&!g.has_drawn&&!g.turn_cards?.length&&!isBot(current(g))&&
        (store.guestsById.get(current(g))?.last_seen??0)>=time-LIMITS.onlineMs){
       const id=current(g),h=hand(r,id);
-      if(!h.cards.some(c=>playable(c,g)&&allowedDuringPowerless(g,c))){
+      if(!h.cards.some(c=>playable(c,g)&&allowedDuringPowerless(g,c)) &&
+         !((g.powerless_remaining||[]).includes(id)&&h.cards.includes("N"))){
         const priorColor=g.current_color;
         const drawn=draw(r,id,1)[0]||null;g.has_drawn=true;g.drawn_card=drawn;
         rememberDraw(r,id,drawn);
@@ -713,7 +777,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
   }
   if(time-lastBasicSweep>=3000){lastBasicSweep=time;basicSweep();}
 }
-export const RPC_NAMES=[...new Set([...basicNames,"end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings","update_winners","negate_effect","accept_skip"])];
+export const RPC_NAMES=[...new Set([...basicNames,"end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings","update_winners","negate_effect","accept_skip","resolve_detective"])];
 export function proRpc(fn,args={}){
   if(fn==="dev_auth"){
     const me=authenticate(args.p_token);
@@ -796,7 +860,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
-    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,machine_gun_hits:[],skip_reaction:null,skip_carry:0});
+    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],shields:{},detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
     for(const h of r.hands.values())h.uno_since=null;
     return result;
@@ -812,6 +876,11 @@ export function proRpc(fn,args={}){
       result.game.last_draw=g.last_draw_by_id?.[result.me]?{...g.last_draw_by_id[result.me],at:stamp(g.last_draw_by_id[result.me].at)}:null;
       result.game.winners_target=g.winners_target??2;
       result.game.powerless_target=g.powerless_target??null;
+      result.game.powerless_remaining=[...(g.powerless_remaining||[])];
+      result.game.shields={...(g.shields||{})};
+      result.game.machine_gun_new=g.machine_gun_new_by_id?.[result.me]
+        ?{...g.machine_gun_new_by_id[result.me],at:stamp(g.machine_gun_new_by_id[result.me].at)}:null;
+      result.game.detective_pending_color=g.detective_pending_color===result.me;
       result.game.skip_reaction=g.skip_reaction
         ?(g.skip_reaction.target===result.me
           ?{target:g.skip_reaction.target,expires_at:stamp(g.skip_reaction.deadline)}
@@ -845,6 +914,10 @@ export function proRpc(fn,args={}){
   if(fn==="negate_effect"){
     const {me,r}=guard(args);
     return negateEffect(r,me.id,args.p_color);
+  }
+  if(fn==="resolve_detective"){
+    const {me,r}=guard(args);
+    return resolveDetective(r,me.id,args.p_color);
   }
   if(fn==="accept_skip"){
     const {me,r}=guard(args);

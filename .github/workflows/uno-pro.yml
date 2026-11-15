@@ -1,7 +1,7 @@
 name: UNO Pro - checagem
 on:
   push:
-    branches: [main, feature-negation-powerless-machinegun-2026-11-14]
+    branches: [main, 'feature-*']
   workflow_dispatch:
 jobs:
   build-and-tests:

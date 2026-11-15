@@ -37,6 +37,7 @@ export function cardLabel(card: string): string {
   if (card === "N") return "Coringa Negação";
   if (card === "P") return "Coringa Sem Poderes";
   if (card === "M") return "Coringa Metralhadora";
+  if (cardValue(card) === "H") return `Escudo ${COLOR_NAMES[card[0] as CardColor]}`;
   const color = COLOR_NAMES[card[0] as CardColor] ?? "";
   const v = cardValue(card);
   const name = v === "S" ? "Pular" : v === "R" ? "Inverter" : v === "D" ? "+2" : v === "T" ? "+2 Volta" : v;
@@ -64,7 +65,7 @@ export function sortHand(cards: string[]): string[] {
     if (c === "M") return 407;
     const ci = COLORS.indexOf(c[0] as CardColor) * 100;
     const v = cardValue(c);
-    const vi = v === "S" ? 10 : v === "R" ? 11 : v === "D" ? 12 : v === "T" ? 13 : Number(v);
+    const vi = v === "S" ? 10 : v === "R" ? 11 : v === "D" ? 12 : v === "T" ? 13 : v === "H" ? 14 : Number(v);
     return ci + vi;
   };
   return [...cards].sort((a, b) => order(a) - order(b));
