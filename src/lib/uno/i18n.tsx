@@ -367,6 +367,9 @@ const dictionary:Record<string,string>={
   "Você não pode jogar cartas especiais agora.": "You can't play special cards now."
 };
 const longPairs=Object.entries(dictionary).filter(([pt])=>pt.length>=10).sort((a,b)=>b[0].length-a[0].length);
+const shortPairs=Object.entries(dictionary)
+  .filter(([pt])=>pt.length<10 && /[\p{L}]/u.test(pt))
+  .sort((a,b)=>b[0].length-a[0].length);
 function translatePiece(value:string,lang:Language){
   if(lang==="pt")return value;
   let s=localizeBotNames(value,"en");
@@ -374,17 +377,13 @@ function translatePiece(value:string,lang:Language){
   if(full)return full;
   const trim=s.trim();if(dictionary[trim])return s.replace(trim,dictionary[trim]);
   for(const [pt,en] of longPairs){if(s.includes(pt))s=s.replaceAll(pt,en);}
-  // Translate short dynamic fragments too: action feed and badges concatenate
-  // names, counts and verbs, so exact/long dictionary lookups miss them.
-  const shortPairs=Object.entries(dictionary)
-    .filter(([pt])=>pt.length<10 && /[\\p{L}]/u.test(pt))
-    .sort((a,b)=>b[0].length-a[0].length);
+  // Dynamic action text combines names, counts and small translatable fragments.
   for(const [pt,en] of shortPairs){
-    const escaped=pt.replace(/[.*+?^\x24{}()|[\]\\]/g,"\\  s=s.replace(/(\d+) cartas\b/g,"$1 cards").replace(/(\d+) carta\b/g,"$1 card");");
+    const escaped=pt.replace(/[.*+?^\x24{}()|[\]\\]/g,"\\$&");
     const pattern=new RegExp("(?<![\\p{L}])"+escaped+"(?![\\p{L}])","gu");
     s=s.replace(pattern,en);
   }
-  s=s.replace(/(\\d+) cartas\\b/g,"$1 cards").replace(/(\\d+) carta\\b/g,"$1 card");
+  s=s.replace(/(\d+) cartas\b/g,"$1 cards").replace(/(\d+) carta\b/g,"$1 card");
   return s;
 }
 type LanguageCtx={language:Language;setLanguage:(lang:Language)=>void;toggleLanguage:()=>void;tr:(text:string)=>string};
