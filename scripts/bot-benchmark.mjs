@@ -1,6 +1,6 @@
 // Deterministic tournament against the real UNO Pro turn engine.
 // Uses public state and virtual time; never delays a real multiplayer session.
-import {store,setClock,newDeck} from "../server/game.js";
+import {store,setClock} from "../server/game.js";
 import {proRpc,proSweep} from "../server/pro.js";
 
 const origNow=Date.now,origRandom=Math.random;
@@ -25,7 +25,14 @@ const makeRandom=seed=>()=>{
 function deck(seed){
   const seeded=makeRandom(seed);
   // Build the actual deck, then shuffle it independently of crypto.randomInt.
-  const d=newDeck();
+  const d=[];
+  for(const col of ["r","y","g","b"]){
+    for(const v of ["0","1","2","3","4","5","6","7","8","9","S","R","D"])
+      for(let i=0;i<3;i++)d.push(col+v);
+    d.push(col+"T",col+"T");
+  }
+  for(let i=0;i<10;i++)d.push("W","W4");
+  d.push("W5","W5","X","B");
   for(let k=d.length-1;k>0;k--){
     const j=Math.floor(seeded()*(k+1));[d[j],d[k]]=[d[k],d[j]];
   }
