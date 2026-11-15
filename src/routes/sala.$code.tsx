@@ -140,7 +140,7 @@ function RoomPage() {
   const g = state.game;
   const playing = state.room.status === "playing" && g?.status === "playing";
   const visibleEffects=playing?(g?.effects||[]).filter(e=>effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
-  const shieldDefenses=visibleEffects.filter(e=>e.type==="shield_defense");
+  const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+5000):[];
   const isHost = state.room.host_id === state.me;
   const finished = g?.status === "finished";
   const winner = finished && g.winner_id ? state.members.find((m) => m.id === g.winner_id) : undefined;
