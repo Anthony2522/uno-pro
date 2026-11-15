@@ -1,9 +1,10 @@
 // Deterministic tournament against the real UNO Pro turn engine.
 // Uses public state and virtual time; never delays a real multiplayer session.
 import {store,setClock} from "../server/game.js";
+import crypto from "node:crypto";
 import {proRpc,proSweep} from "../server/pro.js";
 
-const origNow=Date.now,origRandom=Math.random;
+const origNow=Date.now,origRandom=Math.random,origRandomInt=crypto.randomInt;
 let fakeNow=1_800_000_000_000;
 Date.now=()=>fakeNow;
 setClock(()=>fakeNow);
@@ -47,6 +48,7 @@ function colorChoice(hand){
 function runMatch(seed){
   let random=makeRandom(seed*19997+17);
   Math.random=random;
+  crypto.randomInt=(n)=>Math.floor(random()*n); // Only this offline benchmark overrides entropy.
   fakeNow=1_800_000_000_000+seed*100000000;
   const human=call("register_guest",{p_nickname:"Benchmark Humano"});
   const code=call("create_room",{p_token:human.token,p_name:"Torneio "+seed,p_max_players:3}).code;
@@ -71,6 +73,7 @@ function runMatch(seed){
   g.bot_cut=null;g.bot_move=null;g.public_history={};g.nine=null;
   random=makeRandom(seed*19997+17);
   Math.random=random; // Discard random draws made while creating the room.
+  crypto.randomInt=(n)=>Math.floor(random()*n);
   for(const id of g.turn_order){
     const h=room.hands.get(id);h.cards=d.splice(0,8);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;
   }
@@ -160,4 +163,4 @@ try{
     avgTurnChanges:+(steps/games).toFixed(1),errors,failures:failures.slice(0,4)};
   console.log("UNO_BENCHMARK "+JSON.stringify({...data,repeatCheck}));
   if(finished<Math.ceil(.97*games)||errors>0)process.exitCode=1;
-}finally{Date.now=origNow;Math.random=origRandom;}
+}finally{Date.now=origNow;Math.random=origRandom;crypto.randomInt=origRandomInt;}
