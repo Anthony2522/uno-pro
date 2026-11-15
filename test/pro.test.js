@@ -802,6 +802,9 @@ test("bloqueios múltiplos exibem alvos corretos e não saltam gente além da se
   const room=store.roomsByCode.get(code),g=room.game;
   g.direction=1;g.turn_idx=0;g.discard_pile=["bS"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["bS","yS","gS","r1"];
+  // Elimina a Negação aleatória que pode interceptar o bloqueio neste teste.
+  for(const [id,card] of [[b.guest_id,"r2"],[c.guest_id,"g3"],[d.guest_id,"y4"]])
+    room.hands.get(id).cards=[card];
   for(const card of ["bS","yS","gS"]){
     for(const ef of g.effects)ef.show_at=Date.now()-10000;
     call("play_card",{p_token:a.token,p_code:code,p_card:card});
