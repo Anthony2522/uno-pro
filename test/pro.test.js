@@ -818,6 +818,7 @@ test("dois bloqueios em duelo pulam o adversário, nunca o próprio jogador",()=
   call("join_room",{p_token:b.token,p_code:code});call("start_game",{p_token:a.token,p_code:code});
   const r=store.roomsByCode.get(code),g=r.game;g.turn_idx=0;g.direction=1;g.discard_pile=["bS"];g.current_color="b";
   r.hands.get(a.guest_id).cards=["bS","yS","r3"];
+  r.hands.get(b.guest_id).cards=["r6","g7"]; // No randomly-dealt Negation to intercept the skip.
   call("play_card",{p_token:a.token,p_code:code,p_card:"bS"});
   for(const e of g.effects)e.show_at=Date.now()-10000;
   call("play_card",{p_token:a.token,p_code:code,p_card:"yS"});
