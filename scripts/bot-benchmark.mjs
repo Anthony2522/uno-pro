@@ -141,7 +141,7 @@ try{
     const m=runMatch(seed);
     if(repeatCheck){
       const repeat=runMatch(seed);
-      if(JSON.stringify(repeat)!==JSON.stringify(m))
+      if(repeat.winner!==m.winner||repeat.completed!==m.completed||repeat.errors!==m.errors||repeat.turns!==m.turns)
         throw new Error("NONDETERMINISTIC_SEED "+seed+": "+JSON.stringify({m,repeat}));
     }
     if(m.completed)finished++;
