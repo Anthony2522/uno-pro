@@ -49,9 +49,10 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const byId = useMemo(() => new Map(state.members.map((m) => [m.id, m])), [state.members]);
   const reactingToSkip=!!game.skip_reaction && game.skip_reaction.target===me;
   const myTurn = game.current_player === me && !game.skip_reaction;
+  const forcedByBeer = myTurn && !!game.beer_remaining?.includes(me);
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","H","W","D","T","W4","W5","X","B","N","P","M"];
+    const colors=["b","y","g","r"], special=["R","S","H","V","C","W","D","T","W4","W5","X","B","N","P","M"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
@@ -101,7 +102,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const played = game.turn_cards || [];
   const nine = game.nine;
   const canPlay = (c:string) => {
-    if(busy || nine || game.detective_pending_color)return false;
+    if(busy || nine || game.detective_pending_color || forcedByBeer)return false;
     if(game.powerless_remaining?.includes(me) && !/^[rygb][0-9]$/.test(c))return false;
     if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T"));
     if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T";
@@ -210,7 +211,6 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                 <PlayerAvatar id={p.id} name={p.nickname} size="sm" online={p.online} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold">{p.nickname}</p>
-                  {(game.shields?.[p.id]||0)>0 && <p className="flex items-center gap-0.5 text-[10px] font-semibold text-cyan"><Shield className="size-3"/> Escudo ×{game.shields?.[p.id]}</p>}
                   <p className={cn("text-[0.7rem]", turn ? "font-semibold text-cyan" : "text-muted-foreground")}>
                     {turn ? "Jogando…" : p.online ? `${p.card_count} carta${p.card_count === 1 ? "" : "s"}` : (
                       <span className="inline-flex items-center gap-1"><WifiOff className="size-3" /> offline</span>
@@ -222,7 +222,10 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                 {Array.from({ length: Math.min(p.card_count, 8) }).map((_, i) => (
                   <CardBack key={i} size="xs" className={cn(i > 0 && "-ml-4")} />
                 ))}
-                <span className="ml-2 font-display text-sm font-bold tabular-nums">{p.card_count}</span>
+                <span className="ml-2 inline-flex items-center gap-1 font-display text-sm font-bold tabular-nums">
+                  {p.card_count}
+                  {(game.shields?.[p.id]||0)>0 && <Shield aria-label="Escudo ativo" className="size-3.5 shrink-0 text-cyan" strokeWidth={2.7}/>}
+                </span>
               </div>
             </div>
           );
@@ -237,7 +240,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             className={cn("rounded-full px-3 py-2 font-display text-[11px] font-bold sm:px-5 sm:text-sm",myTurn?"bg-cyan text-navy animate-pulse-ring":"glass")}>
             {myTurn ? ("Sua vez · "+remaining+"s") : current ? `Vez de ${current.nickname}` : "…"}
           </div>
-          {myTurn && !nine && (
+          {myTurn && !nine && !forcedByBeer && (
             <Button variant="hero" className="h-9 shrink-0 rounded-xl px-3 text-xs sm:h-11 sm:px-4 sm:text-sm"
               onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy||!!game.detective_pending_color}>
               {busy?<Loader2 className="size-4 animate-spin"/>:<SkipForward className="size-4"/>} Terminar vez
@@ -245,7 +248,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           )}
         </div>
 
-        {nine && (
+        {forcedByBeer && <div role="status" className="relative z-20 rounded-xl border border-cyan/40 bg-navy/90 px-3 py-1.5 text-xs font-bold text-cyan">Cerveja: jogada automática</div>}
+         {nine && (
           <div className="uno-nine-panel relative z-20 w-full max-w-md rounded-2xl border border-cyan/50 bg-navy/95 p-4 text-center shadow-glow-cyan">
             <p className="font-display text-lg font-black">DESAFIO DO 9 · {nineRemaining}s</p>
             {nineReady ? (
@@ -254,7 +258,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <p className="mt-2 text-sm text-muted-foreground">O último a apertar compra {nine.count} carta(s).</p>
           </div>
         )}
-        {myTurn && !!pending && played.length===0 && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")) && !nine && (
+        {myTurn && !forcedByBeer && !!pending && played.length===0 && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")) && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
             <p className="mt-1 text-sm text-muted-foreground">Escolha uma carta de compra permitida (+5 também pode rebater) ou aceite a penalidade.</p>
@@ -279,13 +283,13 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             Aguardando a decisão de bloqueio…
           </p>
         )}
-        {myTurn&&game.powerless_target===me&&(
+        {myTurn&&!forcedByBeer&&game.powerless_target===me&&(
           <div role="status" className="relative z-20 rounded-xl border border-warning/30 bg-navy/95 px-3 py-2 text-center text-xs text-warning">
             Sem poderes nesta vez: só números podem ser jogados.
             {hasNegation&&<Button variant="glass" className="ml-2 h-9 rounded-lg" disabled={busy} onClick={()=>setPendingNegation(true)}>Negar efeito</Button>}
           </div>
         )}
-        {myTurn&&pending>0&&hasNegation&&played.length===0&&
+        {myTurn&&!forcedByBeer&&pending>0&&hasNegation&&played.length===0&&
           !hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")&&(
             <Button variant="hero" className="relative z-20 rounded-xl" onClick={()=>setPendingNegation(true)} disabled={busy}>
               Anular +{pending} com Negação
@@ -295,7 +299,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           <button
             type="button"
             onClick={actions.draw}
-            disabled={!myTurn || game.has_drawn || played.length>0 || !!pending || !!nine || !!game.detective_pending_color || busy}
+            disabled={!myTurn || forcedByBeer || game.has_drawn || played.length>0 || !!pending || !!nine || !!game.detective_pending_color || busy}
             aria-label={`Comprar carta. ${game.draw_count} cartas no baralho`}
             className={cn(
               "group relative rounded-[12%] transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:cursor-default",
@@ -343,7 +347,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       {/* My area */}
       <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
         <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
-          <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<span className="ml-1 text-cyan" title="Cargas do Escudo">🛡️×{game.shields?.[me]}</span>}</span>
+          <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<Shield aria-label="Escudo ativo" className="ml-1 inline-block size-3.5 align-[-2px] text-cyan" strokeWidth={2.7}/>}</span>
           <button type="button" title={sortMode==="color"?"Organizado por cor. Clique para organizar por número.":"Organizado por número. Clique para organizar por cor."}
             aria-label={sortMode==="color"?"Ordenar por número":"Ordenar por cor"}
             onClick={()=>setSortMode(v=>v==="color"?"number":"color")}

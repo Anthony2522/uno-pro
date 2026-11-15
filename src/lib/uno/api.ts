@@ -52,6 +52,7 @@ export type GameState = {
   powerless_target?: string|null;
   powerless_remaining?: string[];
   shields?: Record<string,number>;
+  beer_remaining?: string[];
   detective_pending_color?: boolean;
   machine_gun_new?: {card:string;nonce:number;at:string}|null;
   skip_reaction?: {target:string|null;expires_at:string}|null;
@@ -65,7 +66,7 @@ export type GameState = {
   my_hand: string[];
   pending_uncounterable: boolean;
   action_locked_until?: string | null;
-  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"|"catch"|"color_wave"|"bomb"|"negation"|"powerless"|"machinegun"|"shield_armed"|"shield_defense"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; reason?: "nine"|"skip"|"draw"|"powerless"|"bomb"|"detective"; revealed?:Array<{target:string;target_name:string;card:string}>; targets?:string[]; target_names?:string[]; target?:string; target_name?:string; n?:number }>;
+  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"|"catch"|"color_wave"|"bomb"|"negation"|"powerless"|"machinegun"|"shield_armed"|"shield_defense"|"vortex"|"beer"|"beer_forced"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; reason?: "nine"|"skip"|"draw"|"powerless"|"bomb"|"detective"; revealed?:Array<{target:string;target_name:string;card:string}>; targets?:string[]; target_names?:string[]; target?:string; target_name?:string; n?:number }>;
   last_draw: { card: string; nonce: number; at: string } | null;
   turn_cards: string[];
   pending_draw: number;
