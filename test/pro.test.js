@@ -1456,3 +1456,16 @@ test("Metralhadora mostra cartas recolhidas e as embaralha sem descarte",()=>{
   s.end(a);
   assert.deepEqual(g.effects.findLast(e=>e.type==="machinegun").revealed,details);
 });
+
+test("Detetive pode ser a última carta sem pular a escolha de cor",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["y3"];g.current_color="y";
+  room.hands.get(a.guest_id).cards=["X"];
+  room.hands.get(b.guest_id).cards=["r2","g3"];
+  call("play_card",{p_token:a.token,p_code:s.code,p_card:"X",p_target_id:b.guest_id});
+  assert.equal(g.placements.length,0,"a vitória precisa aguardar a cor");
+  assert.equal(g.detective_pending_color,a.guest_id);
+  call("resolve_detective",{p_token:a.token,p_code:s.code,p_color:"r"});
+  assert.equal(g.placements[0].id,a.guest_id);
+  assert.equal(g.current_color,"r");
+});
