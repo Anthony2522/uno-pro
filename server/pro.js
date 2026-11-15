@@ -491,8 +491,9 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     if(g.nine)continue;
     botUnoAndCatchTick(r);
     botCutTick(r);
+    if(g.nine)continue; // A jump-in can create a new nine challenge.
     resolveDebt(r);
-    if(g.status!=="playing")continue;
+    if(g.nine||g.status!=="playing")continue;
     // Auto-draw once when there is no playable card anywhere in the hand.
     if(!actionLocked(g)&&!g.pending_draw&&!g.has_drawn&&!g.turn_cards?.length&&!isBot(current(g))&&
        (store.guestsById.get(current(g))?.last_seen??0)>=time-LIMITS.onlineMs){
@@ -508,6 +509,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
       }
     }
     botTick(r);
+    if(g.nine)continue; // A bot may have just finished a nine combination.
 
     if(g.status==="playing"){
       const player=current(g),guest=store.guestsById.get(player);
