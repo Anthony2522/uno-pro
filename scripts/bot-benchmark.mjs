@@ -11,6 +11,7 @@ const args=process.argv.slice(2);
 const mode=args.includes("--paired")?"paired":args.includes("--enhanced")?"enhanced":"baseline";
 const nArg=args.find(a=>a.startsWith("--games="));
 const games=Math.max(1,Math.min(1000,Number(nArg?.slice(8)||120)));
+const repeatCheck=args.some(a=>a.startsWith("--repeat-check"));
 const call=(fn,args)=>proRpc(fn,args);
 const val=c=>["W","W4","W5","X","B"].includes(c)?c:c.slice(1);
 const wild=c=>["W","W4","W5","X","B"].includes(c);
@@ -44,7 +45,7 @@ function colorChoice(hand){
   return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
 }
 function runMatch(seed){
-  const random=makeRandom(seed*19997+17);
+  let random=makeRandom(seed*19997+17);
   Math.random=random;
   fakeNow=1_800_000_000_000+seed*100000000;
   const human=call("register_guest",{p_nickname:"Benchmark Humano"});
@@ -66,6 +67,10 @@ function runMatch(seed){
     g.discard_pile=[...d.splice(0,1)];
   }
   g.current_color=g.discard_pile[0][0];
+  g.turn_start_color=g.current_color;
+  g.bot_cut=null;g.bot_move=null;g.public_history={};g.nine=null;
+  random=makeRandom(seed*19997+17);
+  Math.random=random; // Discard random draws made while creating the room.
   for(const id of g.turn_order){
     const h=room.hands.get(id);h.cards=d.splice(0,8);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;
   }
@@ -134,6 +139,11 @@ let hardWins=0,otherWins=0,humanWins=0,finished=0,errors=0,steps=0,failures=[];
 try{
   for(let seed=1;seed<=games;seed++){
     const m=runMatch(seed);
+    if(repeatCheck){
+      const repeat=runMatch(seed);
+      if(JSON.stringify(repeat)!==JSON.stringify(m))
+        throw new Error("NONDETERMINISTIC_SEED "+seed+": "+JSON.stringify({m,repeat}));
+    }
     if(m.completed)finished++;
     if(m.winner==="hard")hardWins++;
     if(m.winner==="other")otherWins++;
@@ -144,6 +154,6 @@ try{
   const data={mode,games,finished,hardWins,otherWins,humanWins,
     hardWinRate:+(hardWins/games*100).toFixed(1),otherWinRate:+(otherWins/games*100).toFixed(1),
     avgTurnChanges:+(steps/games).toFixed(1),errors,failures:failures.slice(0,4)};
-  console.log("UNO_BENCHMARK "+JSON.stringify(data));
+  console.log("UNO_BENCHMARK "+JSON.stringify({...data,repeatCheck}));
   if(finished<Math.ceil(.97*games)||errors>0)process.exitCode=1;
 }finally{Date.now=origNow;Math.random=origRandom;}

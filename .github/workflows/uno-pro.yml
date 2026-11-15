@@ -16,5 +16,6 @@ jobs:
       - run: node scripts/bot-benchmark.mjs --games=600
       - run: node scripts/bot-benchmark.mjs --enhanced --games=600
       - run: node scripts/bot-benchmark.mjs --paired --games=600
+      - run: node scripts/bot-benchmark.mjs --paired --games=40 --repeat-check
       - run: npm run typecheck
       - run: npm run build
