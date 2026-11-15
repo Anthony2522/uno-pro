@@ -90,9 +90,9 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("baralho de 199 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
+test("baralho de 211 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,199);
+  assert.equal(deck.length,211);
   for(const c of ["N","P","M"])assert.equal(deck.filter(x=>x===c).length,1);
   assert.equal(deck.filter(c=>c==="B").length,1);
   assert.equal(deck.filter(c=>c==="X").length,1);
@@ -104,6 +104,8 @@ test("baralho de 199 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora
   for(const col of ["r","y","g","b"]){
     assert.equal(deck.filter(c=>c===col+"T").length,2);
     assert.equal(deck.filter(c=>c===col+"H").length,2);
+    assert.equal(deck.filter(c=>c===col+"V").length,2);
+    assert.equal(deck.filter(c=>c===col+"C").length,1);
   }
 });
 test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
@@ -113,7 +115,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   room.hands.get(a.guest_id).cards=["b1","r5"];
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,198);
+  assert.equal(g.draw_pile.length,210);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -1471,4 +1473,76 @@ test("Detetive pode ser a última carta sem pular a escolha de cor",()=>{
   call("resolve_detective",{p_token:a.token,p_code:s.code,p_color:"r"});
   assert.equal(g.placements[0].id,a.guest_id);
   assert.equal(g.current_color,"r");
+});
+
+
+test("Escudo é binário: duas cartas ativam uma única proteção",()=>{
+  const s=setup(),{room,g,a}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bH","bH","r7"];
+  s.play(a,"bH");s.play(a,"bH");
+  assert.equal(g.shields[a.guest_id],1);
+  s.end(a);
+  assert.equal(g.shields[a.guest_id],1);
+});
+test("Vórtice baixa todas as cartas da cor em ordem aleatória e soma efeitos",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b4"];g.current_color="b";
+  const chosen=["bV","bH","bD","bD","bC","bS","r3"];
+  room.hands.get(a.guest_id).cards=[...chosen];
+  room.hands.get(b.guest_id).cards=["r1","g1"];
+  room.hands.get(bot).cards=["g2","y2"];
+  s.play(a,"bV");
+  assert.deepEqual(room.hands.get(a.guest_id).cards,["r3"]);
+  assert.equal(g.shields[a.guest_id],1);
+  assert.deepEqual(g.discard_pile.slice(-6).sort(),chosen.filter(c=>c!=="r3").sort());
+  assert.equal(g.card_moves.filter(m=>m.by===a.guest_id).length,6);
+  assert.ok(g.effects.some(e=>e.type==="vortex"&&e.n===5));
+  assert.ok(g.beer_remaining.includes(b.guest_id));
+  assert.ok(g.beer_remaining.includes(bot));
+  assert.equal(g.turn_cards.length,0,"Vórtice encerra a vez automaticamente");
+  assert.equal(g.direction,1);
+  assert.ok(room.hands.get(b.guest_id).cards.length + room.hands.get(bot).cards.length >= 4);
+});
+test("Cerveja tira a escolha do adversário e joga uma carta válida aleatória",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bC","r9"];
+  room.hands.get(b.guest_id).cards=["b5","r6"];
+  room.hands.get(bot).cards=["g1","r2"];
+  s.play(a,"bC");s.end(a);
+  assert.ok(g.beer_remaining.includes(b.guest_id));
+  assert.throws(()=>s.play(b,"b5"),/BEER_FORCED/);
+  proSweep();
+  assert.deepEqual(room.hands.get(b.guest_id).cards,["r6"]);
+  assert.equal(g.discard_pile.at(-1),"b5");
+  assert.ok(!g.beer_remaining.includes(b.guest_id));
+  assert.ok(g.effects.some(e=>e.type==="beer_forced"));
+});
+test("Cerveja compra uma carta, joga se servir, senão passa",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bC","y8"];
+  room.hands.get(b.guest_id).cards=["r5","g6"];
+  room.hands.get(bot).cards=["r1","y2"];
+  g.draw_pile=["b7","r8"];
+  s.play(a,"bC");s.end(a);
+  proSweep();
+  assert.equal(g.discard_pile.at(-1),"b7");
+  assert.deepEqual(room.hands.get(b.guest_id).cards,["r5","g6"]);
+  assert.ok(!g.beer_remaining.includes(b.guest_id));
+});
+test("Cerveja compra e passa quando a carta comprada não combina",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bC","y8"];
+  room.hands.get(b.guest_id).cards=["r5","g6"];
+  room.hands.get(bot).cards=["r1","y2"];
+  g.draw_pile=["r7","b8"];
+  s.play(a,"bC");s.end(a);
+  proSweep();
+  assert.equal(g.discard_pile.at(-1),"bC");
+  assert.deepEqual(room.hands.get(b.guest_id).cards,["r5","g6","r7"]);
+  assert.ok(!g.beer_remaining.includes(b.guest_id));
+  assert.equal(g.turn_order[g.turn_idx],bot);
 });
