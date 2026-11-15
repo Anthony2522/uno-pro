@@ -351,12 +351,12 @@ function resolveDebt(r){const g=r.game;if(!g||!g.pending_draw||g.nine)return;
   // Disconnects preserve the seat for the reduced turn window. An
   // unresolved draw penalty is accepted only when that window expires.
   const actor=current(g),guest=store.guestsById.get(actor);
-  if(!isBot(actor)&&(!guest||guest.last_seen<clock()-LIMITS.onlineMs))return;
   if(g.turn_cards?.length)return; // A player already responded; never charge them during an unfinished combo.
   if(consumeShield(r,actor,"draw")){
     g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
     g.seq++;bump(r);return;
   }
+  if(!isBot(actor)&&(!guest||guest.last_seen<clock()-LIMITS.onlineMs))return;
   if(hand(r,current(g)).cards.includes("N"))return;
   if((g.pending_uncounterable || ready(r).stack) && counter(r,current(g)))return;
   const loser=current(g),n=g.pending_draw,attacker=g.pending_source||loser;
@@ -371,6 +371,7 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
   const actor=current(g),cards=g.turn_cards||[],n=g.turn_order.length;
   if(!cards.length){
     if(g.skip_carry?.remaining){
+      completePowerlessTurn(g,actor);
       const pending=g.skip_carry;g.skip_carry=null;
       if(!g.has_drawn)draw(r,actor,1);
       g.last_action={type:automatic?"auto":"pass",by:actor,name:name(actor)};
@@ -497,36 +498,42 @@ function play(r,id,card,color,targetId){
   planBotCut(r,id);
   bump(r);
   if(h.cards.length===0){
-    g.placements??=[];
-    g.placements.push({id,rank:g.placements.length+1,name:name(id)});
-    g.winner_id=g.placements[0]?.id??id;
-    const remaining=g.turn_order.filter(pid=>pid!==id);
-    const onlyBotsRemain=remaining.length>0&&remaining.every(isBot);
-    if(g.placements.length>=(g.winners_target??2)||g.turn_order.length===2||onlyBotsRemain){
-      if(g.placements.length===1){
-        const runnerUp=remaining.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0];
-        if(runnerUp)g.placements.push({id:runnerUp,rank:2,name:name(runnerUp)});
-      }
-      g.second_winner_id=g.placements[1]?.id??null;
-      observePublic(r,id,{kind:"play",color:g.turn_start_color??g.current_color,
-        cards:[...g.turn_cards],chosen_color:g.current_color});
-      emitTurnEffect(r,id,g.turn_cards||[],g.direction);
-      g.status="finished";
-      g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1,win:true};
-      g.pending_draw=0;g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
-    }
-    finish(r,false,true);
-    const target=current(g);
-    g.turn_order=g.turn_order.filter(p=>p!==id);
-    g.turn_idx=Math.max(0,g.turn_order.indexOf(target));
-    g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1};
-    if(g.nine)g.nine.eligible=g.nine.eligible.filter(p=>p!==id);
-    resolveDebt(r);bump(r);return {ok:true,won:true,continued:true};
+    // A final Detective cannot claim victory until its viewer chooses a color.
+    if(g.detective_pending_color)return {ok:true,pending_color:true};
+    return finishEmptyHand(r,id);
   }
   // In duels, Reverse returns to the same player immediately.
   if(g.turn_order.length===2&&card[1]==="R"&&g.turn_cards.length===1&&
      !g.pending_draw&&!cutting)finish(r);
   return {ok:true};
+}
+function finishEmptyHand(r,id){
+  const g=game(r);
+  g.placements??=[];
+  g.placements.push({id,rank:g.placements.length+1,name:name(id)});
+  g.winner_id=g.placements[0]?.id??id;
+  const remaining=g.turn_order.filter(pid=>pid!==id);
+  const onlyBotsRemain=remaining.length>0&&remaining.every(isBot);
+  if(g.placements.length>=(g.winners_target??2)||g.turn_order.length===2||onlyBotsRemain){
+    if(g.placements.length===1){
+      const runnerUp=remaining.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0];
+      if(runnerUp)g.placements.push({id:runnerUp,rank:2,name:name(runnerUp)});
+    }
+    g.second_winner_id=g.placements[1]?.id??null;
+    observePublic(r,id,{kind:"play",color:g.turn_start_color??g.current_color,
+      cards:[...g.turn_cards],chosen_color:g.current_color});
+    emitTurnEffect(r,id,g.turn_cards||[],g.direction);
+    g.status="finished";
+    g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1,win:true};
+    g.pending_draw=0;g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
+  }
+  finish(r,false,true);
+  const target=current(g);
+  g.turn_order=g.turn_order.filter(p=>p!==id);
+  g.turn_idx=Math.max(0,g.turn_order.indexOf(target));
+  g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1};
+  if(g.nine)g.nine.eligible=g.nine.eligible.filter(p=>p!==id);
+  resolveDebt(r);bump(r);return {ok:true,won:true,continued:true};
 }
 function resolveDetective(r,id,color){
   const g=game(r);
@@ -537,6 +544,7 @@ function resolveDetective(r,id,color){
   g.detective=null;
   g.last_action={type:"detective_color",by:id,name:name(id),color};
   g.seq++;bump(r);
+  if(hand(r,id).cards.length===0)return finishEmptyHand(r,id);
   return {ok:true};
 }
 function hardBotTick(r,id,h){
@@ -730,7 +738,8 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     if(!actionLocked(g)&&!g.pending_draw&&!g.has_drawn&&!g.turn_cards?.length&&!isBot(current(g))&&
        (store.guestsById.get(current(g))?.last_seen??0)>=time-LIMITS.onlineMs){
       const id=current(g),h=hand(r,id);
-      if(!h.cards.some(c=>playable(c,g)&&allowedDuringPowerless(g,c))){
+      if(!h.cards.some(c=>playable(c,g)&&allowedDuringPowerless(g,c)) &&
+         !((g.powerless_remaining||[]).includes(id)&&h.cards.includes("N"))){
         const priorColor=g.current_color;
         const drawn=draw(r,id,1)[0]||null;g.has_drawn=true;g.drawn_card=drawn;
         rememberDraw(r,id,drawn);
