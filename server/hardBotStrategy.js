@@ -248,7 +248,12 @@ export function chooseHardPlan(context){
     const many=others.filter(id=>(counts[id]??0)>8).length;
     const threat=others.some(id=>(counts[id]??100)<=3);
     const hugeHand=mine.length>=7;
-    const acceptance=-context.pendingDraw*1.8+(many>0&&!threat&&hugeHand?12:0);
+    const soleDefense=mine.filter(attack).length===1;
+    const nextId=turnOrder[(context.turnIndex+context.direction+turnOrder.length)%turnOrder.length];
+    const bigHandNext=(counts[nextId]??0)>=9;
+    const likelyCounterWar=bigHandNext&&!threat&&hugeHand&&soleDefense;
+    const acceptance=handQuality(mine,context.rules)*.91-context.pendingDraw*3.1+
+      (likelyCounterWar?23:0);
     scored.push({kind:"accept",cards:[],color:null,target:null,score:acceptance});
   }
   if(!scored.length)return {kind:"draw",cards:[],color:null,target:null,score:-500};

@@ -45,3 +45,14 @@ O anfitrião pode abrir **Configurações avançadas** também na sala de espera
 O **Desuno** só pode ser acionado por participantes ainda ativos: vencedores e observadores não podem denunciar. A partida termina automaticamente quando somente bots continuam na disputa; se um humano foi o primeiro colocado, ele permanece em primeiro e um bot com menos cartas ocupa o segundo lugar para encerrar a classificação.
 
 Animações especiais de cartas (bloqueios, voltas, mudança de cor, Bomba) são agregadas e reproduzidas **uma vez ao terminar a jogada**, inclusive quando ela termina automaticamente. As animações individuais de cada carta viajando ao descarte continuam acontecendo ao jogá-las.
+
+## Inteligência difícil (nova política)
+
+- O bot fácil mantém exatamente a estratégia anterior (60% da melhor opção e 40% da opção aleatória entre jogadas válidas).
+- O bot difícil pesquisa jogadas e combinações legais com busca deduplicada e limitada a 7 mil estados, sem consultar o conteúdo de mãos adversárias.
+- Avalia cores que restarão, possibilidades de pares/sequências, economia de coringas e cartas de compra, direção e próximo jogador, risco de rebatida e rivais com 1–3 cartas.
+- Memória curta de até cinco ações públicas por participante: compras compulsórias não são confundidas com ausência de uma cor. Evidências antigas decaem.
+- Em caso de pontuação praticamente empatada, sorteia entre os melhores planos, evitando um padrão totalmente previsível.
+- Testes independentes exercitam ameaças, proteção de especiais, combos, coringas, regras desativadas, sigilo de cartas ocultas e desempenho em partidas simuladas com sementes reproduzíveis.
+
+Para reproduzir os torneios: `node scripts/bot-benchmark.mjs --games=600` (bot difícil anterior vs fácil), `node scripts/bot-benchmark.mjs --enhanced --games=600` (novo difícil vs fácil) e `node scripts/bot-benchmark.mjs --paired --games=600` (novo difícil vs antigo difícil, com o mesmo conjunto de cartas e um jogador de referência).

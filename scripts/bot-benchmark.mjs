@@ -69,7 +69,8 @@ function runMatch(seed){
   for(const id of g.turn_order){
     const h=room.hands.get(id);h.cards=d.splice(0,8);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;
   }
-  g.draw_pile=d;g.turn_started_at=fakeNow;g.effects=[];g.visual_until=0;g.last_action={type:"start"};
+  g.draw_pile=[...d,...deck(seed+501),...deck(seed+502)];
+  g.turn_started_at=fakeNow;g.effects=[];g.visual_until=0;g.last_action={type:"start"};
   const seen=[],counts={hard:0,other:0,human:0};
   let errors=0,rounds=0,turns=0,lastId=null;
   function safe(fn,params){

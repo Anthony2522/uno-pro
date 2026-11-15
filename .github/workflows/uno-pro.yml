@@ -13,8 +13,8 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm test
-      - run: node scripts/bot-benchmark.mjs --games=120
-      - run: node scripts/bot-benchmark.mjs --enhanced --games=240
-      - run: node scripts/bot-benchmark.mjs --paired --games=240
+      - run: node scripts/bot-benchmark.mjs --games=600
+      - run: node scripts/bot-benchmark.mjs --enhanced --games=600
+      - run: node scripts/bot-benchmark.mjs --paired --games=600
       - run: npm run typecheck
       - run: npm run build

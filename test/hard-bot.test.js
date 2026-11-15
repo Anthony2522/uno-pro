@@ -100,3 +100,25 @@ test("search is bounded on long hands",()=>{
   assert.ok(res.explored<=7000);
   assert.ok(performance.now()-started<500);
 });
+
+
+test("can accept a small debt instead of risking its sole counter in a large counter-war",()=>{
+  const cards=["bD","b2","r1","g2","y5","g5","r8","y8","b7"];
+  const move=chooseHardPlan(ctx(cards,{
+    pendingDraw:2,counts:{rival:13,neutral:12}
+  }));
+  assert.equal(move.kind,"accept");
+});
+test("an imminent rival overrides counter-war caution",()=>{
+  const cards=["bD","b2","r1","g2","y5","g5","r8","y8","b7"];
+  const move=chooseHardPlan(ctx(cards,{
+    pendingDraw:2,counts:{rival:1,neutral:12}
+  }));
+  assert.equal(move.kind,"play");
+  assert.ok(move.cards[0].endsWith("D"));
+});
+test("a normal voluntary purchase alone never creates color-absence certainty",()=>{
+  const gaps=inferColorGaps([{kind:"voluntary_draw",color:"y"},
+    {kind:"forced_draw",color:"y"}]);
+  assert.deepEqual(gaps,{r:0,y:0,g:0,b:0});
+});
