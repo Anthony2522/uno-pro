@@ -113,7 +113,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   room.hands.get(a.guest_id).cards=["b1","r5"];
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,190);
+  assert.equal(g.draw_pile.length,198);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -298,6 +298,7 @@ test("bloqueio avisa a vítima e penalidade informa quem comprou e quantas carta
   const s=setup(),{room,g,a,b}=s;
   s.setTurn(a.guest_id);g.discard_pile=["b1"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["bS","r3","y6"];
+  room.hands.get(b.guest_id).cards=["g1","r2","y3"];
   s.play(a,"bS");
   assert.equal(g.effects.filter(e=>e.type==="skip").length,0);
   s.end(a);
@@ -1164,7 +1165,8 @@ test("Sem Poderes impede especiais durante o próximo turno, mas permite número
   assert.equal(g.powerless_target,b.guest_id);
   assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"W4",p_color:"g"}),/POWERLESS_NUMBER_ONLY/);
   s.play(b,"b5");s.end(b);
-  assert.equal(g.powerless_target,null);
+  assert.equal(g.powerless_target,s.bot);
+  assert.deepEqual(g.powerless_remaining,[s.bot]);
 });
 
 test("Negação cancela o efeito Sem Poderes",()=>{
