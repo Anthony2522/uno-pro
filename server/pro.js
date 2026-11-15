@@ -403,6 +403,12 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
   if(hasFive)g.pending_uncounterable=true;
   const restrictNext=cards.includes("P");
   if(restrictNext)g.powerless_remaining=g.turn_order.filter(id=>id!==actor);
+  if(cards.some(c=>value(c)==="C")){
+    g.beer_remaining=g.turn_order.filter(id=>id!==actor);
+    effect(r,"beer",actor,cards.find(c=>value(c)==="C"),g.current_color,{
+      targets:[...g.beer_remaining],target_names:g.beer_remaining.map(name)
+    });
+  }
   observePublic(r,actor,{kind:"play",color:g.turn_start_color??g.current_color,
     cards:[...cards],chosen_color:g.current_color});
   emitTurnEffect(r,actor,cards,dir);
@@ -432,11 +438,12 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
 function play(r,id,card,color,targetId){
   const g=game(r),rules=ready(r),h=hand(r,id);let series=g.turn_cards||[];
   if(g.detective_pending_color)fail("DETECTIVE_COLOR_PENDING");
+  if(current(g)===id && (g.beer_remaining||[]).includes(id) && !g.beer_resolving)fail("BEER_FORCED");
   const cutting=current(g)!==id||(g.skip_reaction?.target===id&&card===top(g));
   if(g.skip_reaction && !cutting)fail("SKIP_DECISION_PENDING");
   // No cooldown for initial plays or cuts while an announcement is shown.
   if(g.nine)fail("NINE_ACTIVE");
-  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T|H)|W|W4|W5|X|B|N|P|M)$/).test(card))fail("CARD_NOT_IN_HAND");
+  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C)|W|W4|W5|X|B|N|P|M)$/).test(card))fail("CARD_NOT_IN_HAND");
   const cutVictim=cutting?current(g):null;
   if(cutting){
     const debt=g.pending_draw>0;
@@ -487,10 +494,29 @@ function play(r,id,card,color,targetId){
       if(!consumeShield(r,victim,"bomb"))draw(r,victim,2);
   }
   if(value(card)==="H"){
-    g.shields??={};g.shields[id]=(g.shields[id]||0)+1;
+    g.shields??={};g.shields[id]=1; // A Shield is a binary effect; playing another never adds a charge.
   }
   if(card==="M")g.machine_gun_hits=machineGun(r,id);
   g.turn_cards=[...series,card];
+  // A Vortex pulls every remaining card of its own color in shuffled order.
+  // Forced cards are not constrained by the normal repeated/number combo rules.
+  let pulled=[];
+  if(value(card)==="V"){
+    pulled=shuffle(h.cards.filter(c=>c[0]===card[0]));
+    for(const next of pulled){
+      h.cards.splice(h.cards.indexOf(next),1);
+      const old=top(g);
+      g.discard_pile.push(next);g.current_color=card[0];
+      g.card_move_seq=(g.card_move_seq||0)+1;
+      g.card_moves.push({id:g.card_move_seq,by:id,name:name(id),card:next,previous_top:old,at:clock()});
+      if(g.card_moves.length>40)g.card_moves.shift();
+      if(value(next)==="H"){g.shields??={};g.shields[id]=1;}
+    }
+    if(h.cards.length===1&&!h.uno_called){h.uno_since=clock();h.bot_uno_plan=null;}
+    else if(h.cards.length!==1){h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;}
+    g.turn_cards.push(...pulled);
+    effect(r,"vortex",id,card,g.current_color,{n:pulled.length});
+  }
   g.last_action={type:cutting?"cut":"play",by:id,name:name(id),card,color:g.current_color,left:h.cards.length};
   g.seq++;
   // A cut itself remains immediate; card-specific effects wait for End Turn.
@@ -502,6 +528,7 @@ function play(r,id,card,color,targetId){
     if(g.detective_pending_color)return {ok:true,pending_color:true};
     return finishEmptyHand(r,id);
   }
+  if(value(card)==="V"){finish(r);return {ok:true,vortex:true,pulled:pulled.length};}
   // In duels, Reverse returns to the same player immediately.
   if(g.turn_order.length===2&&card[1]==="R"&&g.turn_cards.length===1&&
      !g.pending_draw&&!cutting)finish(r);
@@ -581,6 +608,41 @@ function hardBotTick(r,id,h){
   if(g.status!=="playing"||current(g)!==id||!g.turn_cards?.length)return;
   if(turn.plan.length===0){finish(r);return;}
   turn.due=clock()+2000;
+}
+// One random, server-authoritative move for each opponent affected by Beer.
+function beerTick(r){
+  const g=r.game;
+  if(!g || g.status!=="playing" || g.nine || g.skip_reaction || g.detective_pending_color ||
+     g.turn_cards?.length || !(g.beer_remaining||[]).includes(current(g)))return false;
+  const actor=current(g),h=hand(r,actor);
+  // Remove the effect first: a Vortex or duel Reverse can end a move inside play().
+  g.beer_remaining=g.beer_remaining.filter(id=>id!==actor);
+  let options=h.cards.filter(c=>allowedDuringPowerless(g,c,actor) &&
+    (g.pending_draw?canCounter(g,c):playable(c,g)));
+  if(!options.length && !g.pending_draw){
+    const previousColor=g.current_color;
+    const newCard=draw(r,actor,1)[0]||null;
+    g.has_drawn=true;g.drawn_card=newCard;
+    rememberDraw(r,actor,newCard);
+    observePublic(r,actor,{kind:"no_play_draw",color:previousColor});
+    options=newCard&&playable(newCard,g)&&allowedDuringPowerless(g,newCard,actor)?[newCard]:[];
+  }
+  const chosen=options.length?options[crypto.randomInt(options.length)]:null;
+  effect(r,"beer_forced",actor,chosen,g.current_color,{target:actor,target_name:name(actor)});
+  g.beer_resolving=true;
+  try{
+    if(chosen){
+      const color=wild(chosen)?COLORS[crypto.randomInt(COLORS.length)]:undefined;
+      const others=g.turn_order.filter(id=>id!==actor);
+      const targetId=chosen==="X"?others[crypto.randomInt(others.length)]:undefined;
+      play(r,actor,chosen,color,targetId);
+      if(g.status==="playing"&&current(g)===actor&&g.turn_cards?.length)finish(r);
+    }else{
+      // No legal card: accept a pending draw penalty or pass after drawing once.
+      finish(r,true);
+    }
+  }finally{g.beer_resolving=false;}
+  return true;
 }
 function botTick(r){
   const g=r.game;
@@ -734,6 +796,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     if(g.nine||g.skip_reaction)continue; // A jump-in or skip response is pending.
     resolveDebt(r);
     if(g.nine||g.skip_reaction||g.status!=="playing")continue;
+    if(beerTick(r))continue;
     // Auto-draw once when there is no playable card anywhere in the hand.
     if(!actionLocked(g)&&!g.pending_draw&&!g.has_drawn&&!g.turn_cards?.length&&!isBot(current(g))&&
        (store.guestsById.get(current(g))?.last_seen??0)>=time-LIMITS.onlineMs){
@@ -860,7 +923,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
-    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],shields:{},detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
+    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],shields:{},beer_remaining:[],beer_resolving:false,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
     for(const h of r.hands.values())h.uno_since=null;
     return result;
@@ -877,7 +940,8 @@ export function proRpc(fn,args={}){
       result.game.winners_target=g.winners_target??2;
       result.game.powerless_target=g.powerless_target??null;
       result.game.powerless_remaining=[...(g.powerless_remaining||[])];
-      result.game.shields={...(g.shields||{})};
+      result.game.shields=Object.fromEntries(Object.entries(g.shields||{}).filter(([,count])=>count>0).map(([id])=>[id,1]));
+       result.game.beer_remaining=[...(g.beer_remaining||[])];
       result.game.machine_gun_new=g.machine_gun_new_by_id?.[result.me]
         ?{...g.machine_gun_new_by_id[result.me],at:stamp(g.machine_gun_new_by_id[result.me].at)}:null;
       result.game.detective_pending_color=g.detective_pending_color===result.me;
@@ -926,8 +990,8 @@ export function proRpc(fn,args={}){
   if(fn==="play_card"){const {me,r}=guard(args);const result=play(r,me.id,args.p_card,args.p_color,args.p_target_id);
     if(r.game?.timeout_counts)r.game.timeout_counts[me.id]=0;
     return result;}
-  if(fn==="end_turn"||fn==="pass_turn"){const {me,r}=guard(args),g=game(r);if(current(g)!==me.id)fail("NOT_YOUR_TURN");g.timeout_counts[me.id]=0;finish(r);return {ok:true};}
-  if(fn==="draw_card"){const {me,r}=guard(args),g=game(r);if(current(g)!==me.id)fail("NOT_YOUR_TURN");assertActionOpen(r);
+  if(fn==="end_turn"||fn==="pass_turn"){const {me,r}=guard(args),g=game(r);if(current(g)!==me.id)fail("NOT_YOUR_TURN");if((g.beer_remaining||[]).includes(me.id))fail("BEER_FORCED");g.timeout_counts[me.id]=0;finish(r);return {ok:true};}
+  if(fn==="draw_card"){const {me,r}=guard(args),g=game(r);if(current(g)!==me.id)fail("NOT_YOUR_TURN");if((g.beer_remaining||[]).includes(me.id))fail("BEER_FORCED");assertActionOpen(r);
     if(g.nine)fail("NINE_ACTIVE");if(g.pending_draw)fail("MUST_COUNTER_OR_DRAW");
     if(g.turn_cards?.length)fail("ALREADY_PLAYED");if(g.has_drawn)fail("ALREADY_DRAWN");
     const hadPlayable=hand(r,me.id).cards.some(c=>playable(c,g)&&allowedDuringPowerless(g,c));
@@ -940,7 +1004,7 @@ export function proRpc(fn,args={}){
       finish(r,true);
     }
     return {card,playable:canPlayDrawn,auto_passed:!hadPlayable&&!canPlayDrawn};}
-  if(fn==="accept_draw"){const {me,r}=guard(args),g=game(r);if(current(g)!==me.id)fail("NOT_YOUR_TURN");
+  if(fn==="accept_draw"){const {me,r}=guard(args),g=game(r);if(current(g)!==me.id)fail("NOT_YOUR_TURN");if((g.beer_remaining||[]).includes(me.id))fail("BEER_FORCED");
     if(!g.pending_draw||g.turn_cards.length)fail("NOTHING_TO_ACCEPT");const n=g.pending_draw;g.timeout_counts[me.id]=0;finish(r);return {ok:true,n};}
   if(fn==="call_uno"){const {me,r}=guard(args),g=game(r),h=hand(r,me.id);
     if(!(h.cards.length===1||(h.cards.length===2&&current(g)===me.id)))fail("UNO_NOT_ALLOWED");
