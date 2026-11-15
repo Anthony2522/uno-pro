@@ -70,7 +70,7 @@ function RoomPage() {
     }
     const next=events.filter(e=>e.id>(lastEffectId.current??0));
     if(events.length)lastEffectId.current=events.at(-1)?.id??0;
-    for(const event of next)sfx(event.type==="color_wave"?"wild":event.type);
+    for(const event of next)sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"?"play":event.type);
   },[state?.game?.effects,state?.game?.round]);
 
   // Sounds on state transitions.
