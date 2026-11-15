@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {store, newDeck} from "../server/game.js";
 import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
+import { inferColorGaps } from "../server/hardBotStrategy.js";
 const call=(fn,args)=>proRpc(fn,args);
 function setup(rules) {
   const a=call("register_guest",{p_nickname:"Alice"}),b=call("register_guest",{p_nickname:"Bruno"});
@@ -995,4 +996,44 @@ test("Bomba só anuncia efeito especial no fim da vez, ainda compra imediatament
   assert.equal(g.effects.filter(e=>e.type==="bomb").length,0);
   s.end(a);
   assert.equal(g.effects.filter(e=>e.type==="bomb").length,1);
+});
+
+
+test("memória pública retém somente as últimas cinco ações individuais por adversário",()=>{
+  const s=setup(),{g,room,a,b}=s;
+  for(let i=0;i<8;i++){
+    s.setTurn(a.guest_id);
+    g.discard_pile=["b1"];g.current_color="b";g.turn_start_color="b";
+    room.hands.get(a.guest_id).cards=["b2","r3","y7"];
+    s.play(a,"b2");s.end(a);
+  }
+  const recent=g.public_history[a.guest_id];
+  assert.equal(recent.length,5);
+  assert.ok(recent.every(e=>e.kind==="play"&&e.cards[0]==="b2"&&e.color==="b"));
+  assert.equal(g.public_history[b.guest_id]?.length??0,0);
+  const view=call("get_room_state",{p_token:b.token,p_code:s.code}).game;
+  assert.equal("public_history" in view,false,"o cliente não deve receber estado interno da IA");
+});
+
+test("compras por penalidade são observadas como compulsórias, não falta de cor",()=>{
+  const s=setup(),{g,room,a}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["bD"];g.current_color="b";g.turn_start_color="b";
+  g.pending_draw=4;g.pending_source=s.bot;
+  room.hands.get(a.guest_id).cards=["r3","g4"];
+  s.end(a);
+  const obs=g.public_history[a.guest_id]||[];
+  assert.equal(obs.some(e=>e.kind==="forced_draw"&&e.n===4),true);
+  assert.equal(inferColorGaps(obs).b,0);
+});
+
+test("compras automáticas sem jogada válida criam evidência pública de cor",()=>{
+  const s=setup(),{g,room,a}=s;
+  s.setTurn(a.guest_id);
+  g.discard_pile=["b5"];g.current_color="b";g.turn_start_color="b";
+  room.hands.get(a.guest_id).cards=["r3","g4","y8"];
+  g.draw_pile.unshift("r0");
+  proSweep();
+  const obs=g.public_history[a.guest_id]||[];
+  assert.equal(obs.some(e=>e.kind==="no_play_draw"&&e.color==="b"),true);
+  assert.ok(inferColorGaps(obs).b>0);
 });
