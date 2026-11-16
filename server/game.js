@@ -67,7 +67,7 @@ export function cleanText(p) {
 }
 const cleanCode = (c) => cleanText(c).toUpperCase();
 
-const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C)|W|W4|W5|X|B|N|P|M)$/;
+const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M)$/;
 const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X" || c === "B" || c === "N" || c === "P" || c === "M";
 export const cardValue = (c) => (isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
@@ -85,7 +85,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex and one Beer per color = 211 cards. */
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 227 cards. */
 export function newDeck() {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
@@ -96,7 +96,7 @@ export function newDeck() {
   for (let i = 0; i < 10; i++) d.push("W", "W4");
   for (let i = 0; i < 2; i++) d.push("W5");
   d.push("X", "B", "N", "P", "M"); // One of each custom wild per fresh deck.
-  for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T", col + "H", col + "H", col + "V", col + "V", col + "C");
+  for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T", col + "H", col + "H", col + "V", col + "V", col + "C", col + "L", col + "L", col + "E", col + "E");
   return shuffle(d);
 }
 
@@ -227,12 +227,22 @@ function autoPass(room) {
   bump(room);
 }
 
+/** A single human against bots gets an indefinite in-memory reconnection grace. */
+export function isSoloHumanBotMatch(room) {
+  const ids=room.game?.status==="playing"?room.game.turn_order:[];
+  const humans=ids.filter(id=>!store.guestsById.get(id)?.bot);
+  return humans.length===1 && ids.length>1 && ids.some(id=>store.guestsById.get(id)?.bot);
+}
+
 /** Periodic housekeeping (replaces the SQL _cleanup / list_public_rooms deletes). */
 export function sweep() {
   const t = now();
   for (const room of [...store.rooms.values()]) {
+    const protectedMatch=isSoloHumanBotMatch(room);
     const idle = room.status === "waiting" ? LIMITS.waitingIdleMs : LIMITS.playingIdleMs;
     for (const m of [...room.members]) {
+      // Do not evict the only human while their bot-only match is alive.
+      if(protectedMatch)continue;
       const g = store.guestsById.get(m.guest_id);
       if (!g || g.last_seen < t - idle) removeMember(room, m.guest_id);
     }
@@ -241,7 +251,7 @@ export function sweep() {
     // A loss of connection never immediately changes turns. The advanced
     // engine alone applies an offline grace deadline and normal turn limit.
     const anyRecent = room.members.some((m) => (store.guestsById.get(m.guest_id)?.last_seen ?? 0) > t - LIMITS.roomExpireMs);
-    if (room.updated_at < t - LIMITS.roomExpireMs && !anyRecent) {
+    if (!protectedMatch && room.updated_at < t - LIMITS.roomExpireMs && !anyRecent) {
       deleteRoom(room);
       bumpLobby();
     }
