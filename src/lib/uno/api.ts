@@ -57,6 +57,9 @@ export type GameState = {
   lock_color?: CardColor|null;
   lock_target?: CardColor|null;
   solo_paused?: boolean;
+  solo_recovery_until?: string|null;
+  last_wild?: string;
+  mirror_played_as?: string|null;
   beer_remaining?: string[];
   beer_due_at?: string|null;
   vortex_pending?: {actor:string;remaining:number;total:number}|null;
@@ -66,7 +69,7 @@ export type GameState = {
   machine_gun_new?: {card:string;nonce:number;at:string}|null;
   skip_reaction?: {target:string|null;expires_at:string}|null;
   detective?: {target:string;target_name:string;cards:string[];expires_at:string}|null;
-  card_moves?: Array<{id:number;by:string;name:string;card:string;previous_top:string;at:number}>;
+  card_moves?: Array<{id:number;by:string;name:string;card:string;mirror_as?:string|null;previous_top:string;at:number}>;
   offline_deadline_at?: string|null;
   last_action: LastAction;
   round: number;
