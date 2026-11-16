@@ -254,7 +254,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </div>}
         {game.vortex_pending && <div role="status" aria-live="polite" className="relative z-20 rounded-xl border border-cyan/40 bg-navy/90 px-3 py-1.5 text-xs font-bold text-cyan">
           Vórtice: {game.vortex_pending.total-game.vortex_pending.remaining}/{game.vortex_pending.total} cartas puxadas
-        </div>
+        </div>}
          {nine && (
           <div className="uno-nine-panel relative z-20 w-full max-w-md rounded-2xl border border-cyan/50 bg-navy/95 p-4 text-center shadow-glow-cyan">
             <p className="font-display text-lg font-black">DESAFIO DO 9 · {nineRemaining}s</p>
