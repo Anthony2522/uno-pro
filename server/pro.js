@@ -7,6 +7,7 @@ import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, LIMITS, isS
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
 const BEER_DELAY_MS = 3000;
 const VORTEX_CARD_DELAY_MS = 1250;
+const SOLO_RECOVERY_MS = 5 * 60_000;
 export function chooseBotMoveDelay(difficulty) {
   return difficulty==="hard"?3000:5000;
 }
@@ -854,10 +855,14 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     const g=r.game;
     if(!g||g.status!=="playing")continue;
     if(isSoloHumanBotMatch(r)){
+      if(g.solo_recovery_until && time>=g.solo_recovery_until){
+        store.rooms.delete(r.id);store.roomsByCode.delete(r.code);
+        bump(r,true);continue;
+      }
       const human=g.turn_order.find(id=>!isBot(id));
       const guest=store.guestsById.get(human);
-      if(!guest||time-guest.last_seen>LIMITS.onlineMs){
-        if(!g.solo_paused_at){g.solo_paused_at=time;bump(r);}
+      if(g.solo_force_pause||!guest||time-guest.last_seen>LIMITS.onlineMs){
+        if(!g.solo_paused_at){g.solo_paused_at=time;g.solo_recovery_until=time+SOLO_RECOVERY_MS;bump(r,true);}
         continue;
       }
       if(g.solo_paused_at){
@@ -872,7 +877,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
         if(g.wild_pending_since)g.wild_pending_since+=delta;
         if(g.detective?.until)g.detective.until+=delta;
         if(g.visual_until)g.visual_until+=delta;
-        g.offline_since=null;g.solo_paused_at=null;bump(r);
+        g.offline_since=null;g.solo_paused_at=null;g.solo_recovery_until=null;g.solo_force_pause=false;bump(r,true);
       }
     }
     if(finishWhenOnlyBots(r))continue;
@@ -958,6 +963,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
 }
 export const RPC_NAMES=[...new Set([...basicNames,"end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings","update_winners","negate_effect","accept_skip","resolve_detective","resolve_wild_color"])];
 export function proRpc(fn,args={}){
+  if(fn==="list_rejoinable_rooms")return originalRpc(fn,args);
   if(fn==="dev_auth"){
     const me=authenticate(args.p_token);
     const configured=process.env.DEV_ACCESS_KEY;
@@ -1002,10 +1008,19 @@ export function proRpc(fn,args={}){
     return result;
   }
   if(fn==="leave_room"){
-    const r=store.roomsByCode.get(String(args.p_code||"").trim().toUpperCase());
-    const result=originalRpc(fn,args);
-    if(r&&store.rooms.has(r.id))finishWhenOnlyBots(r);
-    return result;
+    const {me,r}=guard(args);
+    if(r.game?.status==="playing"&&r.game.turn_order.includes(me.id)){
+      // Leaving the page detaches the UI, not the player's seat. In multiplayer,
+      // normal consecutive turn timeouts still enforce removal.
+      if(isSoloHumanBotMatch(r)){
+        r.game.solo_force_pause=true;
+        r.game.solo_paused_at??=clock();
+        r.game.solo_recovery_until??=clock()+SOLO_RECOVERY_MS;
+      }
+      bump(r,true);
+      return {ok:true,rejoinable:true};
+    }
+    return originalRpc(fn,args);
   }
   if(fn==="create_room"){
     const count=args.p_starting_cards===undefined?8:args.p_starting_cards;
@@ -1039,7 +1054,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
-    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
+    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
     for(const h of r.hands.values())h.uno_since=null;
     return result;
@@ -1061,6 +1076,7 @@ export function proRpc(fn,args={}){
       result.game.lock_target=g.lock_target||null;
       result.game.swords=Object.fromEntries(Object.keys(g.swords||{}).map(id=>[id,1]));
       result.game.solo_paused=!!g.solo_paused_at;
+      result.game.solo_recovery_until=g.solo_recovery_until?stamp(g.solo_recovery_until):null;
       result.game.shields=Object.fromEntries(Object.entries(g.shields||{}).filter(([,count])=>count>0).map(([id])=>[id,1]));
        result.game.beer_remaining=[...(g.beer_remaining||[])];
       result.game.beer_due_at=g.beer_due?stamp(g.beer_due):null;
