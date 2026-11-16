@@ -658,6 +658,10 @@ function beerTick(r){
   if(g.beer_due===null||g.beer_due===undefined)g.beer_due=clock()+BEER_DELAY_MS;
   if(clock()<g.beer_due)return true; // All viewers see three seconds before the forced move.
   const actor=current(g),h=hand(r,actor);
+  // A shield cancels a stacked debt before Beer selects the forced move.
+  if(g.pending_draw && consumeShield(r,actor,"draw")){
+    g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
+  }
   // Remove the effect first: a Vortex or duel Reverse can end a move inside play().
   g.beer_remaining=g.beer_remaining.filter(id=>id!==actor);
   let options=h.cards.filter(c=>allowedDuringPowerless(g,c,actor) &&
