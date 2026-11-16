@@ -546,8 +546,8 @@ test("duas cartas +2 Volta: acumulam, invertem, voltam ao atacante",()=>{
   assert.equal(r.hands.get(b.guest_id).cards.length,8);
 });
 
-test("bot grita UNO em 0/8 segundos ou esquece; difícil é imediato",()=>{
-  assert.equal(chooseBotUnoDelay("hard",()=>0.99),0);
+test("bot fácil mantém seus tempos e difícil pode demorar seis segundos",()=>{
+  assert.equal(chooseBotUnoDelay("hard",()=>0.99),6000);
   assert.equal(chooseBotUnoDelay("easy",()=>0.1999),0);
   assert.equal(chooseBotUnoDelay("easy",()=>0.20),8000);
   assert.equal(chooseBotUnoDelay("easy",()=>0.7999),8000);
