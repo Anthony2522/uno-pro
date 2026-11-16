@@ -976,10 +976,24 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
   }
   if(time-lastBasicSweep>=3000){lastBasicSweep=time;basicSweep();}
 }
-export const RPC_NAMES=[...new Set([...basicNames,"auth_config","google_login","end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings","update_winners","negate_effect","accept_skip","resolve_detective","resolve_wild_color"])];
+export const RPC_NAMES=[...new Set([...basicNames,"auth_config","google_login","end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings","update_winners","negate_effect","accept_skip","resolve_detective","resolve_wild_color","export_solo_snapshot"])];
 export function proRpc(fn,args={}){
   if(fn==="auth_config")return {google_client_id:googleClientId(),persistent_rooms_configured:!!(process.env.UPSTASH_REDIS_REST_URL&&process.env.UPSTASH_REDIS_REST_TOKEN)};
   if(fn==="google_login")return googleLogin(args);
+  if(fn==="export_solo_snapshot"){
+    const {me,r}=guard(args);
+    if(!isSoloHumanBotMatch(r)||r.game.status!=="playing"||!r.game.turn_order.includes(me.id))
+      fail("NOT_SOLO_BOT_GAME",403);
+    // Only the sole human can export the bot hands and draw pile.
+    // No other human's hand, Google identity, or access token is included.
+    const guests=r.members.map(m=>{
+      const guest=store.guestsById.get(m.guest_id);
+      return {id:guest.id,tokenHash:guest.tokenHash,nickname:guest.nickname,
+        last_seen:guest.last_seen,bot:!!guest.bot,difficulty:guest.difficulty||null};
+    });
+    return {version:1,code:r.code,saved_at:clock(),human_id:me.id,
+      room:{...r,hands:[...r.hands]},guests};
+  }
   if(fn==="list_rejoinable_rooms")return originalRpc(fn,args);
   if(fn==="dev_auth"){
     const me=authenticate(args.p_token);

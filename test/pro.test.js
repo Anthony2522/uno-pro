@@ -116,9 +116,11 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   s.setTurn(a.guest_id);
   g.draw_pile=[];g.discard_pile=["g6"];g.current_color="g";
   room.hands.get(a.guest_id).cards=["b1","r5"];
+  const mirrorAlreadyDealt=[...room.hands.values()].some(h=>h.cards.includes("Q"));
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,227);
+  // The one Mirror is never duplicated if it is already in another hand.
+  assert.equal(g.draw_pile.length,mirrorAlreadyDealt?226:227);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -1911,4 +1913,28 @@ test("Configuração pública Google não expõe credenciais do armazenamento",(
   assert.equal(typeof config.google_client_id,"string");
   assert.equal(typeof config.persistent_rooms_configured,"boolean");
   assert.equal("UPSTASH_REDIS_REST_TOKEN" in config,false);
+});
+
+test("Somente o humano de uma partida contra bots pode exportar o salvamento completo",()=>{
+  const player=call("register_guest",{p_nickname:"SoloSalvo"});
+  const outsider=call("register_guest",{p_nickname:"Fora"});
+  const {code}=call("create_room",{p_token:player.token,p_name:"Resgate offline",p_max_players:4});
+  call("add_bot",{p_token:player.token,p_code:code,p_difficulty:"hard"});
+  call("add_bot",{p_token:player.token,p_code:code,p_difficulty:"easy"});
+  call("start_game",{p_token:player.token,p_code:code});
+  const room=store.roomsByCode.get(code);
+  const backup=call("export_solo_snapshot",{p_token:player.token,p_code:code});
+  assert.equal(backup.version,1);
+  assert.equal(backup.code,code);
+  assert.equal(backup.room.game.status,"playing");
+  assert.equal(backup.guests.length,3);
+  assert.equal(backup.room.hands.length,3);
+  assert.deepEqual(backup.room.hands.find(([id])=>id===player.guest_id)[1].cards,
+    room.hands.get(player.guest_id).cards);
+  assert.ok(!JSON.stringify(backup).includes(player.token),"never transmit raw player session token");
+  assert.throws(()=>call("export_solo_snapshot",{p_token:outsider.token,p_code:code}),
+    /NOT_MEMBER/,"other users cannot read bot hands");
+  const multi=setup();
+  assert.throws(()=>call("export_solo_snapshot",{p_token:multi.a.token,p_code:multi.code}),
+    /NOT_SOLO_BOT_GAME/,"cannot export matches with another human");
 });

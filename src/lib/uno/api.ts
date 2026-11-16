@@ -1,5 +1,7 @@
 import { GameError, toGameError } from "./errors";
 import type { CardColor } from "./cards";
+import {getLocalMatch,getSoloServerBackup,hasLocalRoom,localRpc,
+  getRecoverableSoloRoom,rescueSoloMatch,saveSoloServerBackup,type SoloBackup} from "./offlineRuntime";
 
 export type RuleSettings = { repeat: boolean; sequence: boolean; nine: boolean; cut: boolean; stack: boolean };
 export type Guest = { guest_id: string; token: string; nickname: string;google_linked?:boolean };
@@ -57,6 +59,7 @@ export type GameState = {
   lock_color?: CardColor|null;
   lock_target?: CardColor|null;
   solo_paused?: boolean;
+  local_only?:boolean;
   solo_recovery_until?: string|null;
   last_wild?: string|null;
   mirror_played_as?: string|null;
@@ -101,12 +104,13 @@ export type RoomState = {
     rules: RuleSettings;
     initial_cards: number;
     winners_target: number;
+    local_only?:boolean;
   };
   members: Member[];
   game: GameState | null;
 };
 
-export type RejoinableRoom = {code:string;name:string;solo:boolean;recovery_until:string|null;player_count:number};
+export type RejoinableRoom = {code:string;name:string;solo:boolean;recovery_until:string|null;player_count:number;local_only?:boolean};
 
 export type PublicRoom = {
   code: string;
@@ -119,6 +123,12 @@ export type PublicRoom = {
 
 /** POSTs to the Node server (server.js). Errors carry the same codes the original backend raised. */
 async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
+  const code=typeof args["p_code"]==="string"?(args["p_code"] as string).toUpperCase():null;
+  if(code&&hasLocalRoom(code))return localRpc<T>(fn,args);
+  const rescue=():T|null=>{
+    if(code&&getRecoverableSoloRoom(code)&&rescueSoloMatch(code))return localRpc<T>(fn,args);
+    return null;
+  };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15000);
   let res: Response;
@@ -131,6 +141,8 @@ async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<
       cache: "no-store",
     });
   } catch (e) {
+    const recovered=rescue();
+    if(recovered!==null)return recovered;
     throw e instanceof DOMException && e.name === "AbortError" ? new GameError("NETWORK", "timeout") : toGameError(e);
   } finally {
     clearTimeout(timer);
@@ -143,6 +155,11 @@ async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<
   }
   if (!res.ok || !body || body.error) {
     const err = body?.error;
+    const codeFromServer=err?.code;
+    if(!err||["ROOM_NOT_FOUND","INVALID_SESSION","NOT_MEMBER"].includes(codeFromServer||"")){
+      const recovered=rescue();
+      if(recovered!==null)return recovered;
+    }
     if (!err) throw new GameError("NETWORK", `HTTP ${res.status}`);
     throw toGameError(new Error(err.message ?? err.code ?? `HTTP ${res.status}`));
   }
@@ -158,7 +175,19 @@ export const api = {
   updateNickname: (token: string, nickname: string) =>
     call<{ guest_id: string; nickname: string }>("update_nickname", { p_token: token, p_nickname: nickname }),
   listPublicRooms: () => call<PublicRoom[]>("list_public_rooms"),
-  listRejoinableRooms: (token:string) => call<RejoinableRoom[]>("list_rejoinable_rooms",{p_token:token}),
+  listRejoinableRooms: async (token:string) => {
+    let online:RejoinableRoom[]=[];
+    try{online=await call<RejoinableRoom[]>("list_rejoinable_rooms",{p_token:token})}catch{/* offline matches remain visible without a backend */}
+    const local=getLocalMatch();
+    const backup=getSoloServerBackup();
+    const localRows:RejoinableRoom[]=[];
+    if(local&&local.playing)localRows.push({code:local.code,name:local.name,solo:true,
+      recovery_until:null,player_count:3,local_only:true});
+    if(backup&&!localRows.some(r=>r.code===backup.code)&&!online.some(r=>r.code===backup.code))
+      localRows.push({code:backup.code,name:backup.name,solo:true,recovery_until:null,
+        player_count:3,local_only:true});
+    return [...localRows,...online.filter(r=>!localRows.some(local=>local.code===r.code))];
+  },
   devStatus: (token:string)=>call<{is_dev:boolean}>("dev_status",{p_token:token}),
   devAuth: (token:string,key:string)=>call<{is_dev:boolean}>("dev_auth",{p_token:token,p_key:key}),
   devDeletePublicRoom: (token:string,code:string)=>call("dev_delete_public_room",{p_token:token,p_code:code}),
@@ -175,8 +204,17 @@ export const api = {
   joinRoom: (token: string, code: string) =>
     call<{ code: string; already: boolean }>("join_room", { p_token: token, p_code: code }),
   leaveRoom: (token: string, code: string) => call("leave_room", { p_token: token, p_code: code }),
-  getRoomState: (token: string, code: string) =>
-    call<RoomState>("get_room_state", { p_token: token, p_code: code }),
+  getRoomState: async (token:string,code:string)=>{
+    const state=await call<RoomState>("get_room_state",{p_token:token,p_code:code});
+    // Save a complete bot-only snapshot (including deck and bot hands) before any outage.
+    if(!state.room.local_only && state.game?.status==="playing" &&
+      state.members.filter(member=>!member.bot&&!member.spectator).length===1 &&
+      state.members.some(member=>member.bot)){
+      void call<SoloBackup>("export_solo_snapshot",{p_token:token,p_code:code})
+        .then(backup=>saveSoloServerBackup(backup,token)).catch(()=>{});
+    }
+    return state;
+  },
   startGame: (token: string, code: string) => call("start_game", { p_token: token, p_code: code }),
   updateWinners: (token:string,code:string,winners:number)=>
     call<{ok:boolean;winners_target:number}>("update_winners",{p_token:token,p_code:code,p_winners:winners}),

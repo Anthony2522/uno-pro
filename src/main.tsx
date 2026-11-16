@@ -20,6 +20,11 @@ declare module "@tanstack/react-router" {
   }
 }
 
+// Cache the SPA and its lazy-loaded routes so a solo bot match survives a full offline reload.
+if(import.meta.env.PROD&&"serviceWorker" in navigator){
+  void navigator.serviceWorker.register("/sw.js").catch(error=>console.warn("Offline shell unavailable",error));
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RouterProvider router={router} />
