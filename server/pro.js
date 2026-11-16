@@ -778,10 +778,10 @@ function botTick(r){
   if(hard&&bot.ai_variant!=="legacy")return hardBotTick(r,id,h);
   if(g.pending_draw && g.turn_cards.length===0 && !counter(r,id)&&!hasNegation(r,id)){finish(r,true);return;}
   const score=c=>{
-    const match=h.cards.filter(x=>x!==c && value(x)===value(c)).length;
-    const run=h.cards.filter(x=>x[0]===c[0] && /^[0-9]$/.test(value(x)) && /^[0-9]$/.test(value(c)) &&
-      Math.abs(Number(value(x))-Number(value(c)))===1).length;
-    return match*4+run*2+weight(c)*3+(value(c)==="S"?4:0)+(value(c)==="R"?2:0)-(wild(c)?2:0);
+    const match=h.cards.filter(x=>x!==c && value(reflected(g,x))===value(reflected(g,c))).length;
+    const run=h.cards.filter(x=>x[0]===c[0] && /^[0-9]$/.test(value(reflected(g,x))) && /^[0-9]$/.test(value(reflected(g,c))) &&
+      Math.abs(Number(value(reflected(g,x)))-Number(value(reflected(g,c))))===1).length;
+    return match*4+run*2+weight(reflected(g,c))*3+(value(reflected(g,c))==="S"?4:0)+(value(reflected(g,c))==="R"?2:0)-(wild(c)?2:0);
   };
   const chooseColor=()=>{
     const counts={r:0,y:0,g:0,b:0};
@@ -800,8 +800,8 @@ function botTick(r){
   }else{
     const series=g.turn_cards,first=series[0],prev=series.at(-1);
     options=h.cards.filter(c=>{
-      const same=value(first)===value(c),delta=Number(value(c))-Number(value(prev));
-      const run=/^\d$/.test(value(c)) && /^\d$/.test(value(prev)) && c[0]===prev[0] &&
+      const same=value(first)===value(reflected(g,c)),delta=Number(value(reflected(g,c)))-Number(value(prev));
+      const run=/^\d$/.test(value(reflected(g,c))) && /^\d$/.test(value(prev)) && c[0]===prev[0] &&
         Math.abs(delta)===1 && (!g.turn_step || Math.sign(delta)===g.turn_step);
       if(!allowedDuringRestrictions(g,c))return false;
       if(!allowedDuringRestrictions(g,c))return false;
@@ -820,8 +820,8 @@ function botTick(r){
   // Keep the turn open for an additional card only when a valid combo exists.
   const series=g.turn_cards,first=series[0],prev=series.at(-1);
   const hasCombo=h.cards.some(c=>{
-    const same=value(first)===value(c),delta=Number(value(c))-Number(value(prev));
-    const run=/^\d$/.test(value(c))&&/^\d$/.test(value(prev))&&c[0]===prev[0]&&
+    const same=value(first)===value(reflected(g,c)),delta=Number(value(reflected(g,c)))-Number(value(prev));
+    const run=/^\d$/.test(value(reflected(g,c)))&&/^\d$/.test(value(prev))&&c[0]===prev[0]&&
       Math.abs(delta)===1&&(!g.turn_step||Math.sign(delta)===g.turn_step);
     return g.turn_mode==="repeat"?same:g.turn_mode==="sequence"?run:
       (same&&rules.repeat)||(run&&rules.sequence);
