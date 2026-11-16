@@ -300,7 +300,7 @@ const handlers = {
         code = r.code;
       }
     }
-    return { guest_id: me.id, nickname: me.nickname, room_code: code };
+    return { guest_id: me.id, nickname: me.nickname, room_code: code,google_linked:!!me.google_sub };
   },
 
   update_nickname({ p_token, p_nickname }) {
