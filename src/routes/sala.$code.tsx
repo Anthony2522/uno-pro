@@ -164,6 +164,7 @@ function RoomPage() {
     catchUno: () => act(() => api.catchUno(token, code)),
     negate: (color) => act(() => api.negateEffect(token,code,color)),
     resolveDetective: (color) => act(() => api.resolveDetective(token,code,color)),
+    resolveWildColor: (color) => act(() => api.resolveWildColor(token,code,color)),
     acceptSkip: () => act(() => api.acceptSkip(token,code)),
   };
   const updateWinners=(n:number)=>act(()=>api.updateWinners(token,code,n));
