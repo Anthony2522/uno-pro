@@ -6,6 +6,7 @@ export const CUSTOM_COLOR_CARDS=[
   {key:"L",name:"Cadeado",count:8,description:"Restringe cada rival à cor do Cadeado."},
   {key:"V",name:"Vórtice",count:8,description:"Puxa todas as suas cartas daquela cor."},
   {key:"C",name:"Cerveja",count:4,description:"Força jogadas aleatórias dos adversários."},
+  {key:"A",name:"Barata",count:4,description:"1 por cor. Cria uma cópia aleatória; cada cadeia passa uma só vez por jogador."},
 ] as const;
 export const CUSTOM_WILD_CARDS=[
   {key:"W5",name:"Coringa +5",count:2,description:"Só outro +5 pode rebater."},
@@ -19,7 +20,7 @@ export const CUSTOM_WILD_CARDS=[
 export type CustomCardKey=typeof CUSTOM_COLOR_CARDS[number]["key"]|typeof CUSTOM_WILD_CARDS[number]["key"];
 export type CardSettings=Record<CustomCardKey,boolean>;
 export const DEFAULT_CARD_SETTINGS:CardSettings={
-  T:true,H:true,E:true,L:true,V:true,C:true,
+  T:true,H:true,E:true,L:true,V:true,C:true,A:true,
   W5:true,X:true,B:true,N:true,P:true,M:true,Q:true
 };
 export function enabledCardSettings(changes?:Partial<CardSettings>):CardSettings{
