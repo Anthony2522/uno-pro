@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Logo } from "./Logo";
 import { HowToPlayDialog } from "./HowToPlayDialog";
 import { NicknameForm } from "./NicknameForm";
+import { GoogleSignInButton } from "./GoogleSignInButton";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { useReadyGuest } from "@/lib/uno/guest";
 import { useMuted } from "@/lib/uno/useMuted";
@@ -14,7 +15,7 @@ import { useLanguage } from "@/lib/uno/i18n";
 import { Input } from "@/components/ui/input";
 
 export function AppHeader({ children }: { children?: React.ReactNode }) {
-  const { guest, rename, isDev, activateDev } = useReadyGuest();
+  const { guest, rename, isDev, activateDev, authenticateGoogle } = useReadyGuest();
   const { language, toggleLanguage } = useLanguage();
   const [devKey,setDevKey]=useState("");
   const [devBusy,setDevBusy]=useState(false);
@@ -60,6 +61,10 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
               toast.success("Apelido atualizado!");
             }}
           />
+          <div className="mt-4 border-t border-glass-border pt-4">
+            <p className="mb-2 text-center text-sm font-semibold">{guest.google_linked?"Conta Google vinculada ✓":"Vincular conta Google para recuperar seu acesso"}</p>
+            {!guest.google_linked&&<GoogleSignInButton label="Vincular Google" onCredential={async credential=>{await authenticateGoogle(credential);setOpen(false);toast.success("Conta Google vinculada!")}}/>}
+          </div>
           {guest.nickname.toLocaleLowerCase("pt-BR")==="toninho" && (
             <div className="mt-4 space-y-2 rounded-xl border border-cyan/30 p-3">
               <p className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="size-4"/> Acesso desenvolvedor {isDev?"✓":""}</p>

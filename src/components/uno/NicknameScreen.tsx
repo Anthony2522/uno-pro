@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Ticket } from "lucide-react";
 import { Logo } from "./Logo";
 import { NicknameForm } from "./NicknameForm";
+import { GoogleSignInButton } from "./GoogleSignInButton";
 import { CardBack, UnoCard } from "./UnoCard";
 import { useGuest } from "@/lib/uno/guest";
 
 export function NicknameScreen() {
-  const { register, lastName } = useGuest();
+  const { register, authenticateGoogle, lastName } = useGuest();
   const [invite, setInvite] = useState<string | null>(null);
   useEffect(() => {
     const m = window.location.pathname.match(/\/sala\/([A-Za-z0-9]+)/);
@@ -26,7 +27,7 @@ export function NicknameScreen() {
           <Logo size="lg" />
         </div>
         <h1 className="text-center text-2xl font-bold sm:text-3xl">Como podemos te chamar?</h1>
-        <p className="mt-2 text-center text-muted-foreground">Sem cadastro, sem e-mail. Só um apelido e bora jogar.</p>
+        <p className="mt-2 text-center text-muted-foreground">Entre com Google para reconhecer sua conta quando voltar, ou jogue apenas com apelido.</p>
         {invite && (
           <div className="mt-5 flex items-center gap-3 rounded-2xl border border-cyan/30 bg-cyan/10 px-4 py-3 text-sm">
             <Ticket className="size-5 shrink-0 text-cyan" aria-hidden />
@@ -36,6 +37,8 @@ export function NicknameScreen() {
           </div>
         )}
         <div className="mt-6">
+          <GoogleSignInButton onCredential={authenticateGoogle}/>
+          <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-glass-border"/><span>ou continue como convidado</span><span className="h-px flex-1 bg-glass-border"/></div>
           <NicknameForm initial={lastName} onSubmit={register} />
         </div>
       </section>

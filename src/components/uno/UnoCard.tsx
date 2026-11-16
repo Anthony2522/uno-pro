@@ -1,4 +1,4 @@
-import { Ban, Repeat2, Eye, Bomb, Shield, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword } from "lucide-react";
+import { Ban, Repeat2, Eye, Bomb, Shield, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword, Scan, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cardLabel, cardValue, isWild } from "@/lib/uno/cards";
 
@@ -76,16 +76,16 @@ export function UnoCard({
   animate = false,
 }: {
   card: string;
-  mirrorAs?: string|undefined;
+  mirrorAs?: string|null|undefined;
   size?: CardSize;
   className?: string;
   rotate?: number;
   animate?: boolean;
 }) {
   const isMirror=card==="Q";
-  const face=isMirror?(mirrorAs&&mirrorAs!=="Q"?mirrorAs:"W"):card;
-  const wild = isWild(face);
-  const color = wild ? null : face[0];
+  const face=isMirror?(mirrorAs&&mirrorAs!=="Q"?mirrorAs:null):card;
+  const wild = isMirror || isWild(face||"");
+  const color = wild ? null : (face?.[0]??null);
   return (
     <div
       role="img"
@@ -112,15 +112,15 @@ export function UnoCard({
             wild ? "text-uno-paper drop-shadow-[0_2px_0_var(--uno-ink)]" : INK[color!],
           )}
         >
-          {size !== "xs" && (face==="W"?<span className="block size-[34cqw] rounded-full bg-wild ring-[3cqw] ring-white/85" />:<Symbol card={face} />)}
+          {size !== "xs" && (isMirror&&!face?<span className="relative flex flex-col items-center"><Scan className="size-[42cqw]" strokeWidth={2.5}/><Sparkles className="absolute -right-[14cqw] -top-[8cqw] size-[19cqw]"/></span>:face==="W"?null:<Symbol card={face||card} />)}
         </div>
         {size !== "xs" && (
           <>
             <div className="absolute left-[7%] top-[5%] z-10 font-display font-black italic leading-none text-uno-paper drop-shadow-[0_1px_0_var(--uno-ink)]">
-              {face === "W" ? <span className="block size-[14cqw] rounded-full bg-wild ring-1 ring-uno-paper" /> : <Symbol card={face} corner />}
+              {isMirror&&!face ? <Scan className="size-[16cqw]"/> : face === "W" ? <span className="block size-[14cqw] rounded-full bg-wild ring-1 ring-uno-paper" /> : <Symbol card={face||card} corner />}
             </div>
             <div className="absolute bottom-[5%] right-[7%] z-10 rotate-180 font-display font-black italic leading-none text-uno-paper drop-shadow-[0_1px_0_var(--uno-ink)]">
-              {face === "W" ? <span className="block size-[14cqw] rounded-full bg-wild ring-1 ring-uno-paper" /> : <Symbol card={face} corner />}
+              {isMirror&&!face ? <Scan className="size-[16cqw]"/> : face === "W" ? <span className="block size-[14cqw] rounded-full bg-wild ring-1 ring-uno-paper" /> : <Symbol card={face||card} corner />}
             </div>
           </>
         )}

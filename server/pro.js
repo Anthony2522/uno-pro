@@ -1,5 +1,6 @@
 // Additional UNO Pro rules for the standalone Node/Render server.
 import crypto from "node:crypto";
+import {googleLogin,googleClientId} from "./googleAuth.js";
 import { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import { chooseHardPlan } from "./hardBotStrategy.js";
 export { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
@@ -975,8 +976,10 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
   }
   if(time-lastBasicSweep>=3000){lastBasicSweep=time;basicSweep();}
 }
-export const RPC_NAMES=[...new Set([...basicNames,"end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings","update_winners","negate_effect","accept_skip","resolve_detective","resolve_wild_color"])];
+export const RPC_NAMES=[...new Set([...basicNames,"auth_config","google_login","end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings","update_winners","negate_effect","accept_skip","resolve_detective","resolve_wild_color"])];
 export function proRpc(fn,args={}){
+  if(fn==="auth_config")return {google_client_id:googleClientId(),persistent_rooms_configured:!!(process.env.UPSTASH_REDIS_REST_URL&&process.env.UPSTASH_REDIS_REST_TOKEN)};
+  if(fn==="google_login")return googleLogin(args);
   if(fn==="list_rejoinable_rooms")return originalRpc(fn,args);
   if(fn==="dev_auth"){
     const me=authenticate(args.p_token);
@@ -1068,7 +1071,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
-    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:"W",mirror_played_as:null,lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
+    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:null,mirror_played_as:null,lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
     for(const h of r.hands.values())h.uno_since=null;
     return result;
@@ -1108,7 +1111,7 @@ export function proRpc(fn,args={}){
       const personal=g.private_notices?.[result.me];
       result.game.private_notice=personal?{...personal,at:stamp(personal.at)}:null;
       result.game.pending_uncounterable=!!g.pending_uncounterable;
-      result.game.last_wild=g.last_wild||"W";
+      result.game.last_wild=g.last_wild||null;
       result.game.mirror_played_as=g.mirror_played_as||null;
       result.game.card_moves=[...(g.card_moves||[])];
       result.game.offline_deadline_at=g.solo_paused_at?null:g.offline_since && current(g)===result.game.current_player
