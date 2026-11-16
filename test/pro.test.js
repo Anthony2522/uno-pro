@@ -457,6 +457,9 @@ test("9 termina quando resta um, ou penaliza todos os omissos após o tempo",()=
   const r=store.roomsByCode.get(code),g=r.game;
   g.turn_idx=0;g.discard_pile=["b9"];g.current_color="b";
   r.hands.get(a.guest_id).cards=["b9","r9","r8"];
+  // A next human with no matching card can receive an unrelated auto-draw
+  // during proSweep. Give each respondent a matching red card to isolate 9 penalties.
+  for(const p of [b,c,d])r.hands.get(p.guest_id).cards=["r1","b3"];
   const before=[b,c,d].map(p=>r.hands.get(p.guest_id).cards.length);
   call("play_card",{p_token:a.token,p_code:code,p_card:"b9"});
   call("play_card",{p_token:a.token,p_code:code,p_card:"r9"});
