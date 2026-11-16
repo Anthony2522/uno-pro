@@ -152,3 +152,17 @@ test("baralho configurado sem Barata nunca a introduz, inclusive ao renovar",()=
   const fresh=newDeck();
   assert.equal(fresh.length,232);
 });
+
+test("duas Baratas de cadeias distintas podem ser jogadas na sequência de repetidas",()=>{
+  const {players,room,g,prepare,code}=match(3),a=players[0];
+  const red=makeRoach("r"),green=makeRoach("g");
+  room.hands.get(a.guest_id).cards=[red,green,"y8"];
+  prepare(a,red);
+  call("play_card",{p_token:a.token,p_code:code,p_card:red});
+  assert.equal(g.turn_cards.length,1);
+  assert.doesNotThrow(()=>call("play_card",{p_token:a.token,p_code:code,p_card:green}));
+  assert.equal(g.turn_cards.length,2);
+  assert.equal(g.turn_mode,"repeat");
+  assert.equal(g.roach_chains[roachChainId(red)].received.length,1);
+  assert.equal(g.roach_chains[roachChainId(green)].received.length,1);
+});
