@@ -32,6 +32,7 @@ const MESSAGES: Record<string, string> = {
   NEGATION_NOT_IN_HAND: "Você precisa ter a carta Negação.",
   NEGATION_NOT_ALLOWED: "Não existe um efeito que a Negação possa cancelar agora.",
   POWERLESS_NUMBER_ONLY: "Sem Poderes: durante esta vez, só pode jogar cartas numéricas.",
+  LOCK_COLOR_ONLY: "Cadeado: nesta vez só pode jogar cartas da cor exigida, sem coringas. Use Negação para cancelar.",
   INVALID_WINNERS: "Escolha uma quantidade válida de vencedores.",
   ANNOUNCEMENT_WAIT: "A animação não impede ações; tente novamente.",
   NINE_NOT_ALLOWED: "Você não pode apertar 9 agora.",
