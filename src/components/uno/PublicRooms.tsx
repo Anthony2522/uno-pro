@@ -51,12 +51,12 @@ export function PublicRooms({ onCreate }: { onCreate: () => void }) {
               <div className="min-w-0">
                 <p className="truncate font-bold">{r.name} <span className="font-mono text-xs text-cyan">{r.code}</span></p>
                 <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                  {r.solo?(language==="en"?"Solo with bots":"Você + bots"):(language==="en"?"Multiplayer":"Multijogador")}
+                  {r.local_only?(language==="en"?"Offline on this device":"Offline neste aparelho"):r.solo?(language==="en"?"Solo with bots":"Você + bots"):(language==="en"?"Multiplayer":"Multijogador")}
                   {r.recovery_until&&<span className="ml-1 inline-flex items-center gap-1"><Timer className="size-3"/>{Math.ceil((new Date(r.recovery_until).getTime()-tick)/1000)}s</span>}
                 </p>
               </div>
               <Button asChild variant="cyan" className="h-10 rounded-xl">
-                <Link to="/sala/$code" params={{code:r.code}}>{language==="en"?"Resume match":"Retomar partida"}</Link>
+                <Link to="/sala/$code" params={{code:r.code}}>{r.local_only?(language==="en"?"Play offline":"Jogar offline"):(language==="en"?"Resume match":"Retomar partida")}</Link>
               </Button>
             </div>
           ))}
