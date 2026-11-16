@@ -17,17 +17,18 @@ const makeRandom=seed=>()=>{
 };
 const rawArgs=process.argv;
 const full=rawArgs.includes("--full"),quick=rawArgs.includes("--quick");
-const stageSeeds=full?18:quick?5:10;
-const finalSeeds=full?140:quick?20:60;
-const selfSeeds=full?24:quick?5:12;
+const stageSeeds=full?48:quick?5:10;
+const finalSeeds=full?360:quick?20:60;
+const selfSeeds=full?80:quick?5:12;
 const seedOffset=Number(rawArgs.find(a=>a.startsWith("--seed="))?.slice(7)||0);
-const base={negationKeep:16.5,drawKeep:1,wildKeep:1,handShape:1,aggression:1,urgency:1,perCard:1,colorFit:1};
+const base={negationKeep:16.5,drawKeep:1,wildKeep:1,handShape:1,aggression:1,urgency:1,perCard:1,colorFit:1,vortexValue:1,shieldValue:1,swordValue:1,lockValue:1,restrictionsValue:1};
 const tuned=[
   {name:"balanced",params:{...base}},
   {name:"defensive",params:{...base,negationKeep:22,drawKeep:.74,handShape:1.13,urgency:1.1}},
   {name:"speed",params:{...base,negationKeep:14,perCard:1.24,handShape:.8,aggression:1.12}},
   {name:"press",params:{...base,negationKeep:18,aggression:1.4,urgency:1.4,drawKeep:.9}},
   {name:"flex",params:{...base,negationKeep:19.5,handShape:1.25,colorFit:1.22,perCard:.95}},
+  {name:"power",params:{...base,negationKeep:19,handShape:1.05,vortexValue:1.32,shieldValue:1.22,swordValue:1.15,lockValue:1.24}},
 ];
 const clamp=(n,lo,hi)=>Math.min(hi,Math.max(lo,n));
 const perturb=(champion,generation)=>[
@@ -36,6 +37,7 @@ const perturb=(champion,generation)=>[
   {name:"tempo_"+generation,params:{...champion.params,perCard:clamp(champion.params.perCard*1.17,.65,1.55),handShape:clamp(champion.params.handShape*.87,.6,1.6)}},
   {name:"attack_"+generation,params:{...champion.params,aggression:clamp(champion.params.aggression*1.2,.6,1.8),urgency:clamp(champion.params.urgency*1.25,.6,2)}},
   {name:"diverse_"+generation,params:{...champion.params,handShape:clamp(champion.params.handShape*1.19,.65,1.65),colorFit:clamp(champion.params.colorFit*1.16,.65,1.75)}},
+  {name:"power_"+generation,params:{...champion.params,vortexValue:clamp(champion.params.vortexValue*1.25,.6,2),shieldValue:clamp(champion.params.shieldValue*1.15,.6,1.8),lockValue:clamp(champion.params.lockValue*1.18,.6,1.8)}},
 ];
 function match(seed,variants){
   const n=variants.length;
@@ -145,10 +147,14 @@ try{
     const contestants=generation===0?tuned:perturb(champion,generation);
     const trial=contestants.map((p,index)=>{
       const result=playSeries(p,baseline,stageSeeds,1000+generation*2000);
-      return {name:p.name,params:p.params,...result};
-    }).sort((a,b)=>b.advantage-a.advantage);
+      // Successive generations must also defeat their own prior champion,
+      // rather than overfit against the old hard policy alone.
+      const challenger=generation?playSeries(p,champion,Math.max(4,Math.round(stageSeeds*.55)),200000+generation*2000):null;
+      const fitness=+(result.advantage*.70+(challenger?.advantage||0)*.30).toFixed(3);
+      return {name:p.name,params:p.params,...result,championAdvantage:challenger?.advantage??null,fitness};
+    }).sort((a,b)=>b.fitness-a.fitness);
     champion={name:trial[0].name,params:trial[0].params};
-    league.push({generation,seeds:stageSeeds,leader:trial[0],ranking:trial.map(({name,twoWinPct,threeWinPct,advantage})=>({name,twoWinPct,threeWinPct,advantage}))});
+    league.push({generation,seeds:stageSeeds,leader:trial[0],ranking:trial.map(({name,twoWinPct,threeWinPct,advantage,championAdvantage,fitness})=>({name,twoWinPct,threeWinPct,advantage,championAdvantage,fitness}))});
     console.log("UNO_TRAIN_GEN "+JSON.stringify(league.at(-1)));
   }
   const holdout=playSeries(champion,baseline,finalSeeds,99000);
