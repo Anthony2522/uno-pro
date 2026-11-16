@@ -90,10 +90,10 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("baralho de 227 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
+test("baralho de 228 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,227);
-  for(const c of ["N","P","M"])assert.equal(deck.filter(x=>x===c).length,1);
+  assert.equal(deck.length,228);
+  for(const c of ["N","P","M","Q"])assert.equal(deck.filter(x=>x===c).length,1);
   assert.equal(deck.filter(c=>c==="B").length,1);
   assert.equal(deck.filter(c=>c==="X").length,1);
   for(const col of ["r","y","g","b"])
@@ -117,7 +117,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   room.hands.get(a.guest_id).cards=["b1","r5"];
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,226);
+  assert.equal(g.draw_pile.length,227);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -952,7 +952,7 @@ test("se um humano vencer contra dois bots, partida encerra imediatamente",()=>{
   assert.equal(g.placements.length,2);
 });
 
-test("quando o último humano sai e ficam somente bots, o jogo termina",()=>{
+test("sair da partida solo não expulsa e dá cinco minutos para retornar",()=>{
   const a=call("register_guest",{p_nickname:"Saiu"});
   const code=call("create_room",{p_token:a.token,p_name:"Só robôs",p_max_players:4}).code;
   call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
@@ -960,8 +960,15 @@ test("quando o último humano sai e ficam somente bots, o jogo termina",()=>{
   call("start_game",{p_token:a.token,p_code:code});
   const r=store.roomsByCode.get(code);
   call("leave_room",{p_token:a.token,p_code:code});
-  assert.equal(r.game.status,"finished");
-  assert.equal(r.status,"waiting");
+  assert.equal(r.game.status,"playing");
+  assert.equal(r.status,"playing");
+  assert.ok(r.game.solo_recovery_until>Date.now()+295000);
+  assert.ok(r.members.some(m=>m.guest_id===a.guest_id));
+  assert.equal(call("list_rejoinable_rooms",{p_token:a.token}).some(v=>v.code===code),true);
+  call("join_room",{p_token:a.token,p_code:code});
+  assert.equal(r.game.solo_force_pause,false);
+  proSweep();
+  assert.equal(r.game.solo_recovery_until,null);
 });
 
 test("o anfitrião edita regras e cartas antes da primeira partida e após uma rodada",()=>{
