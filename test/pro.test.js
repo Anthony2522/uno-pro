@@ -2128,3 +2128,17 @@ test("difícil valoriza Vórtice pela quantidade de cartas realmente puxadas",()
   const mixed=chooseHardPlan({...context,hand:["bV","rV","y7"]});
   assert.ok(mixed.cards.length<=1,"não inventa combo manual após o Vórtice iniciar");
 });
+
+test("bot pode usar Negação reativa contra Bloqueio mesmo afetado pela Cerveja",()=>{
+  const scen=setup(),{room,g,a,b,bot}=scen;
+  g.turn_order=[a.guest_id,b.guest_id,bot];g.direction=1;g.turn_idx=room.game.turn_order.indexOf(bot);
+  room.hands.get(bot).cards=["N","r4","g2"];
+  g.beer_remaining=[bot];
+  g.skip_reaction={actor:a.guest_id,target:bot,cursor:g.turn_idx,
+    remaining:1,declined:[],deadline:Date.now()+9000};
+  g.discard_pile=["rS"];g.current_color="r";g.nine=null;
+  assert.doesNotThrow(()=>proSweep(),"Negação de defesa é exceção à jogada forçada da Cerveja");
+  assert.equal(room.hands.get(bot).cards.includes("N"),false);
+  assert.equal(g.skip_reaction,null);
+  assert.ok(g.effects.some(e=>e.type==="negation"&&e.by===bot));
+});
