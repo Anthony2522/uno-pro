@@ -1607,3 +1607,18 @@ test("Cerveja dá 3 segundos para cada adversário antes da jogada forçada",()=
   g.beer_due=Date.now()-1;proSweep();
   assert.equal(g.discard_pile.at(-1),"b7");
 });
+
+test("Cerveja respeita Escudo antes de sortear a carta da vez",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bC","r9"];
+  room.hands.get(b.guest_id).cards=["b5","r6"];
+  room.hands.get(s.bot).cards=["g1","y2"];
+  s.play(a,"bC");s.end(a);
+  g.pending_draw=2;g.pending_source=a.guest_id;g.shields[b.guest_id]=1;
+  g.beer_due=Date.now()-1;proSweep();
+  assert.equal(g.shields[b.guest_id],undefined,"o escudo foi consumido");
+  assert.equal(g.pending_draw,0,"dívida cancelada antes da escolha da Cerveja");
+  assert.equal(g.discard_pile.at(-1),"b5");
+  assert.ok(g.effects.some(e=>e.type==="shield_defense"&&e.reason==="draw"));
+});
