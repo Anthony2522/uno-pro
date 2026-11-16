@@ -2091,3 +2091,25 @@ test("difícil guarda Negação para defesa em vez de descartá-la cedo",()=>{
   const only=chooseHardPlan({...common,hand:["N","b1"],currentColor:"r",topCard:"r7"});
   assert.equal(only.cards[0],"N","Negação ainda é jogável quando única opção");
 });
+
+test("bot fácil e difícil aguardam Vórtice concluir em vez de encerrar a vez antes",()=>{
+  for(const difficulty of ["easy","hard"]){
+    const scenario=setup(),{room,g,bot}=scenario;
+    store.guestsById.get(bot).difficulty=difficulty;
+    g.turn_idx=g.turn_order.indexOf(bot);g.turn_cards=[];g.turn_mode=null;g.turn_step=0;
+    g.pending_draw=0;g.nine=null;g.has_drawn=false;g.bot_move={id:bot,due:Date.now()-1,played:0};
+    g.current_color="b";g.discard_pile=["b2"];
+    room.hands.get(bot).cards=["bV","bV","g4"];
+    proSweep();
+    assert.ok(g.vortex_queue,`Vórtice deveria iniciar para ${difficulty}`);
+    assert.equal(g.status,"playing");
+    g.vortex_queue.next_at=Date.now()-1;
+    assert.doesNotThrow(()=>proSweep(),`não pode finalizar antes de puxar cartas (${difficulty})`);
+    if(g.vortex_queue){
+      g.vortex_queue.next_at=Date.now()-1;
+      assert.doesNotThrow(()=>proSweep(),`conclusão de Vórtice não pode lançar exceção (${difficulty})`);
+    }
+    assert.equal(g.vortex_queue,null,`Vórtice finaliza para ${difficulty}`);
+    assert.equal(g.turn_cards.length,0);
+  }
+});
