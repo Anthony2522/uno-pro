@@ -141,3 +141,32 @@ test("sala offline aceita configurações antes de iniciar: número de bots, ven
     if(saved.navigator)Object.defineProperty(globalThis,"navigator",saved.navigator);else delete globalThis.navigator;
   }
 });
+
+test("sala offline permite escolher 19 bots (20 jogadores no total)",async()=>{
+  const data=new Map();
+  const saved={storage:globalThis.localStorage,window:globalThis.window,document:globalThis.document,
+    navigator:Object.getOwnPropertyDescriptor(globalThis,"navigator")};
+  globalThis.localStorage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,String(v)),removeItem:k=>data.delete(k)};
+  globalThis.window={setInterval:()=>1};
+  globalThis.document={visibilityState:"visible",addEventListener:()=>{}};
+  Object.defineProperty(globalThis,"navigator",{configurable:true,value:{storage:{persist:async()=>true}}});
+  try{
+    const runtime=await import((await bundledRuntime())+"#twenty-players");
+    const code=runtime.startLocalSolo("Anfitrião",{name:"19 bots",maxPlayers:20,
+      startingCards:8,winners:2,
+      rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+      cards:{T:true,H:true,E:true,L:true,V:true,C:true,W5:true,X:true,B:true,N:true,P:true,M:true,Q:true}
+    });
+    const state=runtime.localRpc("get_room_state",{p_code:code});
+    assert.equal(state.room.max_players,20);
+    assert.equal(state.members.length,20);
+    assert.equal(state.members.filter(m=>m.bot).length,19);
+    assert.equal(new Set(state.members.map(m=>m.nickname)).size,20);
+    assert.equal(state.game.my_hand.length,8);
+  }finally{
+    if(saved.storage===undefined)delete globalThis.localStorage;else globalThis.localStorage=saved.storage;
+    if(saved.window===undefined)delete globalThis.window;else globalThis.window=saved.window;
+    if(saved.document===undefined)delete globalThis.document;else globalThis.document=saved.document;
+    if(saved.navigator)Object.defineProperty(globalThis,"navigator",saved.navigator);else delete globalThis.navigator;
+  }
+});
