@@ -92,7 +92,7 @@ function botCutTick(r) {
       for(const card of hand(r,id).cards)if(counts[card[0]]!==undefined)counts[card[0]]++;
       const color=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
       play(r,id,w.top,color);
-      if(g.status==="playing" && current(g)===id) finish(r);
+      if(g.status==="playing" && current(g)===id && !g.vortex_queue) finish(r);
     } catch (e) { if(!(e instanceof RpcError))throw e; }
     break;
   }
@@ -710,7 +710,7 @@ function hardBotTick(r,id,h){
   const card=turn.plan.shift();
   if(!h.cards.includes(card))throw new Error("INVALID_HARD_BOT_PLAN");
   play(r,id,card,wild(card)?turn.color:undefined,reflected(g,card)==="X"?turn.target:undefined);
-  if(g.status!=="playing"||current(g)!==id||!g.turn_cards?.length)return;
+  if(g.status!=="playing"||current(g)!==id||!g.turn_cards?.length||g.vortex_queue)return;
   if(turn.plan.length===0){finish(r);return;}
   turn.due=clock()+2000;
 }
@@ -815,7 +815,7 @@ function botTick(r){
   const target=reflected(g,pick)==="X"?g.turn_order.filter(p=>p!==id)
     .sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0]:undefined;
   play(r,id,pick,chooseColor(),target);
-  if(g.status!=="playing" || current(g)!==id||!g.turn_cards?.length)return;
+  if(g.status!=="playing" || current(g)!==id||!g.turn_cards?.length||g.vortex_queue)return;
   g.bot_move={id,due:clock()+(hard?2000:5000),played:(g.bot_move?.played||0)+1};
   // Keep the turn open for an additional card only when a valid combo exists.
   const series=g.turn_cards,first=series[0],prev=series.at(-1);
