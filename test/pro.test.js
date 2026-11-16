@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {store, newDeck, CUSTOM_CARD_KEYS, normalizeCardsEnabled, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
 import {serializeState,hydrateState} from "../server/persistence.js";
 import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
-import { inferColorGaps } from "../server/hardBotStrategy.js";
+import { inferColorGaps,chooseHardPlan } from "../server/hardBotStrategy.js";
 const call=(fn,args)=>proRpc(fn,args);
 function setup(rules) {
   const a=call("register_guest",{p_nickname:"Alice"}),b=call("register_guest",{p_nickname:"Bruno"});
@@ -252,13 +252,13 @@ test("timeout após rebater +4 finaliza a jogada sem cobrar o próprio jogador",
 
 test("probabilidades exatas dos bots no desafio do 9 e no corte",()=>{
   assert.equal(chooseNineDelay("easy",()=>0.01),0);
-  assert.equal(chooseNineDelay("easy",()=>0.29),0);
-  assert.equal(chooseNineDelay("easy",()=>0.30),8000);
+  assert.equal(chooseNineDelay("easy",()=>0.19999),0);
+  assert.equal(chooseNineDelay("easy",()=>0.20),8000);
   assert.equal(chooseNineDelay("easy",()=>0.95),8000);
-  assert.equal(chooseNineDelay("hard",()=>0.09),0);
-  assert.equal(chooseNineDelay("hard",()=>0.10),2000);
-  assert.equal(chooseNineDelay("hard",()=>0.49),2000);
-  assert.equal(chooseNineDelay("hard",()=>0.50),5000);
+  assert.equal(chooseNineDelay("hard",()=>0.49999),0);
+  assert.equal(chooseNineDelay("hard",()=>0.50),2000);
+  assert.equal(chooseNineDelay("hard",()=>0.74999),2000);
+  assert.equal(chooseNineDelay("hard",()=>0.75),5000);
   assert.equal(chooseCutDelay("easy",()=>0),40000);
   assert.equal(chooseCutDelay("hard",()=>0.09),10000);
   assert.equal(chooseCutDelay("hard",()=>0.11),25000);
@@ -2048,4 +2048,45 @@ test("espadas de A e B se somam em +6 quando B rebate e C aceita a dívida",()=>
   assert.ok(strikes.length>=1);
   assert.equal(strikes.at(-1).n,6,"o golpe notifica o bônus total +6");
   assert.equal(g.pending_sword_bonus,0,"a batalha foi encerrada e o bônus zerado");
+});
+
+test("bot difícil grita UNO imediatamente em 80% dos casos e após 6s em 20%",()=>{
+  assert.equal(chooseBotUnoDelay("hard",()=>0),0);
+  assert.equal(chooseBotUnoDelay("hard",()=>.799999),0);
+  assert.equal(chooseBotUnoDelay("hard",()=>.8),6000);
+  assert.equal(chooseBotUnoDelay("hard",()=>.9999),6000);
+  assert.equal(chooseBotUnoDelay("easy",()=>.15),0);
+  assert.equal(chooseBotUnoDelay("easy",()=>.5),8000);
+  assert.equal(chooseBotUnoDelay("easy",()=>.95),null);
+});
+test("planejador difícil reconhece Espelho copiando +5, +4 e Negação",()=>{
+  const common={turnOrder:["eu","rival"],turnIndex:0,selfId:"eu",counts:{rival:4},
+    direction:1,rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+    history:{},random:()=>0};
+  const pending=chooseHardPlan({...common,hand:["Q","b4"],mirrorAs:"W5",
+    currentColor:"r",topCard:"r4",pendingDraw:5,pendingUncounterable:true});
+  assert.equal(pending.kind,"play");
+  assert.equal(pending.cards[0],"Q","Espelho reflete +5 e consegue rebater dívida de +5");
+  const four=chooseHardPlan({...common,hand:["Q","b4"],mirrorAs:"W4",
+    currentColor:"r",topCard:"r4",pendingDraw:4,pendingUncounterable:false});
+  assert.equal(four.kind,"play");
+  assert.equal(four.cards[0],"Q","Espelho reflete +4 e pode rebater");
+  const mirrorNegation=chooseHardPlan({...common,hand:["Q","r3"],mirrorAs:"N",
+    currentColor:"r",topCard:"r8"});
+  assert.equal(mirrorNegation.cards[0],"r3","Espelho-Negação preservado quando existe alternativa");
+  const wild=chooseHardPlan({...common,hand:["Q","b4"],mirrorAs:"W",
+    currentColor:"r",topCard:"r8"});
+  assert.equal(wild.cards[0],"Q","Espelho básico permanece jogável");
+});
+test("difícil guarda Negação para defesa em vez de descartá-la cedo",()=>{
+  const common={turnOrder:["eu","rival"],turnIndex:0,selfId:"eu",counts:{rival:7},
+    direction:1,rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+    history:{},random:()=>0,mirrorAs:"W"};
+  const play=chooseHardPlan({...common,
+    hand:["N","r3","g7","b8","r4","y0","W4","g2"],
+    currentColor:"r",topCard:"r7"});
+  assert.equal(play.kind,"play");
+  assert.ok(!play.cards.includes("N"),"tem alternativa e deve guardar Negação");
+  const only=chooseHardPlan({...common,hand:["N","b1"],currentColor:"r",topCard:"r7"});
+  assert.equal(only.cards[0],"N","Negação ainda é jogável quando única opção");
 });
