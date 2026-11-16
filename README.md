@@ -67,3 +67,29 @@ Para reproduzir os torneios: `node scripts/bot-benchmark.mjs --games=600` (bot d
 - **Avisos**: aparecem juntos até três por vez, não bloqueiam ações. Compras automáticas com passagem de vez geram aviso privado.
 - **Vitórias**: quantidade configurável de 1 a N−1, ajustada ao número real de participantes no início. Anfitrião pode alterar na espera.
 - **Inatividade**: duas passagens de turno consecutivas pelo tempo esgotado e sem ação removem automaticamente o jogador.
+
+## Entrar com Google e recuperar sua partida após queda de Wi-Fi
+
+O botão oficial **Entrar com Google** aparece na tela inicial de apelido. O jogador também pode **vincular a conta Google existente** clicando no próprio perfil/apelido dentro do jogo. A verificação do ID token é feita no servidor, com assinatura do Google, audiência e prazo de validade; nenhuma credencial do Google é armazenada em arquivos do frontend.
+
+**Configuração obrigatória no Google Cloud:**
+
+1. Crie/abra um projeto em [Google Cloud Console](https://console.cloud.google.com/apis/credentials) e configure a tela de consentimento OAuth.
+2. Crie uma credencial **OAuth Client ID**, tipo **Web application**. Em **Authorized JavaScript origins**, acrescente a URL HTTPS exata do site (por exemplo `https://SEU-SITE.onrender.com`, sem barra ao final). Para testar localmente, acrescente `http://localhost:3000`.
+3. Copie o Client ID (termina com `.apps.googleusercontent.com`) para a variável **`GOOGLE_CLIENT_ID`** em **Render → Environment**. **Não** coloque segredos OAuth no GitHub. O fluxo atual usa popup do Google Identity Services; ele não precisa de Client Secret nem de redirect URI.
+4. Se o consentimento OAuth estiver em modo Testing, acrescente as contas que poderão testar.
+
+Enquanto `GOOGLE_CLIENT_ID` não estiver configurado, o login com apelido permanece funcionando, mas o botão Google ficará inativo.
+
+**Persistência das salas e sessões:**
+
+- O servidor agora salva automaticamente partidas, mãos, convidados, tokens de sessão **hashados** e vínculos Google. Sem configuração adicional, usa um arquivo local `.uno-state.json` (ignorado pelo Git). Isso pode sobreviver a uma reinicialização do processo, **mas não é garantido entre deploys/recriações do serviço no Render**.
+- Para recuperação confiável após recriações do Render, crie um Redis [Upstash](https://console.upstash.com/redis), copie as credenciais REST e configure no Render **`UPSTASH_REDIS_REST_URL`** e **`UPSTASH_REDIS_REST_TOKEN`**. Nunca exponha esse token no browser. O servidor passa a salvar no Redis e a restaurar o estado *antes de aceitar conexões*. Use a mesma instância de Redis e a mesma chave (`UNO_REDIS_KEY`, opcional) após cada deploy.
+- O serviço foi projetado para **uma única instância do servidor** (sem escalonamento horizontal); executar vários servidores independentes exige sincronização distribuída.
+- Para partidas solo com bots, a pausa/retomada segue o limite de **cinco minutos** a partir da desconexão. Nas partidas com outros humanos, as regras de expulsão por inatividade continuam valendo. Uma conta Google valida a identidade, mas não substitui o armazenamento persistente das cartas.
+
+**Recomendação para partidas já iniciadas:** antes de fechar a aba, vincule sua conta Google ao perfil atual. Ao voltar com a mesma conta, sua identidade e partidas elegíveis serão reconhecidas, desde que a sala ainda exista no armazenamento.
+
+## Coringa Espelho — aparência
+
+Há uma única carta física Espelho. Enquanto nenhum coringa real tiver sido jogado na partida, ela mostra **sua própria arte de espelho**. Assim que um coringa real é jogado (inclusive pelo próprio portador), sua face mostra a **mesma arte daquele coringa** — por exemplo, o símbolo **+4** — mas conserva a borda branca pulsante e o brilho prateado que passa por cima da carta. A cópia do Espelho não substitui a referência do último coringa real.
