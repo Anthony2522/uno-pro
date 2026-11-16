@@ -20,7 +20,7 @@ function CardGroup({title,items,cards,onChange}:{title:string;
         <input type="checkbox" checked={cards[item.key]} onChange={e=>onChange({...cards,[item.key]:e.target.checked})}
           className="size-4 shrink-0 accent-cyan" aria-label={item.name}/>
         <UnoCard card={item.key.length>1||["X","B","N","P","M","Q"].includes(item.key)?item.key:"b"+item.key}
-          size="xs" className="!w-9 shrink-0"/>
+          size="sm" className="!w-12 shrink-0"/>
         <span className="min-w-0">
           <span className="block text-sm font-semibold">{item.name} <span className="font-normal text-muted-foreground">· {item.count} no baralho</span></span>
           <span className="mt-0.5 block text-xs text-muted-foreground">{item.description}</span>

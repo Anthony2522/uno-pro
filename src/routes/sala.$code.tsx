@@ -159,7 +159,6 @@ function RoomPage() {
         sfx("draw");
         if (r.auto_passed) toast("Sem jogada possível: você comprou e a vez passou automaticamente.");
         else if (r.card) toast("Carta comprada. Você pode jogar qualquer carta compatível.");
-        if (!r.card) toast("O baralho acabou.");
       }),
     end: () => act(() => api.endTurn(token, code)),
     accept: () => act(() => api.acceptDraw(token, code)),
@@ -241,7 +240,7 @@ function RoomPage() {
                  e.type==="beer"?"Cerveja: os adversários jogarão automaticamente":
                  e.type==="beer_forced"?`${e.name}: jogada aleatória pela Cerveja`:
                  e.type==="lock"?language==="en"?`Lock: next turn, opponents may only play ${({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[e.color??"b"]} cards (no wilds).`:`Cadeado: na próxima vez, adversários só poderão usar cartas ${({r:"vermelhas",y:"amarelas",g:"verdes",b:"azuis"} as Record<string,string>)[e.color??"b"]}, sem coringas.`:
-                 e.type==="sword_armed"?language==="en"?`${e.name} activated Sword (+3 to next draw card)`:`${e.name} ativou Espada (+3 na próxima compra)`:
+                 e.type==="sword_armed"?language==="en"?`${e.name} activated Sword (+3 to the next attack)`:`${e.name} ativou Espada (+3 no próximo ataque)`:
                  e.type==="sword_boost"?language==="en"?`Sword: +${e.n??3} added to the draw debt`:`Espada: +${e.n??3} somados à dívida`:
                  e.type==="sword_strike"?language==="en"?`Sword hit ${e.target_name??"a player"}!`:`Espada atingiu ${e.target_name??"um jogador"}!`:
                  e.type==="shield_defense"?`${e.target_name??e.name} foi defendido(a) pelo Escudo`:
