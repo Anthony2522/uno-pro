@@ -68,27 +68,36 @@ Para reproduzir os torneios: `node scripts/bot-benchmark.mjs --games=600` (bot d
 - **Vitórias**: quantidade configurável de 1 a N−1, ajustada ao número real de participantes no início. Anfitrião pode alterar na espera.
 - **Inatividade**: duas passagens de turno consecutivas pelo tempo esgotado e sem ação removem automaticamente o jogador.
 
-## Entrar com Google e recuperar sua partida após queda de Wi-Fi
+## Modo offline de verdade e recuperação de partidas solo (novembro 2026)
 
-O botão oficial **Entrar com Google** aparece na tela inicial de apelido. O jogador também pode **vincular a conta Google existente** clicando no próprio perfil/apelido dentro do jogo. A verificação do ID token é feita no servidor, com assinatura do Google, audiência e prazo de validade; nenhuma credencial do Google é armazenada em arquivos do frontend.
+### Causa raiz
 
-**Configuração obrigatória no Google Cloud:**
+No plano gratuito do Render o processo pode reiniciar e perder dados em memória. Os arquivos locais do serviço também são efêmeros; **o link da sala não é um backup**. O antigo timeout de cinco minutos não recupera uma sala que já deixou de existir no servidor. Por isso uma partida que depende exclusivamente do servidor pode desaparecer mesmo com um link correto.
 
-1. Crie/abra um projeto em [Google Cloud Console](https://console.cloud.google.com/apis/credentials) e configure a tela de consentimento OAuth.
-2. Crie uma credencial **OAuth Client ID**, tipo **Web application**. Em **Authorized JavaScript origins**, acrescente a URL HTTPS exata do site (por exemplo `https://SEU-SITE.onrender.com`, sem barra ao final). Para testar localmente, acrescente `http://localhost:3000`.
-3. Copie o Client ID (termina com `.apps.googleusercontent.com`) para a variável **`GOOGLE_CLIENT_ID`** em **Render → Environment**. **Não** coloque segredos OAuth no GitHub. O fluxo atual usa popup do Google Identity Services; ele não precisa de Client Secret nem de redirect URI.
-4. Se o consentimento OAuth estiver em modo Testing, acrescente as contas que poderão testar.
+### Jogar offline com bots (sem login Google, sem Redis)
 
-Enquanto `GOOGLE_CLIENT_ID` não estiver configurado, o login com apelido permanece funcionando, mas o botão Google ficará inativo.
+1. Abra o UNO Pro **uma vez com internet** depois da atualização. O service worker instala um cache versionado contendo a interface, as cartas e todos os módulos de rotas.
+2. Na tela inicial, clique em **Jogar offline com bots**. Uma partida de três jogadores (você, um bot fácil e um difícil) começa **no seu navegador**, com as mesmas regras e IA do jogo online.
+3. Você pode desligar o Wi-Fi, jogar, recarregar a página e voltar a essa partida pelo botão **Continuar partida offline com bots** ou pelo link local da sala.
+4. O jogo salva o baralho, suas cartas, as mãos dos bots e o turno no **localStorage deste navegador** após cada ação. Ao ficar em segundo plano, os cronômetros são pausados e ajustados quando você volta. Não há janela de expiração de cinco minutos para partidas inteiramente locais.
 
-**Persistência das salas e sessões:**
+**Modo offline significa**: a partida não é sincronizada com o servidor e não pode ser compartilhada com amigos ou retomada em outro aparelho. Não limpe os dados do site, não use modo anônimo e mantenha o mesmo navegador. O navegador pode apagar dados em situações excepcionais; o jogo solicita armazenamento persistente quando disponível.
 
-- O servidor agora salva automaticamente partidas, mãos, convidados, tokens de sessão **hashados** e vínculos Google. Sem configuração adicional, usa um arquivo local `.uno-state.json` (ignorado pelo Git). Isso pode sobreviver a uma reinicialização do processo, **mas não é garantido entre deploys/recriações do serviço no Render**.
-- Para recuperação confiável após recriações do Render, crie um Redis [Upstash](https://console.upstash.com/redis), copie as credenciais REST e configure no Render **`UPSTASH_REDIS_REST_URL`** e **`UPSTASH_REDIS_REST_TOKEN`**. Nunca exponha esse token no browser. O servidor passa a salvar no Redis e a restaurar o estado *antes de aceitar conexões*. Use a mesma instância de Redis e a mesma chave (`UNO_REDIS_KEY`, opcional) após cada deploy.
-- O serviço foi projetado para **uma única instância do servidor** (sem escalonamento horizontal); executar vários servidores independentes exige sincronização distribuída.
-- Para partidas solo com bots, a pausa/retomada segue o limite de **cinco minutos** a partir da desconexão. Nas partidas com outros humanos, as regras de expulsão por inatividade continuam valendo. Uma conta Google valida a identidade, mas não substitui o armazenamento persistente das cartas.
+### Resgatar uma partida online com bots, mesmo após a sala desaparecer
 
-**Recomendação para partidas já iniciadas:** antes de fechar a aba, vincule sua conta Google ao perfil atual. Ao voltar com a mesma conta, sua identidade e partidas elegíveis serão reconhecidas, desde que a sala ainda exista no armazenamento.
+- Durante uma partida **com um único humano e os demais bots**, o cliente baixa periodicamente um **snapshot completo privado**: estado, baralho, mãos dos bots e a própria mão. O endpoint recusa partidas com mais de um humano ou usuários que não fazem parte da sala.
+- Se o servidor ficar inacessível ou responder **ROOM_NOT_FOUND / INVALID_SESSION** ao abrir o link antigo, o cliente recupera o snapshot guardado neste aparelho e **continua a partida localmente**, sem perder todas as cartas.
+- A tela inicial também mostra os backups locais recuperáveis, com botão de retomada, mesmo se o serviço estiver indisponível.
+- Depois do resgate, a partida segue somente no aparelho (sem voltar a sincronizar com o servidor), pois o servidor antigo pode ter desaparecido ou evoluído enquanto você esteve offline.
+- **Limite honesto**: o resgate automático só existe se este navegador **já tiver salvo pelo menos um snapshot** daquela partida. Se o servidor cair antes do primeiro salvamento, ou se os dados do site forem apagados, não há como reconstruir exatamente a partida anterior.
+
+### Partidas com outras pessoas
+
+O modo offline e o snapshot de resgate só se aplicam a partidas em que há **um único humano contra bots**. Partidas multiplayer reais continuam usando o servidor e mantendo as regras atuais de reconexão e expulsão por inatividade. Não existe fork local de partidas compartilhadas.
+
+### Armazenamento do servidor (opcional)
+
+A persistência externa via Redis continua disponível para quem quiser manter salas *multiplayer* durante reinícios do Render: configure `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN` no Render. **Para partidas offline com bots não precisa de Redis nem de Google Cloud.** O servidor também pode usar `.uno-state.json` local, mas esse arquivo não sobrevive necessariamente a novos deploys no plano gratuito.
 
 ## Coringa Espelho — aparência
 
