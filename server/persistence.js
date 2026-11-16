@@ -1,10 +1,14 @@
 // Optional durable state for a single UNO Pro Node instance.
 // Configure UPSTASH_REDIS_REST_URL/TOKEN on Render; NEVER send the token to the browser.
 import {store} from "./game.js";
+import fs from "node:fs/promises";
+import path from "node:path";
 const url=process.env.UPSTASH_REDIS_REST_URL?.replace(/\/$/,"");
 const token=process.env.UPSTASH_REDIS_REST_TOKEN;
 const key=process.env.UNO_REDIS_KEY||"unopro:live-state:v1";
-export const persistenceEnabled=()=>Boolean(url&&token);
+const filePath=process.env.UNO_STATE_FILE||path.join(process.cwd(),".uno-state.json");
+export const remotePersistenceEnabled=()=>Boolean(url&&token);
+export const persistenceEnabled=()=>true;
 export function serializeState(){
   return {version:1,saved_at:Date.now(),
     guests:[...store.guestsById.values()].map(g=>({...g})),
@@ -44,12 +48,11 @@ async function command(...args){
   return data.result;
 }
 export async function restoreState(){
-  if(!persistenceEnabled())return false;
   try{
-    const saved=await command("GET",key);
+    const saved=remotePersistenceEnabled()?await command("GET",key):await fs.readFile(filePath,"utf8").catch(error=>{if(error.code==="ENOENT")return null;throw error});
     if(saved){hydrateState(JSON.parse(saved));return true;}
   }catch(error){console.error("[persistence] could not restore:",error);
-    // Do not silently start an empty game server on a configured database failure.
+    // Do not silently serve an empty game after a storage outage.
     throw error;
   }
   return false;
@@ -67,7 +70,12 @@ export async function flushState(){
   if(active){await active;if(savedVersion>=version)return;}
   if(savedVersion>=version)return;
   const target=version,payload=JSON.stringify(serializeState());
-  active=command("SET",key,payload);
+  active=remotePersistenceEnabled()?command("SET",key,payload):(async()=>{
+    const temp=filePath+".tmp";
+    await fs.mkdir(path.dirname(filePath),{recursive:true});
+    await fs.writeFile(temp,payload,{encoding:"utf8",mode:0o600});
+    await fs.rename(temp,filePath);
+  })();
   try{await active;savedVersion=target;}
   finally{active=null}
   if(savedVersion<version){ // Catch updates arriving during an in-flight write.
