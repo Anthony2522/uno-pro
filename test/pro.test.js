@@ -2113,3 +2113,17 @@ test("bot fácil e difícil aguardam Vórtice concluir em vez de encerrar a vez 
     assert.equal(g.turn_cards.length,0);
   }
 });
+
+test("difícil valoriza Vórtice pela quantidade de cartas realmente puxadas",()=>{
+  const context={hand:["bV","b2","b4","b5","r7"],topCard:"b0",currentColor:"b",
+    direction:1,turnOrder:["eu","rival"],turnIndex:0,selfId:"eu",
+    counts:{rival:6},rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+    mirrorAs:"W",history:{},random:()=>0};
+  const decision=chooseHardPlan(context);
+  assert.equal(decision.kind,"play");
+  assert.deepEqual(decision.cards,["bV"],"Vórtice limpa bV,b2,b4,b5 de uma vez");
+  const winning=chooseHardPlan({...context,hand:["bV","b2","b4","b5"]});
+  assert.deepEqual(winning.cards,["bV"],"Vórtice garante vitória ao puxar todas as cartas restantes");
+  const mixed=chooseHardPlan({...context,hand:["bV","rV","y7"]});
+  assert.ok(mixed.cards.length<=1,"não inventa combo manual após o Vórtice iniciar");
+});
