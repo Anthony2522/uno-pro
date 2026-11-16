@@ -53,6 +53,10 @@ export type GameState = {
   powerless_remaining?: string[];
   shields?: Record<string,number>;
   beer_remaining?: string[];
+  beer_due_at?: string|null;
+  vortex_pending?: {actor:string;remaining:number;total:number}|null;
+  wild_pending_color?: boolean;
+  wild_color_pending_player?: string|null;
   detective_pending_color?: boolean;
   machine_gun_new?: {card:string;nonce:number;at:string}|null;
   skip_reaction?: {target:string|null;expires_at:string}|null;
@@ -165,6 +169,8 @@ export const api = {
     call<{ok:boolean;winners_target:number}>("update_winners",{p_token:token,p_code:code,p_winners:winners}),
   resolveDetective: (token:string,code:string,color:CardColor)=>
     call("resolve_detective",{p_token:token,p_code:code,p_color:color}),
+  resolveWildColor: (token:string,code:string,color:CardColor)=>
+    call("resolve_wild_color",{p_token:token,p_code:code,p_color:color}),
   negateEffect: (token:string,code:string,color:CardColor)=>
     call("negate_effect",{p_token:token,p_code:code,p_color:color}),
   acceptSkip: (token:string,code:string)=>
