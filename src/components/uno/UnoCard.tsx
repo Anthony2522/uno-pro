@@ -85,7 +85,7 @@ export function UnoCard({
   const isMirror=card==="Q";
   const face=isMirror?(mirrorAs&&mirrorAs!=="Q"?mirrorAs:null):card;
   const wild = isMirror || isWild(face||"");
-  const color = wild ? null : face[0];
+  const color = wild ? null : (face?.[0]??null);
   return (
     <div
       role="img"
