@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {store, newDeck, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
+import {serializeState,hydrateState} from "../server/persistence.js";
 import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
 import { inferColorGaps } from "../server/hardBotStrategy.js";
 const call=(fn,args)=>proRpc(fn,args);
@@ -1744,16 +1745,16 @@ test("Jogador único entre bots preserva a partida durante desconexão longa",()
 
 test("Espelho é coringa único e começa copiando o coringa comum",()=>{
   const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
-  assert.equal(g.last_wild,"W");
+  assert.equal(g.last_wild,null,"antes do primeiro coringa o Espelho tem sua arte própria");
   room.hands.get(a.guest_id).cards=["Q","r3"];
   g.discard_pile=["b1"];g.current_color="b";
   s.play(a,"Q","y");
   assert.equal(g.discard_pile.at(-1),"Q","identidade física preservada");
   assert.equal(g.mirror_played_as,"W");
   assert.equal(g.current_color,"y");
-  assert.equal(g.last_wild,"W","Espelho não se copia a si mesmo");
+  assert.equal(g.last_wild,null,"Espelho não se copia a si mesmo");
   const state=call("get_room_state",{p_token:a.token,p_code:s.code}).game;
-  assert.equal(state.last_wild,"W");
+  assert.equal(state.last_wild,null);
   assert.equal(state.mirror_played_as,"W");
 });
 test("Espelho copia +4 do último coringa e preserva a dívida",()=>{
@@ -1884,4 +1885,30 @@ test("Retorno de sala privada não revela partidas de outros jogadores",()=>{
   assert.ok(call("list_rejoinable_rooms",{p_token:a.token}).some(x=>x.code===code));
   assert.ok(!call("list_rejoinable_rooms",{p_token:outsider.token}).some(x=>x.code===code));
   assert.ok(!call("list_public_rooms",{}).some(x=>x.code===code));
+});
+
+test("O servidor reiniciado recupera identidades, Google vinculado e mãos da mesma sala",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  store.guestsById.get(a.guest_id).google_sub="verified-google-sub";
+  g.last_wild="W4";
+  room.hands.get(a.guest_id).cards=["Q","r4"];
+  const snapshot=JSON.parse(JSON.stringify(serializeState()));
+  const guestCount=store.guestsById.size;
+  // Simulate new process by clearing the in-memory registries and hydrating.
+  store.guestsById=new Map();store.guestsByHash=new Map();
+  store.rooms=new Map();store.roomsByCode=new Map();
+  hydrateState(snapshot);
+  assert.equal(store.guestsById.size,guestCount);
+  assert.equal(store.roomsByCode.get(s.code).game.last_wild,"W4");
+  assert.deepEqual(store.roomsByCode.get(s.code).hands.get(a.guest_id).cards,["Q","r4"]);
+  assert.equal(store.guestsById.get(a.guest_id).google_sub,"verified-google-sub");
+  assert.equal(call("whoami",{p_token:a.token}).guest_id,a.guest_id,"same saved session remains valid");
+  assert.equal(call("get_room_state",{p_token:a.token,p_code:s.code}).game.my_hand.includes("Q"),true);
+  assert.equal(call("get_room_state",{p_token:b.token,p_code:s.code}).game.my_hand.includes("Q"),false);
+});
+test("Configuração pública Google não expõe credenciais do armazenamento",()=>{
+  const config=call("auth_config",{});
+  assert.equal(typeof config.google_client_id,"string");
+  assert.equal(typeof config.persistent_rooms_configured,"boolean");
+  assert.equal("UPSTASH_REDIS_REST_TOKEN" in config,false);
 });
