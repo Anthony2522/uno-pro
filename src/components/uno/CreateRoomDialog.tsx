@@ -10,8 +10,10 @@ import { errorMessage, toGameError } from "@/lib/uno/errors";
 import { useReadyGuest } from "@/lib/uno/guest";
 import { cn } from "@/lib/utils";
 import { AdvancedRoomSettingsFields } from "./AdvancedRoomSettingsFields";
+import {DEFAULT_CARD_SETTINGS,type CardSettings} from "@/lib/uno/cardSettings";
+import {startLocalSolo} from "@/lib/uno/offlineRuntime";
 
-export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: boolean; onOpenChange: (o: boolean) => void; offline?:boolean }) {
   const { guest, resetSession } = useReadyGuest();
   const navigate = useNavigate();
   const [name, setName] = useState("");
@@ -21,19 +23,21 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
   const [startingCards, setStartingCards] = useState(8);
   const [advanced, setAdvanced] = useState(false);
   const [rules, setRules] = useState<RuleSettings>({ repeat:true,sequence:true,nine:true,cut:true,stack:true });
+  const [cards,setCards]=useState<CardSettings>({...DEFAULT_CARD_SETTINGS});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setName(`Sala de ${guest.nickname}`.slice(0, 32));
+      setName((offline?`Offline de ${guest.nickname}`:`Sala de ${guest.nickname}`).slice(0, 32));
       setError(null);
       setAdvanced(false);
       setStartingCards(8);
       setWinners(2);
+      setCards({...DEFAULT_CARD_SETTINGS});
       setRules({repeat:true,sequence:true,nine:true,cut:true,stack:true});
     }
-  }, [open, guest.nickname]);
+  }, [open, guest.nickname, offline]);
 
   const clean = name.replace(/\s+/g, " ").trim();
   const valid = clean.length >= 2 && clean.length <= 32;
@@ -47,7 +51,8 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
     setBusy(true);
     setError(null);
     try {
-      const { code } = await api.createRoom(guest.token, clean, isPublic, max, rules, startingCards, winners);
+      const code=offline ? startLocalSolo(guest.nickname,{name:clean,maxPlayers:max,startingCards,winners,rules,cards}) :
+        (await api.createRoom(guest.token, clean, isPublic, max, rules, startingCards, winners, cards)).code;
       onOpenChange(false);
       navigate({ to: "/sala/$code", params: { code } });
     } catch (err) {
@@ -62,8 +67,8 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent onOpenAutoFocus={(event)=>event.preventDefault()} className="glass-strong max-h-[90dvh] overflow-y-auto overscroll-contain touch-pan-y rounded-3xl border-glass-border sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Criar sala</DialogTitle>
-          <DialogDescription>Você será o anfitrião e poderá iniciar a partida.</DialogDescription>
+          <DialogTitle className="font-display text-2xl">{offline?"Criar sala offline":"Criar sala"}</DialogTitle>
+          <DialogDescription>{offline?"Escolha o número de bots, as regras, as cartas e os vencedores antes de jogar. Sem Wi-Fi durante a partida.":"Você será o anfitrião e poderá iniciar a partida."}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-5" noValidate>
           <div className="space-y-2">
@@ -84,7 +89,7 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
             </div>
           </div>
 
-          <fieldset className="space-y-2">
+          {!offline&&<fieldset className="space-y-2">
             <legend className="text-sm font-medium">Visibilidade</legend>
             <div className="grid grid-cols-2 gap-2" role="radiogroup">
               {[
@@ -107,10 +112,10 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
                 </button>
               ))}
             </div>
-          </fieldset>
+          </fieldset>}
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Máximo de jogadores</legend>
+            <legend className="text-sm font-medium">{offline?"Você + quantos bots?":"Máximo de jogadores"}</legend>
             <div className="grid grid-cols-7 gap-1.5" role="radiogroup">
               {[2, 3, 4, 5, 6, 7, 8].map((n) => (
                 <button
@@ -151,15 +156,15 @@ export function CreateRoomDialog({ open, onOpenChange }: { open: boolean; onOpen
             </button>
             {advanced && (
               <div className="mt-3 border-t border-glass-border pt-3">
-                <AdvancedRoomSettingsFields startingCards={startingCards} rules={rules}
-                  onStartingCardsChange={setStartingCards} onRulesChange={setRules}/>
+                <AdvancedRoomSettingsFields startingCards={startingCards} rules={rules} cards={cards}
+                  onStartingCardsChange={setStartingCards} onRulesChange={setRules} onCardsChange={setCards}/> 
               </div>
             )}
           </div>
 
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <Button type="submit" variant="hero" size="xl" className="w-full" disabled={busy || !valid}>
-            {busy && <Loader2 className="animate-spin" />} Criar e abrir sala
+            {busy && <Loader2 className="animate-spin" />} {offline?"Iniciar partida offline":"Criar e abrir sala"}
           </Button>
         </form>
       </DialogContent>
