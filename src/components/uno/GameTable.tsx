@@ -242,7 +242,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           </div>
           {myTurn && !nine && !forcedByBeer && (
             <Button variant="hero" className="h-9 shrink-0 rounded-xl px-3 text-xs sm:h-11 sm:px-4 sm:text-sm"
-              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy||!!game.detective_pending_color}>
+              onClick={pending>0&&!played.length?actions.accept:actions.end} disabled={busy||!!game.detective_pending_color||!!game.wild_pending_color||!!game.vortex_pending}>
               {busy?<Loader2 className="size-4 animate-spin"/>:<SkipForward className="size-4"/>} Terminar vez
             </Button>
           )}
