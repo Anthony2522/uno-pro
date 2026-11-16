@@ -28,8 +28,8 @@ export function isPlayable(card: string, top: string, currentColor: string): boo
   return false;
 }
 
-export function cardLabel(card: string, mirrorAs?:string): string {
-  if (card === "Q") return `Coringa Espelho · ${cardLabel(mirrorAs||"W")}`;
+export function cardLabel(card: string, mirrorAs?:string|null): string {
+  if (card === "Q") return mirrorAs?`Coringa Espelho · ${cardLabel(mirrorAs)}`:"Coringa Espelho";
   if (card === "W") return "Coringa";
   if (card === "W4") return "Coringa +4";
   if (card === "W5") return "Coringa +5";
