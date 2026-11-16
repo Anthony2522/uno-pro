@@ -25,13 +25,13 @@ export type GameActions = {
   catchUno: () => void;
   negate: (color:CardColor)=>void;
   resolveDetective: (color:CardColor)=>void;
+  resolveWildColor: (color:CardColor)=>void;
   acceptSkip: ()=>void;
 };
 
 export function GameTable({ state, busy, actions }: { state: RoomState; busy: boolean; actions: GameActions }) {
   const game = state.game!;
   const me = state.me;
-  const [pendingWild, setPendingWild] = useState<string | null>(null);
   const [pendingDetective,setPendingDetective]=useState(false);
   const [pendingNegation,setPendingNegation]=useState(false);
   const [detectiveDismissed,setDetectiveDismissed]=useState(false);
@@ -102,7 +102,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const played = game.turn_cards || [];
   const nine = game.nine;
   const canPlay = (c:string) => {
-    if(busy || nine || game.detective_pending_color || forcedByBeer)return false;
+    if(busy || nine || game.detective_pending_color || game.wild_color_pending_player || game.vortex_pending || forcedByBeer)return false;
     if(game.powerless_remaining?.includes(me) && !/^[rygb][0-9]$/.test(c))return false;
     if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T"));
     if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T";
@@ -185,8 +185,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   function onCard(c: string) {
     if (!canPlay(c)) {sfx("error");toast.error("Essa carta não pode ser jogada agora.",{duration:3000});return;}
     if(c==="X"){setDetectiveDismissed(false);setPendingDetective(true);return;}
-    if (isWild(c)) setPendingWild(c);
-    else actions.play(c);
+    // A wild, even a jump-in, is placed on the discard pile before choosing its color.
+    actions.play(c);
   }
 
   return (
@@ -248,7 +248,13 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           )}
         </div>
 
-        {forcedByBeer && <div role="status" className="relative z-20 rounded-xl border border-cyan/40 bg-navy/90 px-3 py-1.5 text-xs font-bold text-cyan">Cerveja: jogada automática</div>}
+        {forcedByBeer && <div role="status" aria-live="polite" className="relative z-20 max-w-md rounded-xl border border-cyan/50 bg-navy/95 px-4 py-3 text-center font-display text-sm font-bold text-cyan shadow-glow-cyan">
+          Você está embriagado e joga uma carta aleatória.
+          {game.beer_due_at && <span className="ml-2 whitespace-nowrap text-foreground">· {Math.max(0,Math.ceil((new Date(game.beer_due_at).getTime()-clock)/1000))}s</span>}
+        </div>}
+        {game.vortex_pending && <div role="status" aria-live="polite" className="relative z-20 rounded-xl border border-cyan/40 bg-navy/90 px-3 py-1.5 text-xs font-bold text-cyan">
+          Vórtice: {game.vortex_pending.total-game.vortex_pending.remaining}/{game.vortex_pending.total} cartas puxadas
+        </div>
          {nine && (
           <div className="uno-nine-panel relative z-20 w-full max-w-md rounded-2xl border border-cyan/50 bg-navy/95 p-4 text-center shadow-glow-cyan">
             <p className="font-display text-lg font-black">DESAFIO DO 9 · {nineRemaining}s</p>
@@ -261,7 +267,9 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         {myTurn && !forcedByBeer && !!pending && played.length===0 && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")) && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
-            <p className="mt-1 text-sm text-muted-foreground">Escolha uma carta de compra permitida (+5 também pode rebater) ou aceite a penalidade.</p>
+            <p className="mt-1 text-sm text-cyan">Revidar → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length])?.nickname??"Jogador"}</strong>
+              {!game.pending_uncounterable && hand.some(c=>cardValue(c)==="T") && game.turn_order.length>2 && <> · +2 Volta → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)-game.direction+game.turn_order.length)%game.turn_order.length])?.nickname??"Jogador"}</strong></>}
+            </p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <Button variant="glass" className="rounded-xl" onClick={actions.accept} disabled={busy}>Comprar {pending} e passar</Button>
               {hasNegation&&<Button variant="hero" className="rounded-xl" disabled={busy} onClick={()=>setPendingNegation(true)}>Usar Negação</Button>}
@@ -444,8 +452,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </div>
       )}
       <ColorPicker
-        open={!!pendingWild||pendingNegation||detectiveColorOpen}
-        onClose={() => {setPendingWild(null);setPendingNegation(false)}}
+        open={!!game.wild_pending_color||pendingNegation||detectiveColorOpen}
+        onClose={() => {if(!game.wild_pending_color)setPendingNegation(false)}}
         onPick={(color) => {
           if(pendingNegation){
             setPendingNegation(false);actions.negate(color);return;
@@ -453,9 +461,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           if(detectiveColorOpen){
             setDetectiveDismissed(false);actions.resolveDetective(color);return;
           }
-          const c = pendingWild!;
-          setPendingWild(null);
-          actions.play(c, color);
+          if(game.wild_pending_color) actions.resolveWildColor(color);
         }}
       />
     </main>
