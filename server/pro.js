@@ -25,7 +25,11 @@ export function chooseCutDelay(difficulty, random=Math.random) {
 }
 const weight = c => c==="W5" ? 5 : c==="W4" ? 4 : c?.slice(1)==="D" || c?.slice(1)==="T" ? 2 : 0;
 const value = c => wild(c) ? c : c.slice(1);
-const wild = c => c==="W"||c==="W4"||c==="W5"||c==="X"||c==="B"||c==="N"||c==="P"||c==="M";
+const wild = c => c==="W"||c==="W4"||c==="W5"||c==="X"||c==="B"||c==="N"||c==="P"||c==="M"||c==="Q";
+// The Mirror is one physical card. Its current effect follows the most recent REAL wild.
+const reflected=(g,c)=>c==="Q"?(g.last_wild||"W"):c;
+const hasNegation=(r,id)=>hand(r,id).cards.some(c=>reflected(r.game,c)==="N");
+const negationCard=(r,id)=>hand(r,id).cards.includes("N")?"N":(r.game.last_wild==="N"&&hand(r,id).cards.includes("Q")?"Q":null);
 const COLORS = ["r","y","g","b"];
 const playable=(c,g)=>wild(c)||c[0]===g.current_color||(!wild(top(g)) && value(c)===value(top(g)));
 const top=g=>g.discard_pile.at(-1);
@@ -50,7 +54,7 @@ function draw(room,id,n){const g=room.game,h=hand(room,id),got=[];
   h.cards.push(...got);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;return got;}
 function shuffle(a){const b=[...a];for(let k=b.length-1;k>0;k--){const j=crypto.randomInt(k+1);[b[k],b[j]]=[b[j],b[k]];}return b;}
 // A +5 is always stackable only by another +5. It can also answer +2/+4.
-const canCounter=(g,c)=>g.pending_uncounterable ? c==="W5" : (isDraw(c)||c==="W5");
+const canCounter=(g,c)=>g.pending_uncounterable ? reflected(g,c)==="W5" : (isDraw(reflected(g,c))||reflected(g,c)==="W5");
 const counter=(r,id)=>hand(r,id).cards.some(c=>canCounter(r.game,c));
 function planBotCut(r,source) {
   const g=r.game;
@@ -325,7 +329,7 @@ function continueSkips(r,actor,remaining,cursor,declined=[]){
       g.skip_carry=remaining>1?{source:actor,remaining:remaining-1}:null;
       g.seq++;bump(r);return;
     }
-    if(!seen.has(target)&&hand(r,target).cards.includes("N")){
+    if(!seen.has(target)&&hasNegation(r,target)){
       nextTurn(g,idx);
       g.skip_reaction={actor,target,cursor:idx,remaining,declined:[...seen],
         deadline:clock()+9000};
@@ -344,7 +348,8 @@ function declineSkip(r,id){
 }
 function negateEffect(r,id,color){
   const g=game(r),h=hand(r,id);
-  if(!h.cards.includes("N"))fail("NEGATION_NOT_IN_HAND");
+  const reactionCard=negationCard(r,id);
+  if(!reactionCard)fail("NEGATION_NOT_IN_HAND");
   if(!["r","y","g","b"].includes(color))fail("COLOR_REQUIRED");
   const reaction=g.skip_reaction?.target===id;
   const debt=g.pending_draw>0&&current(g)===id&&!g.turn_cards.length;
@@ -363,7 +368,7 @@ function negateEffect(r,id,color){
   }
   if(powerless){g.powerless_remaining=[];g.powerless_target=null;}
   if(locked){g.lock_remaining=[];g.lock_target=null;g.lock_color=null;}
-  const result=play(r,id,"N",color);
+  const result=play(r,id,reactionCard,color);
   // Negation is a reaction, not the player's regular move. After defending,
   // the player may still start a legal play or draw from the new color.
   if(g.status==="playing"&&current(g)===id){
@@ -386,7 +391,7 @@ function resolveDebt(r){const g=r.game;if(!g||!g.pending_draw||g.nine)return;
     g.seq++;bump(r);return;
   }
   if(!isBot(actor)&&(!guest||guest.last_seen<clock()-LIMITS.onlineMs))return;
-  if(hand(r,current(g)).cards.includes("N"))return;
+  if(hasNegation(r,current(g)))return;
   if((g.pending_uncounterable || ready(r).stack) && hand(r,current(g)).cards.some(c=>canCounter(g,c)&&allowedDuringRestrictions(g,c)))return;
   const loser=current(g),n=g.pending_draw,attacker=g.pending_source||loser;
   observePublic(r,loser,{kind:"forced_draw",color:g.current_color,n});
@@ -487,7 +492,8 @@ function play(r,id,card,color,targetId){
   if(g.skip_reaction && !cutting)fail("SKIP_DECISION_PENDING");
   // No cooldown for initial plays or cuts while an announcement is shown.
   if(g.nine)fail("NINE_ACTIVE");
-  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M)$/).test(card))fail("CARD_NOT_IN_HAND");
+  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M|Q)$/).test(card))fail("CARD_NOT_IN_HAND");
+  const effective=reflected(g,card);
   const cutVictim=cutting?current(g):null;
   if(cutting){
     const debt=g.pending_draw>0;
@@ -514,7 +520,7 @@ function play(r,id,card,color,targetId){
     else fail("INVALID_COMBO");
   }
   if(wild(card)&&color!=null&&!COLORS.includes(color))fail("COLOR_REQUIRED");
-  if(card==="X"&&(!targetId||targetId===id||!g.turn_order.includes(targetId)))fail("INVALID_DETECTIVE_TARGET");
+  if(effective==="X"&&(!targetId||targetId===id||!g.turn_order.includes(targetId)))fail("INVALID_DETECTIVE_TARGET");
   h.cards.splice(h.cards.indexOf(card),1);
   if(h.cards.length===1&&!h.uno_called){h.uno_since=clock();h.bot_uno_plan=null;}
   else if(h.cards.length!==1){h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;}
@@ -522,11 +528,13 @@ function play(r,id,card,color,targetId){
   const previousTop=top(g);
   g.discard_pile.push(card);g.current_color=wild(card)?(color||g.current_color):card[0];
   g.card_moves??=[];g.card_move_seq=(g.card_move_seq||0)+1;
-  g.card_moves.push({id:g.card_move_seq,by:id,name:name(id),card,previous_top:previousTop,at:clock()});
+  g.card_moves.push({id:g.card_move_seq,by:id,name:name(id),card,mirror_as:card==="Q"?effective:null,previous_top:previousTop,at:clock()});
+  if(card==="Q")g.mirror_played_as=effective;
+  else if(wild(card))g.last_wild=card;
   if(g.card_moves.length>40)g.card_moves.shift();
   // Commit the wild (including a jump-in) before asking its owner for the color.
   if(wild(card)&&card!=="X"&&!color){g.wild_pending_color=id;g.wild_pending_since=clock();}
-  if(card==="X"){
+  if(effective==="X"){
     const defended=consumeShield(r,targetId,"detective");
     g.detective=defended?null:{viewer:id,target:targetId,until:clock()+10000};
     if(!color){
@@ -535,7 +543,7 @@ function play(r,id,card,color,targetId){
       g.turn_started_at+=10000;
     }
   }
-  if(card==="B"){
+  if(effective==="B"){
     for(const victim of g.turn_order.filter(pid=>pid!==id))
       if(!consumeShield(r,victim,"bomb"))draw(r,victim,2);
   }
@@ -543,9 +551,10 @@ function play(r,id,card,color,targetId){
     g.shields??={};g.shields[id]=1; // A Shield is a binary effect; playing another never adds a charge.
   }
   if(value(card)==="E")armSword(g,id);
-  if(weight(card))consumeSwordForDraw(g,id,card);
-  if(card==="M")g.machine_gun_hits=machineGun(r,id);
-  g.turn_cards=[...series,card];
+  if(weight(effective))consumeSwordForDraw(g,id,effective);
+  if(effective==="M")g.machine_gun_hits=machineGun(r,id);
+  // The discard keeps Q, but turn resolution uses the copied wild effect.
+  g.turn_cards=[...series,effective];
   // The server reveals one pulled card at a time, allowing all clients to see it.
   if(value(card)==="V"){
     const pulled=shuffle(h.cards.filter(c=>c[0]===card[0]));
