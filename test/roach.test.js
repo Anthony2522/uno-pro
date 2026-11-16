@@ -183,3 +183,21 @@ test("corte aceita Baratas visualmente iguais mesmo quando pertencem a cadeias d
   assert.equal(g.roach_chains[roachChainId(other)].origin,b.guest_id);
   assert.notEqual(g.roach_chains[roachChainId(other)].origin,a.guest_id);
 });
+
+test("receber Barata desfaz UNO gritado e a contagem aumenta corretamente",()=>{
+  const {players,room,g,play}=match(2),[a,b]=players;
+  const first=makeRoach("y");
+  room.hands.get(a.guest_id).cards=[first,"g4"];
+  const recipient=room.hands.get(b.guest_id);
+  recipient.cards=["b3"];recipient.uno_called=true;recipient.uno_since=null;
+  recipient.bot_uno_plan={since:Date.now(),due:Date.now()+8000};
+  play(a,first);
+  assert.equal(recipient.cards.length,2);
+  assert.equal(recipient.uno_called,false);
+  assert.equal(recipient.uno_since,null);
+  assert.equal(recipient.bot_uno_plan,null);
+  const snapshot=call("get_room_state",{p_token:b.token,p_code:room.code});
+  assert.equal(snapshot.game.my_hand.length,2);
+  assert.equal(snapshot.members.find(x=>x.id===b.guest_id).card_count,2);
+  assert.ok(g.effects.some(e=>e.type==="roach"&&e.target===b.guest_id));
+});
