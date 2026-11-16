@@ -102,3 +102,42 @@ test("a full server solo snapshot can be resumed in the browser after ROOM_NOT_F
     else delete globalThis.navigator;
   }
 });
+
+test("sala offline aceita configurações antes de iniciar: número de bots, vencedores, regras e cartas",async()=>{
+  const data=new Map();
+  const saved={storage:globalThis.localStorage,window:globalThis.window,document:globalThis.document,
+    navigator:Object.getOwnPropertyDescriptor(globalThis,"navigator")};
+  globalThis.localStorage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,String(v)),removeItem:k=>data.delete(k)};
+  globalThis.window={setInterval:()=>1};
+  globalThis.document={visibilityState:"visible",addEventListener:()=>{}};
+  Object.defineProperty(globalThis,"navigator",{configurable:true,value:{storage:{persist:async()=>true}}});
+  try{
+    const runtime=await import((await bundledRuntime())+"#configured");
+    const options={
+      name:"Partida personalizada",maxPlayers:5,startingCards:6,winners:1,
+      rules:{repeat:false,sequence:false,nine:false,cut:false,stack:true},
+      cards:{T:false,H:false,E:true,L:true,V:false,C:false,W5:false,X:false,B:true,N:true,P:true,M:false,Q:true}
+    };
+    const code=runtime.startLocalSolo("Jogador",options);
+    const state=runtime.localRpc("get_room_state",{p_code:code});
+    assert.equal(state.members.length,5,"um humano mais quatro bots");
+    assert.equal(state.members.filter(member=>member.bot).length,4);
+    assert.equal(state.room.name,options.name);
+    assert.equal(state.room.initial_cards,6);
+    assert.equal(state.room.winners_target,1);
+    assert.equal(state.room.rules.nine,false);
+    assert.equal(state.room.rules.repeat,false);
+    assert.equal(state.room.cards_enabled.V,false);
+    assert.equal(state.room.cards_enabled.M,false);
+    assert.equal(state.room.cards_enabled.E,true);
+    assert.equal(state.game.my_hand.length,6);
+    const snapshot=JSON.parse(data.get("unopro.offline.solo.v2"));
+    assert.equal(snapshot.room.cards_enabled.T,false);
+    assert.equal(snapshot.room.members.length,5);
+  }finally{
+    if(saved.storage===undefined)delete globalThis.localStorage;else globalThis.localStorage=saved.storage;
+    if(saved.window===undefined)delete globalThis.window;else globalThis.window=saved.window;
+    if(saved.document===undefined)delete globalThis.document;else globalThis.document=saved.document;
+    if(saved.navigator)Object.defineProperty(globalThis,"navigator",saved.navigator);else delete globalThis.navigator;
+  }
+});

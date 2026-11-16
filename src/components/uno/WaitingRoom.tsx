@@ -1,6 +1,7 @@
 import { Bot, Crown, Globe, Loader2, Lock, Play, Trophy, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RoomState,RuleSettings } from "@/lib/uno/api";
+import type {CardSettings} from "@/lib/uno/cardSettings";
 import { EditRoomSettingsDialog } from "./EditRoomSettingsDialog";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { CopyInviteButton } from "./RoomTopBar";
@@ -20,7 +21,7 @@ export function WaitingRoom({
   onStart: () => void;
   onAddBot: (difficulty: "easy" | "hard") => void;
   onRemoveBot: (id: string) => void;
-  onUpdateSettings: (startingCards:number,rules:RuleSettings)=>Promise<void>;
+  onUpdateSettings: (startingCards:number,rules:RuleSettings,cards:CardSettings)=>Promise<void>;
   onUpdateWinners: (number:number)=>Promise<void>;
 }) {
   const { room, members, me, game } = state;

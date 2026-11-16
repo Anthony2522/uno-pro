@@ -4,7 +4,7 @@ import {googleLogin,googleClientId} from "./googleAuth.js";
 import { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import { chooseHardPlan } from "./hardBotStrategy.js";
 export { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
-import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, LIMITS, isSoloHumanBotMatch, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
+import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, CUSTOM_CARD_KEYS, normalizeCardsEnabled, LIMITS, isSoloHumanBotMatch, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
 const BEER_DELAY_MS = 3000;
 const VORTEX_CARD_DELAY_MS = 1250;
@@ -12,6 +12,12 @@ const SOLO_RECOVERY_MS = 5 * 60_000;
 export function chooseBotMoveDelay(difficulty) {
   return difficulty==="hard"?3000:5000;
 }
+const validateCardSettings=input=>{
+  if(input===undefined||input===null)return;
+  if(typeof input!=="object"||Array.isArray(input)||
+     Object.keys(input).some(k=>!CUSTOM_CARD_KEYS.includes(k))||
+     CUSTOM_CARD_KEYS.some(k=>typeof input[k]!=="boolean"))fail("INVALID_CARD_SETTINGS");
+};
 const stateRules = input => Object.fromEntries(Object.keys(DEFAULT_RULES).map(k => [k,typeof input?.[k] === "boolean" ? input[k] : true]));
 const fail = (message, status=400) => {throw new RpcError(message,status)};
 const clock = () => Date.now();
@@ -51,7 +57,7 @@ function ready(room){if(!room.rules)room.rules={...DEFAULT_RULES};return room.ru
 function hand(room,id){const h=room.hands.get(id);if(!h)fail("NOT_MEMBER",403);return h;}
 function draw(room,id,n){const g=room.game,h=hand(room,id),got=[];
   for(let k=0;k<n;k++){if(!g.draw_pile.length){
-    g.draw_pile=newDeck();
+    g.draw_pile=newDeck(room.cards_enabled);
     // The Mirror is unique even if the infinite draw pile is regenerated.
     if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
       g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
@@ -273,7 +279,7 @@ function machineGun(r,actor){
     if(!candidates.length)candidates=h.cards.filter(c=>["S","R","H","L","E"].includes(value(c)));
     if(!candidates.length)continue;
     const chosen=candidates[crypto.randomInt(candidates.length)];
-    if(!g.draw_pile?.some(isNumberCard))g.draw_pile.push(...newDeck());
+    if(!g.draw_pile?.some(isNumberCard))g.draw_pile.push(...newDeck(r.cards_enabled));
     const numbers=g.draw_pile.map((card,i)=>isNumberCard(card)?i:-1).filter(i=>i>=0);
     const index=numbers[crypto.randomInt(numbers.length)];
     const replacement=g.draw_pile.splice(index,1)[0];
@@ -1056,8 +1062,9 @@ export function proRpc(fn,args={}){
   if(fn==="create_room"){
     const count=args.p_starting_cards===undefined?8:args.p_starting_cards;
     if(!Number.isInteger(count)||count<2||count>20)fail("INVALID_STARTING_CARDS");
+    validateCardSettings(args.p_cards_enabled);
     const result=originalRpc(fn,args),r=find(result.code);
-    r.rules=stateRules(args.p_rules);r.initial_cards=count;
+    r.rules=stateRules(args.p_rules);r.cards_enabled=normalizeCardsEnabled(args.p_cards_enabled);r.initial_cards=count;
     const target=args.p_winners===undefined?2:Number(args.p_winners);
     r.winners_target=Math.max(1,Math.min(r.max_players-1,Number.isFinite(target)?Math.floor(target):2));
     return result;
@@ -1079,9 +1086,11 @@ export function proRpc(fn,args={}){
     if(!Number.isInteger(count)||count<2||count>20)fail("INVALID_STARTING_CARDS");
     if(!args.p_rules||Object.keys(DEFAULT_RULES).some(k=>typeof args.p_rules[k]!=="boolean"))
       fail("INVALID_RULE_SETTINGS");
+    validateCardSettings(args.p_cards_enabled);
     r.initial_cards=count;r.rules=stateRules(args.p_rules);
+    r.cards_enabled=normalizeCardsEnabled(args.p_cards_enabled??r.cards_enabled);
     bump(r);
-    return {ok:true,initial_cards:count,rules:r.rules};
+    return {ok:true,initial_cards:count,rules:r.rules,cards_enabled:r.cards_enabled};
   }
   if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
@@ -1090,7 +1099,7 @@ export function proRpc(fn,args={}){
     for(const h of r.hands.values())h.uno_since=null;
     return result;
   }
-  if(fn==="get_room_state"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;result.room.rules=ready(r);result.room.initial_cards=r.initial_cards??8;result.room.winners_target=r.winners_target??2;
+  if(fn==="get_room_state"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;result.room.rules=ready(r);result.room.cards_enabled=normalizeCardsEnabled(r.cards_enabled);result.room.initial_cards=r.initial_cards??8;result.room.winners_target=r.winners_target??2;
     result.is_dev=!!authenticate(args.p_token).is_dev;
     result.members=result.members.map(m=>({ ...m,bot:isBot(m.id),difficulty:store.guestsById.get(m.id)?.difficulty||null,spectator:!!r.members.find(x=>x.guest_id===m.id)?.spectator}));
     if(g&&result.game){result.game.turn_cards=[...(g.turn_cards||[])];result.game.pending_draw=g.pending_draw||0;

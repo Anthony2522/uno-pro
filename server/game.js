@@ -86,7 +86,16 @@ export function shuffle(arr) {
 }
 
 /** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 228 cards (including one Mirror Wild). */
-export function newDeck() {
+export const CUSTOM_CARD_KEYS=Object.freeze(["T","H","E","L","V","C","W5","X","B","N","P","M","Q"]);
+export const DEFAULT_CARDS_ENABLED=Object.freeze(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true])));
+export function normalizeCardsEnabled(value){
+  return Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,value?.[k]!==false]));
+}
+function customCardKey(card){
+  const value=card.startsWith("W")?card:card.length>1?card.slice(1):card;
+  return CUSTOM_CARD_KEYS.includes(value)?value:null;
+}
+export function newDeck(cardsEnabled=DEFAULT_CARDS_ENABLED) {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
     for (const v of ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "S", "R", "D"]) {
@@ -97,7 +106,10 @@ export function newDeck() {
   for (let i = 0; i < 2; i++) d.push("W5");
   d.push("X", "B", "N", "P", "M", "Q"); // One of each custom wild per fresh deck.
   for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T", col + "H", col + "H", col + "V", col + "V", col + "C", col + "L", col + "L", col + "E", col + "E");
-  return shuffle(d);
+  return shuffle(d.filter(card=>{
+    const custom=customCardKey(card);
+    return !custom || cardsEnabled[custom]!==false;
+  }));
 }
 
 const CODE_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -135,7 +147,7 @@ function draw(room, gid, n) {
   for (let k = 0; k < n; k++) {
     if (g.draw_pile.length === 0) {
       // Endless fresh deck; keep discard history so the visible top card never changes.
-      g.draw_pile = newDeck();
+      g.draw_pile = newDeck(room.cards_enabled);
       if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
         g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
     }
@@ -365,6 +377,7 @@ const handlers = {
       created_at: t,
       updated_at: t,
       members: [{ guest_id: me.id, joined_at: t }],
+      cards_enabled: {...DEFAULT_CARDS_ENABLED},
       hands: new Map(),
       game: null,
       version: 0,
@@ -471,7 +484,7 @@ const handlers = {
     if (r.status !== "waiting") fail("GAME_STARTED");
     const players = r.members.filter(m=>!m.spectator).map((m) => m.guest_id);
     if (players.length < 2) fail("NOT_ENOUGH_PLAYERS");
-    let dp = newDeck();
+    let dp = newDeck(r.cards_enabled);
     r.hands = new Map();
     for (const p of players) r.hands.set(p, { cards: dp.splice(0, r.initial_cards ?? 8), uno_called: false, uno_since: null });
     let top;

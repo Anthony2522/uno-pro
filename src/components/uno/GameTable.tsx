@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowDownWideNarrow, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole } from "lucide-react";
+import { BookOpen, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +10,7 @@ import { useLanguage } from "@/lib/uno/i18n";
 import { sfx } from "@/lib/uno/sound";
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "./ColorPicker";
+import {HandCardsGuide} from "./HowToPlayDialog";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { CardBack, UnoCard } from "./UnoCard";
 
@@ -37,7 +38,6 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const [pendingDetective,setPendingDetective]=useState<string|null>(null);
   const [pendingNegation,setPendingNegation]=useState(false);
   const [detectiveDismissed,setDetectiveDismissed]=useState(false);
-  const [sortMode,setSortMode] = useState<"color"|"number">("number");
   const [clock,setClock] = useState(Date.now());
 
   const lastMoveId=useRef<number|null>(null);
@@ -58,8 +58,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     const colors=["b","y","g","r"], special=["R","S","H","E","L","V","C","W","D","T","W4","W5","X","B","N","P","M","Q"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
-    return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
-  },[game.my_hand,sortMode]);
+    return [...game.my_hand].sort((a,b)=>rank(a)-rank(b)||col(a)-col(b));
+  },[game.my_hand]);
 
   // Opponents in seat order, starting with whoever plays after me.
   const opponents = useMemo(() => {
@@ -143,7 +143,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     observer.observe(view);
     window.addEventListener("resize",measure);
     return ()=>{observer.disconnect();window.removeEventListener("resize",measure);};
-  },[myCount,sortMode]);
+  },[myCount]);
   const canUno = myCount===1||(myCount===2&&myTurn);
   const myPlacement=game.placements?.find(p=>p.id===me);
   const normalDeadline=new Date(game.turn_started_at).getTime()+50000;
@@ -369,19 +369,19 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
         <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
           <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<Shield aria-label="Escudo ativo" className="ml-1 inline-block size-3.5 align-[-2px] text-cyan" strokeWidth={2.7}/>}{(game.swords?.[me]||0)>0&&<Sword aria-label="Espada ativa" className="ml-1 inline-block size-3.5 align-[-2px] text-amber-300" strokeWidth={2.7}/>} </span>
-          <button type="button" title={sortMode==="color"?"Organizado por cor. Clique para organizar por número.":"Organizado por número. Clique para organizar por cor."}
-            aria-label={sortMode==="color"?"Ordenar por número":"Ordenar por cor"}
-            onClick={()=>setSortMode(v=>v==="color"?"number":"color")}
-            className="glass flex h-9 min-w-0 w-full max-w-44 items-center justify-center gap-1 rounded-xl px-1.5 text-xs sm:px-3">
-            <ArrowDownWideNarrow className="size-4 shrink-0"/><span className="truncate">{sortMode==="color"?"Por cor":"Por número"}</span>
-          </button>
+          <HandCardsGuide cards={hand} trigger={
+            <button type="button" title="Ver o significado das cartas especiais que tenho"
+              className="glass flex h-9 min-w-0 w-full max-w-44 items-center justify-center gap-1 rounded-xl px-1.5 text-xs sm:px-3">
+              <BookOpen className="size-4 shrink-0"/><span className="truncate">{language==="en"?"What do my cards do?":"O que minhas cartas fazem?"}</span>
+            </button>
+          }/>
           <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3"
-            onClick={actions.catchUno} disabled={!game.can_catch_uno||busy}
+            onClick={()=>{if(busy)return;if(!game.can_catch_uno){toast.info("DESUNO: só é possível denunciar quem está há pelo menos 4 segundos com uma carta sem gritar UNO.");return;}actions.catchUno();}}
             title="Desuno: denuncie quem está há 4 segundos com uma carta sem gritar UNO."
             aria-label="Desuno">
             <ShieldAlert className="size-4 shrink-0"/><span>Desuno</span>
           </Button>
-          <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3" onClick={actions.uno} disabled={busy||!canUno} aria-label="Gritar UNO">
+          <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3" onClick={()=>{if(busy)return;if(!canUno){toast.info("UNO: aperte quando estiver com uma carta (ou duas antes de jogar a penúltima).");return;}actions.uno();}} aria-label="Gritar UNO">
             <Megaphone className="size-4 shrink-0"/><span>UNO</span>
           </Button>
         </div>

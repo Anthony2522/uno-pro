@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {store, newDeck, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
+import {store, newDeck, CUSTOM_CARD_KEYS, normalizeCardsEnabled, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
 import {serializeState,hydrateState} from "../server/persistence.js";
 import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
 import { inferColorGaps } from "../server/hardBotStrategy.js";
@@ -367,9 +367,9 @@ test("bots fazem primeira jogada em 3s (difícil) ou 5s (fácil)",()=>{
   assert.equal(chooseBotMoveDelay("hard"),3000);
   assert.equal(chooseBotMoveDelay("easy"),5000);
 });
-test("100 nomes de bots diferentes dentro da sala",()=>{
-  assert.equal(BOT_NAMES.length,100);
-  assert.equal(new Set(BOT_NAMES).size,100);
+test("32 nomes fornecidos pelo jogador, sem repetições na sala",()=>{
+  assert.equal(BOT_NAMES.length,32);
+  assert.equal(new Set(BOT_NAMES).size,32);
   const owner=call("register_guest",{p_nickname:"Dono"});
   const code=call("create_room",{p_token:owner.token,p_name:"Nomes engraçados",p_max_players:8}).code;
   for(let i=0;i<7;i++)call("add_bot",{p_token:owner.token,p_code:code,p_difficulty:"easy"});
@@ -710,8 +710,8 @@ test("em duelo, o segundo lugar é decidido automaticamente ao vencer o primeiro
   assert.equal(g.placements[1].id,b.guest_id);
 });
 
-test("100 nomes de bot diferentes e anfitrião sempre humano",()=>{
-  assert.equal(BOT_NAMES.length,100);
+test("32 nomes da lista e anfitrião sempre humano",()=>{
+  assert.equal(BOT_NAMES.length,32);
   const host=call("register_guest",{p_nickname:"Humano host"});
   const {code}=call("create_room",{p_token:host.token,p_name:"Sem host robô",p_max_players:4});
   call("add_bot",{p_token:host.token,p_code:code,p_difficulty:"easy"});
@@ -1734,14 +1734,15 @@ test("Jogador único entre bots preserva a partida durante desconexão longa",()
   assert.ok(room.members.some(m=>m.guest_id===a.guest_id),"humano não expulso");
   assert.equal(g.status,"playing");
   assert.ok(g.solo_paused_at);
+  assert.deepEqual(room.hands.get(a.guest_id).cards,savedCards,"a mão não muda enquanto desconectado");
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
   g.solo_paused_at=Date.now()-2*60*60*1000;
   const before=g.turn_started_at;
   call("get_room_state",{p_token:a.token,p_code:code});
   proSweep();
   assert.equal(g.solo_paused_at,null);
   assert.ok(g.turn_started_at>before+2*60*60*1000-2000,"timer ajustado pela ausência");
-  assert.deepEqual(room.hands.get(a.guest_id).cards,savedCards);
-  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  assert.ok(savedCards.every(c=>room.hands.get(a.guest_id).cards.includes(c)),"as cartas originais permanecem após voltar");
   assert.equal(g.timeout_counts[a.guest_id]||0,0);
 });
 
@@ -1937,4 +1938,56 @@ test("Somente o humano de uma partida contra bots pode exportar o salvamento com
   const multi=setup();
   assert.throws(()=>call("export_solo_snapshot",{p_token:multi.a.token,p_code:multi.code}),
     /NOT_SOLO_BOT_GAME/,"cannot export matches with another human");
+});
+
+test("seleções de cartas retiram só as inventadas e mantêm o baralho essencial",()=>{
+  const allDisabled=Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,false]));
+  assert.deepEqual(CUSTOM_CARD_KEYS,["T","H","E","L","V","C","W5","X","B","N","P","M","Q"]);
+  const deck=newDeck(normalizeCardsEnabled(allDisabled));
+  assert.equal(deck.length,176,"números, Volta, Bloqueio, +2, Coringa e +4 permanecem");
+  assert.ok(["rR","yS","bD","W","W4"].every(card=>deck.includes(card)));
+  assert.ok(deck.every(card=>!["T","H","E","L","V","C"].includes(card.slice(1))&&!["W5","X","B","N","P","M","Q"].includes(card)));
+  const defaultDeck=newDeck();
+  assert.equal(defaultDeck.length,228,"todas ativadas por padrão");
+  assert.equal(defaultDeck.filter(c=>c==="Q").length,1);
+});
+test("sala online aplica escolha de cartas na distribuição, compras e revanche",()=>{
+  const host=call("register_guest",{p_nickname:"Cartas opcionais"});
+  const disabled=normalizeCardsEnabled({T:false,H:false,Q:false,W5:false,L:false});
+  const code=call("create_room",{p_token:host.token,p_name:"Cartas filtradas",p_max_players:3,p_cards_enabled:disabled}).code;
+  call("add_bot",{p_token:host.token,p_code:code,p_difficulty:"hard"});
+  const room=store.roomsByCode.get(code);
+  assert.equal(room.cards_enabled.Q,false);
+  const state=call("get_room_state",{p_token:host.token,p_code:code});
+  assert.deepEqual(state.room.cards_enabled,disabled);
+  call("start_game",{p_token:host.token,p_code:code});
+  const g=room.game;
+  const all=[...g.draw_pile,...g.discard_pile,...[...room.hands.values()].flatMap(h=>h.cards)];
+  assert.ok(!all.some(c=>c==="Q"||c==="W5"||["T","H","L"].includes(c.slice(1))));
+  const h=room.hands.get(host.guest_id);
+  const prior=h.cards.length;
+  g.draw_pile=[];
+  g.turn_idx=g.turn_order.indexOf(host.guest_id);
+  g.turn_cards=[];g.pending_draw=0;g.has_drawn=false;g.turn_started_at=Date.now();
+  for(const e of g.effects||[])e.show_at=Date.now()-10000;
+  call("draw_card",{p_token:host.token,p_code:code});
+  assert.ok(h.cards.length>=prior);
+  assert.ok(!g.draw_pile.some(c=>c==="Q"||c==="W5"||["T","H","L"].includes(c.slice(1))),"renovação respeita configuração");
+});
+test("anfitrião pode editar cartas antes de jogar, não durante a partida",()=>{
+  const host=call("register_guest",{p_nickname:"Configurador"});
+  const {code}=call("create_room",{p_token:host.token,p_name:"Mudar baralho",p_max_players:3});
+  const rules={repeat:true,sequence:true,nine:true,cut:true,stack:true};
+  const setting=normalizeCardsEnabled({V:false,C:false,B:false,M:false});
+  call("update_room_settings",{p_token:host.token,p_code:code,p_rules:rules,
+    p_starting_cards:5,p_cards_enabled:setting});
+  const r=store.roomsByCode.get(code);
+  assert.deepEqual(r.cards_enabled,setting);
+  assert.equal(r.initial_cards,5);
+  call("add_bot",{p_token:host.token,p_code:code,p_difficulty:"easy"});
+  call("start_game",{p_token:host.token,p_code:code});
+  assert.throws(()=>call("update_room_settings",{p_token:host.token,p_code:code,
+    p_rules:rules,p_starting_cards:8,p_cards_enabled:normalizeCardsEnabled()}),/GAME_STARTED/);
+  assert.throws(()=>call("create_room",{p_token:host.token,p_name:"Inválido",p_max_players:3,
+    p_cards_enabled:{unknown:true}}),/INVALID_CARD_SETTINGS/);
 });

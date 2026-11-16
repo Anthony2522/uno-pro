@@ -454,3 +454,36 @@
   .uno-mirror-card,.uno-mirror-sheen {animation:none;}
   .uno-mirror-sheen {background:linear-gradient(120deg,transparent,rgba(255,255,255,.16),transparent);opacity:.75;}
 }
+
+/* One shared, visible Shield breaking animation on all clients at defense time. */
+@keyframes uno-shield-left-break {
+  0%,22% { transform:translate(0,0) rotate(0) scale(1);opacity:1 }
+  38% {transform:translate(-8px,0) rotate(-7deg) scale(1.07);opacity:1}
+  90%,100% {transform:translate(-65px,55px) rotate(-35deg) scale(.64);opacity:0}
+}
+@keyframes uno-shield-right-break {
+  0%,22% {transform:translate(0,0) rotate(0) scale(1);opacity:1}
+  38% {transform:translate(10px,-4px) rotate(8deg) scale(1.07);opacity:1}
+  90%,100% {transform:translate(65px,48px) rotate(36deg) scale(.64);opacity:0}
+}
+@keyframes uno-shield-fracture-flash {
+  0%,19% {opacity:0}
+  28%,36% {opacity:1;filter:drop-shadow(0 0 12px white)}
+  55%,100% {opacity:0}
+}
+@keyframes uno-shield-label-rise {
+  0%,15% {opacity:0;transform:translateY(10px)}
+  38%,77% {opacity:1;transform:translateY(0)}
+  100% {opacity:0;transform:translateY(-8px)}
+}
+.uno-shield-defense {animation:uno-shield-block 3.3s ease both;}
+.uno-shield-left {clip-path:polygon(0 0,52% 0,60% 28%,45% 51%,58% 70%,51% 100%,0 100%);
+  animation:uno-shield-left-break 3.3s ease-in forwards;}
+.uno-shield-right {clip-path:polygon(52% 0,100% 0,100% 100%,51% 100%,58% 70%,45% 51%,60% 28%);
+  animation:uno-shield-right-break 3.3s ease-in forwards;}
+.uno-shield-fracture {animation:uno-shield-fracture-flash 3.3s ease both;}
+.uno-shield-text {animation:uno-shield-label-rise 3.3s ease both;}
+@media (prefers-reduced-motion:reduce){
+  .uno-shield-left,.uno-shield-right,.uno-shield-fracture,.uno-shield-text {animation:none;opacity:1;transform:none}
+  .uno-shield-defense {animation:none}
+}

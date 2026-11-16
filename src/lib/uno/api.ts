@@ -1,5 +1,6 @@
 import { GameError, toGameError } from "./errors";
 import type { CardColor } from "./cards";
+import {DEFAULT_CARD_SETTINGS,type CardSettings} from "./cardSettings";
 import {getLocalMatch,getSoloServerBackup,hasLocalRoom,localRpc,
   getRecoverableSoloRoom,rescueSoloMatch,saveSoloServerBackup,type SoloBackup} from "./offlineRuntime";
 
@@ -102,6 +103,7 @@ export type RoomState = {
     host_id: string;
     status: "waiting" | "playing";
     rules: RuleSettings;
+    cards_enabled:CardSettings;
     initial_cards: number;
     winners_target: number;
     local_only?:boolean;
@@ -191,13 +193,14 @@ export const api = {
   devStatus: (token:string)=>call<{is_dev:boolean}>("dev_status",{p_token:token}),
   devAuth: (token:string,key:string)=>call<{is_dev:boolean}>("dev_auth",{p_token:token,p_key:key}),
   devDeletePublicRoom: (token:string,code:string)=>call("dev_delete_public_room",{p_token:token,p_code:code}),
-  createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8, winners = 2) =>
+  createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8, winners = 2, cards:CardSettings=DEFAULT_CARD_SETTINGS) =>
     call<{ code: string }>("create_room", {
       p_token: token,
       p_name: name,
       p_is_public: isPublic,
       p_max_players: maxPlayers,
       p_rules: rules,
+      p_cards_enabled: cards,
       p_starting_cards: startingCards,
       p_winners: winners,
     }),
@@ -226,8 +229,8 @@ export const api = {
     call("negate_effect",{p_token:token,p_code:code,p_color:color}),
   acceptSkip: (token:string,code:string)=>
     call("accept_skip",{p_token:token,p_code:code}),
-  updateRoomSettings: (token:string,code:string,startingCards:number,rules:RuleSettings)=>
-    call("update_room_settings",{p_token:token,p_code:code,p_starting_cards:startingCards,p_rules:rules}),
+  updateRoomSettings: (token:string,code:string,startingCards:number,rules:RuleSettings,cards:CardSettings=DEFAULT_CARD_SETTINGS)=>
+    call("update_room_settings",{p_token:token,p_code:code,p_starting_cards:startingCards,p_rules:rules,p_cards_enabled:cards}),
   playCard: (token: string, code: string, card: string, color?: string, targetId?: string) =>
     call("play_card", { p_token: token, p_code: code, p_card: card, p_color: color ?? null, p_target_id: targetId ?? null }),
   drawCard: (token: string, code: string) =>
