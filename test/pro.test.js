@@ -2027,7 +2027,7 @@ test("espadas de A e B se somam em +6 quando B rebate e C aceita a dívida",()=>
   g.swords={[a.guest_id]:1,[b.guest_id]:1};
   room.hands.get(a.guest_id).cards=["bD","b1"];
   room.hands.get(b.guest_id).cards=["W4","r2"];
-  room.hands.get(c.guest_id).cards=["g3","y4"];
+  room.hands.get(c.guest_id).cards=["bD","g3","y4"]; // C pode rebater, mas decide aceitar os 12.
   call("play_card",{p_token:a.token,p_code:code,p_card:"bD"});
   call("end_turn",{p_token:a.token,p_code:code});
   assert.equal(g.pending_draw,5,"A: +2 do come e +3 da primeira Espada");
