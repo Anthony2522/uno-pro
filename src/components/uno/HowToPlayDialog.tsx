@@ -4,6 +4,7 @@ import {Button} from "@/components/ui/button";
 import {BookOpen,Trophy,Hand,MousePointer2,Hash,Layers3,Repeat2,ArrowDownUp,ShieldAlert} from "lucide-react";
 import type {LucideIcon} from "lucide-react";
 import {UnoCard} from "./UnoCard";
+import {cardValue} from "@/lib/uno/cards";
 import {useLanguage} from "@/lib/uno/i18n";
 
 type Group="basics"|"colored"|"wild";
@@ -61,6 +62,9 @@ export const RULES:ManualEntry[]=[
   {key:"C",group:"colored",pt:"Cerveja",en:"Beer",card:"yC",
     descPt:"Na próxima vez dos adversários, o jogo escolhe uma carta válida aleatória. Sem carta válida, compram e jogam automaticamente se puderem; caso contrário passam.",
     descEn:"On opponents' next turns, the game randomly picks a legal move. If none is available, they draw and auto-play if possible, otherwise pass."},
+  {key:"A",group:"colored",pt:"Barata",en:"Cockroach",card:"bA@00000000-0000-4000-8000-000000000001",
+    descPt:"Há uma Barata original por cor. Ao jogá-la, uma cópia de cor aleatória (inclusive igual) vai para um adversário sorteado. A cópia continua a cadeia quando for jogada. Cada jogador só pode recebê-la uma vez, e quem iniciou a cadeia nunca a recebe. Depois de passar por todos os outros, a última jogada encerra a cadeia sem gerar outra cópia. Cada Barata original possui seu próprio histórico.",
+    descEn:"There is one original Roach per color. Playing one sends a random-colored copy (possibly the same color) to a random eligible opponent. Each recipient can receive that chain only once, and the original player can never receive it. After all other players have received it, its next play ends the chain without a new copy. Each original has its own history."},
   {key:"W",group:"wild",pt:"Coringa comum",en:"Wild",card:"W",
     descPt:"Pode ser jogado sobre qualquer cor ou número. A carta entra no descarte imediatamente e você escolhe a próxima cor.",
     descEn:"Can be played on any color or number. It enters the discard pile immediately, then you choose the new color."},
@@ -89,9 +93,9 @@ export const RULES:ManualEntry[]=[
     descPt:"Copia a arte e os poderes do último coringa real jogado por qualquer pessoa, inclusive você. Sua borda branca e o brilho reflexivo permanecem. Antes do primeiro coringa, tem a aparência própria de Espelho e age como Coringa comum.",
     descEn:"Copies the last real wild card's artwork and effect, even if you played it yourself. Its reflective sheen and white glowing edge remain. Before the first wild, it shows its own Mirror design and acts as a regular Wild."}
 ];
-const MINI_ORDER=["W4","W5","X","B","N","P","M","Q","W","H","E","L","V","C","T","D","S","R"];
+const MINI_ORDER=["W4","W5","X","B","N","P","M","Q","W","H","E","L","V","C","A","T","D","S","R"];
 export function rulesForHand(cards:readonly string[]){
-  const values=new Set(cards.map(c=>c.length>1&&!c.startsWith("W")&&c!=="W4"&&c!=="W5"?c.slice(1):c));
+  const values=new Set(cards.map(cardValue));
   return MINI_ORDER.filter(key=>values.has(key)).map(key=>RULES.find(r=>r.key===key)!).filter(Boolean);
 }
 export function RuleRows({entries,numbered=false}:{entries:ManualEntry[];numbered?:boolean}){
