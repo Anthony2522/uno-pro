@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair, Beer } from "lucide-react";
+import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
 import { UnoCard } from "@/components/uno/UnoCard";
-import { cardLabel } from "@/lib/uno/cards";
+import { cardLabel, COLOR_NAMES, type CardColor } from "@/lib/uno/cards";
+import { useLanguage } from "@/lib/uno/i18n";
 import { ConnectionBanner, CopyInviteButton, LeaveButton } from "@/components/uno/RoomTopBar";
 import { WaitingRoom } from "@/components/uno/WaitingRoom";
 import { WinnerOverlay } from "@/components/uno/WinnerOverlay";
@@ -33,6 +34,7 @@ function RoomPage() {
   const { code: rawCode } = Route.useParams();
   const code = rawCode.toUpperCase();
   const navigate = useNavigate();
+  const {language}=useLanguage();
   const { state, fatal, connection, refresh, leave, token } = useRoom(code);
   const [busy, setBusy] = useState(false);
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
@@ -70,7 +72,7 @@ function RoomPage() {
     }
     const next=events.filter(e=>e.id>(lastEffectId.current??0));
     if(events.length)lastEffectId.current=events.at(-1)?.id??0;
-    for(const event of next)sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"?"play":event.type);
+    for(const event of next)sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"?"play":event.type==="sword_boost"?"draw4":event.type);
   },[state?.game?.effects,state?.game?.round]);
 
   // Sounds on state transitions.
@@ -204,6 +206,8 @@ function RoomPage() {
                  e.type==="machinegun"?<Crosshair className="size-6"/>:
                  e.type==="vortex"?<img src="/vortice.svg" alt="" className="h-6 w-6 object-contain brightness-0 invert"/>:
                  e.type==="beer"||e.type==="beer_forced"?<Beer className="size-6"/>:
+                 e.type==="lock"?<LockKeyhole className="size-6"/>:
+                 e.type==="sword_armed"||e.type==="sword_boost"||e.type==="sword_strike"?<Sword className="size-6"/>:
                  e.type==="shield_armed"||e.type==="shield_defense"?<Shield className="size-6"/>:
                  e.type==="uno"?<Megaphone className="size-6"/>:
                  e.type==="cut"?<Scissors className="size-6"/>:
@@ -228,6 +232,10 @@ function RoomPage() {
                  e.type==="vortex"?`${e.name} ativou Vórtice: ${e.n??0} carta(s) puxada(s)`:
                  e.type==="beer"?"Cerveja: os adversários jogarão automaticamente":
                  e.type==="beer_forced"?`${e.name}: jogada aleatória pela Cerveja`:
+                 e.type==="lock"?language==="en"?`Lock: next turn, opponents may only play ${({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[e.color??"b"]} cards (no wilds).`:`Cadeado: na próxima vez, adversários só poderão usar cartas ${({r:"vermelhas",y:"amarelas",g:"verdes",b:"azuis"} as Record<string,string>)[e.color??"b"]}, sem coringas.`:
+                 e.type==="sword_armed"?language==="en"?`${e.name} activated Sword (+3 to next draw card)`:`${e.name} ativou Espada (+3 na próxima compra)`:
+                 e.type==="sword_boost"?language==="en"?`Sword: +${e.n??3} added to the draw debt`:`Espada: +${e.n??3} somados à dívida`:
+                 e.type==="sword_strike"?language==="en"?`Sword hit ${e.target_name??"a player"}!`:`Espada atingiu ${e.target_name??"um jogador"}!`:
                  e.type==="shield_defense"?`${e.target_name??e.name} foi defendido(a) pelo Escudo`:
                 e.type==="powerless"?"Sem Poderes: próxima vez de cada adversário só com números":
                 e.type==="negation"?"Negação: efeito anulado":
@@ -249,6 +257,15 @@ function RoomPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+      {playing && (g?.effects||[]).some(e=>e.type==="sword_strike"&&effectsClock>=e.show_at&&effectsClock<e.show_at+2400) && (
+        <div className="uno-sword-attack pointer-events-none fixed inset-0 z-[77] flex items-center justify-center overflow-hidden" role="status" aria-live="polite">
+          <div className="uno-sword-burst" aria-hidden />
+          <Sword className="uno-sword-blade h-[min(42vw,220px)] w-[min(42vw,220px)] text-amber-200 drop-shadow-[0_0_25px_rgba(255,195,50,0.95)]" strokeWidth={2.4} aria-hidden />
+          <div className="uno-sword-impact absolute bottom-[28%] rounded-xl bg-navy/90 px-4 py-2 text-center font-display text-sm font-black text-amber-200 shadow-glow">
+            {language==="en"?"SWORD STRIKE!":"GOLPE DE ESPADA!"}
+          </div>
         </div>
       )}
       {shieldDefenses.length>0 && (
