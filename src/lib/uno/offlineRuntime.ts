@@ -9,7 +9,7 @@ const LOCAL_KEY="unopro.offline.solo.v2";
 const BACKUP_KEY="unopro.solo.server-backup.v1";
 const VERSION=1;
 type GuestRecord={id:string;tokenHash:string;nickname:string;last_seen:number;bot?:boolean;difficulty?:string};
-type RoomRecord={id:string;code:string;name:string;version:number;hands:[string,unknown][];game:Record<string,any>|null;members:{guest_id:string}[];[key:string]:any};
+type RoomRecord={id:string;code:string;name:string;version:number;hands:[string,unknown][];game:any;members:{guest_id:string}[];[key:string]:any};
 type Saved={version:number;code:string;token:string;saved_at:number;room:RoomRecord;guests:GuestRecord[];source:"local"|"rescued";human_id:string};
 export type SoloBackup=Omit<Saved,"token"|"source">;
 let active:Saved|null=null;
@@ -44,9 +44,9 @@ function persist(){
     lastSaveVersion=data.room.version;
   }catch{storageError=true;}
 }
-function moveClocks(g:Record<string,any>,delta:number){
+function moveClocks(g:any,delta:number){
   if(!delta||g.status!=="playing")return;
-  const push=(obj:Record<string,any>,key:string)=>{
+  const push=(obj:any,key:string)=>{
     if(typeof obj?.[key]==="number"&&obj[key]>0)obj[key]+=delta;
   };
   for(const k of ["turn_started_at","visual_until","beer_due","wild_pending_since"])push(g,k);
