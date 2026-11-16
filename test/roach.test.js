@@ -166,3 +166,20 @@ test("duas Baratas de cadeias distintas podem ser jogadas na sequência de repet
   assert.equal(g.roach_chains[roachChainId(red)].received.length,1);
   assert.equal(g.roach_chains[roachChainId(green)].received.length,1);
 });
+
+test("corte aceita Baratas visualmente iguais mesmo quando pertencem a cadeias distintas",()=>{
+  const {players,room,g,code}=match(3),[a,b]=players;
+  const played=makeRoach("r"),other=makeRoach("r");
+  assert.notEqual(roachChainId(played),roachChainId(other));
+  g.turn_idx=g.turn_order.indexOf(a.guest_id);
+  g.turn_cards=[];g.turn_mode=null;g.turn_step=0;g.has_drawn=false;
+  g.pending_draw=0;g.nine=null;g.skip_reaction=null;
+  g.current_color="r";g.discard_pile=[played];
+  room.hands.get(b.guest_id).cards=[other,"g2","y4"];
+  const result=call("play_card",{p_token:b.token,p_code:code,p_card:other});
+  assert.equal(result.ok,true);
+  assert.equal(g.turn_order[g.turn_idx],b.guest_id,"o corte rouba a vez");
+  assert.equal(g.card_moves.at(-1).card,other,"mantém a identidade física da própria cadeia");
+  assert.equal(g.roach_chains[roachChainId(other)].origin,b.guest_id);
+  assert.notEqual(g.roach_chains[roachChainId(other)].origin,a.guest_id);
+});
