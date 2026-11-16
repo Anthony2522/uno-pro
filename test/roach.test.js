@@ -8,7 +8,7 @@ import {serializeState,hydrateState} from "../server/persistence.js";
 const call=(fn,args)=>proRpc(fn,args);
 function match(n){
   const players=Array.from({length:n},(_,i)=>call("register_guest",{p_nickname:"Barata "+(i+1)}));
-  const {code}=call("create_room",{p_token:players[0].token,p_name:"Teste de cadeias",p_max_players:n}).valueOf();
+  const {code}=call("create_room",{p_token:players[0].token,p_name:"Teste de cadeias",p_max_players:n});
   for(const p of players.slice(1))call("join_room",{p_token:p.token,p_code:code});
   call("start_game",{p_token:players[0].token,p_code:code});
   const room=store.roomsByCode.get(code),g=room.game;
@@ -45,7 +45,7 @@ test("Barata: há exatamente uma original por cor, quatro cadeias distintas e 23
   assert.equal(playable(r,"b7","g"),false);
 });
 
-for(const numberOfPlayers of [2,3,4]){
+for(const numberOfPlayers of [2,3,4,20]){
   test(`Barata: cadeia independente circula por ${numberOfPlayers} jogadores, sem repetição nem retorno ao iniciador`,()=>{
     const {players,room,g,play}=match(numberOfPlayers),origin=players[0];
     const first=makeRoach("r"),id=roachChainId(first);
@@ -74,7 +74,6 @@ for(const numberOfPlayers of [2,3,4]){
     }
     assert.equal(visited.size,numberOfPlayers-1);
     assert.equal(visited.has(origin.guest_id),false);
-    const total=room.hands.values().map?null:0;
     const beforeCount=[...room.hands.values()].reduce((n,h)=>n+h.cards.filter(c=>roachChainId(c)===id).length,0);
     assert.equal(beforeCount,1,"em uma cadeia ativa existe somente uma cópia na mão");
     play(actor,card);
