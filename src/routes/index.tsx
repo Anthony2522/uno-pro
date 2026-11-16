@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, DoorOpen, Plus } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ArrowRight, DoorOpen, Plus, WifiOff } from "lucide-react";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { CreateRoomDialog } from "@/components/uno/CreateRoomDialog";
 import { JoinByCode } from "@/components/uno/JoinByCode";
@@ -9,6 +9,7 @@ import { UnoCard } from "@/components/uno/UnoCard";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/uno/api";
 import { useReadyGuest } from "@/lib/uno/guest";
+import {getLocalMatch,startLocalSolo} from "@/lib/uno/offlineRuntime";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -26,6 +27,8 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const { guest } = useReadyGuest();
+  const navigate=useNavigate();
+  const localMatch=getLocalMatch();
   const [createOpen, setCreateOpen] = useState(false);
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
   const codeRef = useRef<HTMLInputElement>(null);
@@ -66,6 +69,15 @@ function Home() {
             >
               <DoorOpen /> Entrar em uma sala
             </Button>
+          </div>
+          <div className="mt-4 max-w-xl">
+            <Button variant="glass" size="xl" className="w-full rounded-2xl border border-cyan/40 bg-cyan/10 text-cyan" onClick={()=>{
+              const code=startLocalSolo(guest.nickname);
+              void navigate({to:"/sala/$code",params:{code}});
+            }}>
+              <WifiOff className="size-5"/> {localMatch?.playing?"Continuar partida offline com bots":"Jogar offline com bots"}
+            </Button>
+            <p className="mt-2 text-xs text-muted-foreground">Funciona sem Wi-Fi após a primeira visita. Salva as cartas neste aparelho e não depende do servidor.</p>
           </div>
           {activeRoom && (
             <Link
