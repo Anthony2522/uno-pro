@@ -103,6 +103,8 @@ export type RoomState = {
   game: GameState | null;
 };
 
+export type RejoinableRoom = {code:string;name:string;solo:boolean;recovery_until:string|null;player_count:number};
+
 export type PublicRoom = {
   code: string;
   name: string;
@@ -151,6 +153,7 @@ export const api = {
   updateNickname: (token: string, nickname: string) =>
     call<{ guest_id: string; nickname: string }>("update_nickname", { p_token: token, p_nickname: nickname }),
   listPublicRooms: () => call<PublicRoom[]>("list_public_rooms"),
+  listRejoinableRooms: (token:string) => call<RejoinableRoom[]>("list_rejoinable_rooms",{p_token:token}),
   devStatus: (token:string)=>call<{is_dev:boolean}>("dev_status",{p_token:token}),
   devAuth: (token:string,key:string)=>call<{is_dev:boolean}>("dev_auth",{p_token:token,p_key:key}),
   devDeletePublicRoom: (token:string,code:string)=>call("dev_delete_public_room",{p_token:token,p_code:code}),
