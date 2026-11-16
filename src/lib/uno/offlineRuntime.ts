@@ -156,7 +156,12 @@ export function getRecoverableSoloRoom(code:string){
   const saved=read(BACKUP_KEY);
   return Boolean(saved&&saved.code===code.toUpperCase());
 }
-export function startLocalSolo(nickname:string){
+export type OfflineRoomConfig={
+  name:string; maxPlayers:number; startingCards:number; winners:number;
+  rules:{repeat:boolean;sequence:boolean;nine:boolean;cut:boolean;stack:boolean};
+  cards:Record<string,boolean>;
+};
+export function startLocalSolo(nickname:string,options?:OfflineRoomConfig){
   ensureLoaded();
   if(active?.room?.game?.status==="playing")return active.code;
   store.rooms.clear();store.roomsByCode.clear();
@@ -164,17 +169,21 @@ export function startLocalSolo(nickname:string){
   active=null;
   const guest=proRpc("register_guest",{p_nickname:nickname.trim().slice(0,18)||"Jogador"});
   const created=proRpc("create_room",{
-    p_token:guest.token,p_name:"Solo offline",p_is_public:false,p_max_players:4,
-    p_starting_cards:8,p_winners:2,
-    p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true}
+    p_token:guest.token,p_name:options?.name||"Solo offline",p_is_public:false,
+    p_max_players:options?.maxPlayers??4,
+    p_starting_cards:options?.startingCards??8,p_winners:options?.winners??2,
+    p_rules:options?.rules??{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+    p_cards_enabled:options?.cards
   });
   const room=store.roomsByCode.get(created.code);
   // Distinct prefix makes an offline room recognizable even without network.
   store.roomsByCode.delete(created.code);
   room.code="OFF"+created.code.slice(0,5);
   store.roomsByCode.set(room.code,room);
-  proRpc("add_bot",{p_token:guest.token,p_code:room.code,p_difficulty:"easy"});
-  proRpc("add_bot",{p_token:guest.token,p_code:room.code,p_difficulty:"hard"});
+  const botCount=(options?.maxPlayers??3)-1;
+  for(let i=0;i<botCount;i++)proRpc("add_bot",{
+    p_token:guest.token,p_code:room.code,p_difficulty:i%2===0?"easy":"hard"
+  });
   proRpc("start_game",{p_token:guest.token,p_code:room.code});
   active={version:VERSION,source:"local",code:room.code,token:guest.token,
     human_id:guest.guest_id,saved_at:Date.now(),
