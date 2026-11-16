@@ -433,3 +433,24 @@
   .uno-sword-blade,.uno-sword-burst,.uno-sword-impact {animation:none;opacity:1;}
   .uno-sword-burst {opacity:.15;}
 }
+
+/* Mirror Wild: the face copies the last wild while a silver-white surface remains visible. */
+@keyframes uno-mirror-glint {
+  0%,100% {background-position:-130% 50%;opacity:.58}
+  48% {background-position:130% 50%;opacity:.95}
+}
+@keyframes uno-mirror-halo {
+  0%,100% {box-shadow:0 0 8px 2px rgba(255,255,255,.7),0 0 20px rgba(174,222,255,.4)}
+  50% {box-shadow:0 0 15px 4px rgba(255,255,255,.95),0 0 35px rgba(190,230,255,.85)}
+}
+.uno-mirror-card {border:2px solid rgba(255,255,255,.96)!important;animation:uno-mirror-halo 2.3s ease-in-out infinite;}
+.uno-mirror-sheen {
+  background:linear-gradient(112deg,transparent 8%,rgba(255,255,255,.14) 27%,rgba(255,255,255,.55) 42%,rgba(220,242,255,.23) 55%,transparent 76%);
+  background-size:245% 100%;
+  background-repeat:no-repeat;
+  animation:uno-mirror-glint 3.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion:reduce) {
+  .uno-mirror-card,.uno-mirror-sheen {animation:none;}
+  .uno-mirror-sheen {background:linear-gradient(120deg,transparent,rgba(255,255,255,.16),transparent);opacity:.75;}
+}

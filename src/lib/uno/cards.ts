@@ -9,7 +9,7 @@ export const COLOR_NAMES: Record<CardColor, string> = {
 };
 
 export function isWild(card: string): boolean {
-  return card === "W" || card === "W4" || card === "W5" || card === "X" || card === "B" || card === "N" || card === "P" || card === "M";
+  return card === "W" || card === "W4" || card === "W5" || card === "X" || card === "B" || card === "N" || card === "P" || card === "M" || card === "Q";
 }
 
 export function cardColor(card: string): CardColor | null {
@@ -28,7 +28,8 @@ export function isPlayable(card: string, top: string, currentColor: string): boo
   return false;
 }
 
-export function cardLabel(card: string): string {
+export function cardLabel(card: string, mirrorAs?:string): string {
+  if (card === "Q") return `Coringa Espelho · ${cardLabel(mirrorAs||"W")}`;
   if (card === "W") return "Coringa";
   if (card === "W4") return "Coringa +4";
   if (card === "W5") return "Coringa +5";
@@ -67,6 +68,7 @@ export function sortHand(cards: string[]): string[] {
     if (c === "N") return 405;
     if (c === "P") return 406;
     if (c === "M") return 407;
+    if (c === "Q") return 408;
     const ci = COLORS.indexOf(c[0] as CardColor) * 100;
     const v = cardValue(c);
     const vi = v === "S" ? 10 : v === "R" ? 11 : v === "D" ? 12 : v === "T" ? 13 : v === "H" ? 14 : v === "V" ? 15 : v === "C" ? 16 : v === "L" ? 17 : v === "E" ? 18 : Number(v);

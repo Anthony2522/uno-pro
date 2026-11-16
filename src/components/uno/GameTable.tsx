@@ -34,7 +34,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const game = state.game!;
   const {language}=useLanguage();
   const me = state.me;
-  const [pendingDetective,setPendingDetective]=useState(false);
+  const [pendingDetective,setPendingDetective]=useState<string|null>(null);
   const [pendingNegation,setPendingNegation]=useState(false);
   const [detectiveDismissed,setDetectiveDismissed]=useState(false);
   const [sortMode,setSortMode] = useState<"color"|"number">("number");
@@ -42,7 +42,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
   const lastMoveId=useRef<number|null>(null);
   const motionTimers=useRef(new Map<number,ReturnType<typeof setTimeout>>());
-  const [flights,setFlights]=useState<Array<{id:number;card:string;fromX:number;fromY:number;toX:number;toY:number}>>([]);
+  const [flights,setFlights]=useState<Array<{id:number;card:string;mirrorAs:string|null|undefined;fromX:number;fromY:number;toX:number;toY:number}>>([]);
   const [pileCover,setPileCover]=useState<{id:number;card:string}|null>(null);
   const handViewportRef=useRef<HTMLDivElement|null>(null);
   const [fitColumns,setFitColumns]=useState(6);
@@ -55,7 +55,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const lockedColor = myTurn && game.lock_remaining?.includes(me) ? game.lock_color : null;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","H","E","L","V","C","W","D","T","W4","W5","X","B","N","P","M"];
+    const colors=["b","y","g","r"], special=["R","S","H","E","L","V","C","W","D","T","W4","W5","X","B","N","P","M","Q"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
@@ -71,7 +71,9 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
 
   const pending = game.pending_draw || 0;
-  const hasNegation=game.my_hand.includes("N");
+  const effectiveCard=(c:string)=>c==="Q"?(game.last_wild||"W"):c;
+  const counterCard=(c:string)=>{const e=effectiveCard(c);return game.pending_uncounterable?e==="W5":e==="W4"||e==="W5"||cardValue(e)==="D"||cardValue(e)==="T";};
+  const hasNegation=game.my_hand.includes("N")||(game.last_wild==="N"&&game.my_hand.includes("Q"));
   const lastPrivateNotice=useRef<number|null>(null);
   useEffect(()=>{
     const notice=game.private_notice;
@@ -108,11 +110,11 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     if(busy || nine || game.detective_pending_color || game.wild_color_pending_player || game.vortex_pending || forcedByBeer)return false;
     if(game.powerless_remaining?.includes(me) && !/^[rygb][0-9]$/.test(c))return false;
     if(lockedColor && (isWild(c) || c[0]!==lockedColor))return false;
-    if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T"));
-    if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T";
+    if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || counterCard(c));
+    if(pending&&!played.length)return counterCard(c);
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
     const first=played[0]!,last=played[played.length-1]!;
-    const same=cardValue(first)===cardValue(c);
+    const same=cardValue(first)===cardValue(effectiveCard(c));
     const diff=Number(cardValue(c))-Number(cardValue(last));
     const sequential=/^\d$/.test(cardValue(c))&&/^\d$/.test(cardValue(last))&&c[0]===last[0]&&Math.abs(diff)===1;
     if(played.length===1)return (state.room.rules.repeat&&same)||(state.room.rules.sequence&&sequential);
@@ -173,7 +175,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           .find(el=>el.dataset['playerSeat']===m.by)?.querySelector<HTMLElement>("[data-seat-cards]")??null;
       }
       const r=source?.getBoundingClientRect()??discard.getBoundingClientRect();
-      const item={id:m.id,card:m.card,
+      const item={id:m.id,card:m.card,mirrorAs:m.mirror_as,
         fromX:r.left+r.width/2-35,fromY:r.top+r.height/2-52,
         toX:d.left+d.width/2-35,toY:d.top+d.height/2-52};
       setFlights(v=>[...v,item]);
@@ -188,7 +190,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   },[game.card_moves,me]);
   function onCard(c: string) {
     if (!canPlay(c)) {sfx("error");toast.error(lockedColor?(language==="en"?`Lock: only ${({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[lockedColor]} cards, no wilds.`:`Cadeado: só cartas ${COLOR_NAMES[lockedColor]}, sem coringas.`):"Essa carta não pode ser jogada agora.",{duration:3000});return;}
-    if(c==="X"){setDetectiveDismissed(false);setPendingDetective(true);return;}
+    if(effectiveCard(c)==="X"){setDetectiveDismissed(false);setPendingDetective(c);return;}
     // A wild, even a jump-in, is placed on the discard pile before choosing its color.
     actions.play(c);
   }
@@ -269,7 +271,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <p className="mt-2 text-sm text-muted-foreground">O último a apertar compra {nine.count} carta(s).</p>
           </div>
         )}
-        {myTurn && !forcedByBeer && !!pending && played.length===0 && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")) && !nine && (
+        {myTurn && !forcedByBeer && !!pending && played.length===0 && (hand.some(counterCard)) && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
             <p className="mt-1 text-sm text-cyan">Revidar → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong>
@@ -309,7 +311,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           </div>
         )}
         {myTurn&&!forcedByBeer&&pending>0&&hasNegation&&played.length===0&&
-          !hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")&&(
+          !hand.some(counterCard)&&(
             <Button variant="hero" className="relative z-20 rounded-xl" onClick={()=>setPendingNegation(true)} disabled={busy}>
               Anular +{pending} com Negação
             </Button>
@@ -334,7 +336,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           </button>
 
           <div data-discard-pile className={cn("relative rounded-[14%] ring-4 ring-offset-4 ring-offset-navy transition-all", RING[game.current_color])}>
-            <UnoCard key={game.seq + game.top_card} card={game.top_card} size="lg" className="uno-center-card" rotate={((game.seq * 37) % 14) - 7} />
+            <UnoCard key={game.seq + game.top_card} card={game.top_card} mirrorAs={game.top_card==="Q"?(game.mirror_played_as||game.last_wild):undefined} size="lg" className="uno-center-card" rotate={((game.seq * 37) % 14) - 7} />
             {pileCover&&(
               <div className="absolute inset-0 z-10"><UnoCard card={pileCover.card} size="lg" className="uno-center-card" /></div>
             )}
@@ -393,9 +395,9 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             {hand.map((c,i)=>{
               const ok=canPlay(c);
               return (
-                <button key={c+"-"+i} data-hand-card={c} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c)+(myTurn&&ok?" — jogável":"")} aria-disabled={!ok}
+                <button key={c+"-"+i} data-hand-card={c} type="button" onClick={()=>onCard(c)} aria-label={cardLabel(c,game.last_wild)+(myTurn&&ok?" — jogável":"")} aria-disabled={!ok}
                   className={cn("uno-hand-button relative shrink-0 rounded-[12%] transition-all hover:z-10 hover:-translate-y-1 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan",myTurn && played.length===0 ? (ok ? "shadow-glow-cyan" : "opacity-65") : "",i===freshIndex&&recentDraw&&clock-recentDraw.at<8000&&"uno-recently-drawn",i===replacementIndex&&"uno-machine-new-card")}>
-                  <UnoCard card={c} size="md" className="uno-hand-card"/>
+                  <UnoCard card={c} mirrorAs={game.last_wild} size="md" className="uno-hand-card"/>
                 </button>
               );
             })}
@@ -411,7 +413,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
               "--mid-x":(f.fromX+f.toX)/2+"px","--mid-y":((f.fromY+f.toY)/2-52)+"px",
               "--end-x":f.toX+"px","--end-y":f.toY+"px",
             } as CSSProperties}>
-              <UnoCard card={f.card} size="md" className="!w-[70px] shadow-glow-cyan"/>
+              <UnoCard card={f.card} mirrorAs={f.mirrorAs||game.last_wild} size="md" className="!w-[70px] shadow-glow-cyan"/>
             </div>
           ))}
         </div>
@@ -421,7 +423,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           <CardBack size="md"/>
         </div>
       )}
-      <Dialog open={pendingDetective} onOpenChange={setPendingDetective}>
+      <Dialog open={!!pendingDetective} onOpenChange={open=>{if(!open)setPendingDetective(null)}}>
         <DialogContent className="glass-strong rounded-3xl border-glass-border sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Eye className="size-5 text-cyan"/> Coringa Detetive</DialogTitle>
@@ -431,7 +433,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             {game.turn_order.filter(id=>id!==me).map(id=>{
               const player=byId.get(id);
               return <Button key={id} type="button" variant="glass" className="h-12 justify-start rounded-xl"
-                onClick={()=>{setPendingDetective(false);setDetectiveDismissed(false);actions.play("X",undefined,id)}}>
+                onClick={()=>{const card=pendingDetective||"X";setPendingDetective(null);setDetectiveDismissed(false);actions.play(card,undefined,id)}}>
                 <Eye className="size-4"/> {player?.nickname??"Jogador"}
               </Button>;
             })}

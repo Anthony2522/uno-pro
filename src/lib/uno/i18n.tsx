@@ -3,6 +3,9 @@ import {localizeBotNames} from "./botNames";
 export type Language="pt"|"en";
 const dictionary:Record<string,string>={
   "Escudo": "Shield",
+  "Espelho": "Mirror",
+  "Coringa Espelho": "Mirror Wild",
+  "Você poderá voltar a esta partida pela tela inicial, enquanto sua vaga estiver preservada.": "You can return to this match from the home page while your seat is reserved.",
   "Escudo ativo": "Shield active",
   "Cadeado": "Lock",
   "Espada": "Sword",

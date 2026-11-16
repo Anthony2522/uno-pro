@@ -67,8 +67,8 @@ export function cleanText(p) {
 }
 const cleanCode = (c) => cleanText(c).toUpperCase();
 
-const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M)$/;
-const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X" || c === "B" || c === "N" || c === "P" || c === "M";
+const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M|Q)$/;
+const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X" || c === "B" || c === "N" || c === "P" || c === "M" || c === "Q";
 export const cardValue = (c) => (isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
   return isWild(c) || c[0] === color || (!isWild(top) && c.slice(1) === top.slice(1));
@@ -85,7 +85,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 227 cards. */
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 228 cards (including one Mirror Wild). */
 export function newDeck() {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
@@ -95,7 +95,7 @@ export function newDeck() {
   }
   for (let i = 0; i < 10; i++) d.push("W", "W4");
   for (let i = 0; i < 2; i++) d.push("W5");
-  d.push("X", "B", "N", "P", "M"); // One of each custom wild per fresh deck.
+  d.push("X", "B", "N", "P", "M", "Q"); // One of each custom wild per fresh deck.
   for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T", col + "H", col + "H", col + "V", col + "V", col + "C", col + "L", col + "L", col + "E", col + "E");
   return shuffle(d);
 }
@@ -136,6 +136,8 @@ function draw(room, gid, n) {
     if (g.draw_pile.length === 0) {
       // Endless fresh deck; keep discard history so the visible top card never changes.
       g.draw_pile = newDeck();
+      if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
+        g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
     }
     drawn.push(g.draw_pile.shift());
   }
@@ -238,7 +240,7 @@ export function isSoloHumanBotMatch(room) {
 export function sweep() {
   const t = now();
   for (const room of [...store.rooms.values()]) {
-    const protectedMatch=isSoloHumanBotMatch(room);
+    const protectedMatch=isSoloHumanBotMatch(room) && (!room.game.solo_recovery_until || room.game.solo_recovery_until>t);
     const idle = room.status === "waiting" ? LIMITS.waitingIdleMs : LIMITS.playingIdleMs;
     for (const m of [...room.members]) {
       // Do not evict the only human while their bot-only match is alive.
@@ -311,6 +313,17 @@ const handlers = {
     return { guest_id: me.id, nickname: nm };
   },
 
+  list_rejoinable_rooms({p_token}) {
+    const me=auth(p_token),t=now();
+    return [...store.rooms.values()].filter(r=>r.status==="playing" && r.game?.status==="playing" &&
+      r.members.some(m=>m.guest_id===me.id) &&
+      (!isSoloHumanBotMatch(r)||!r.game.solo_recovery_until||r.game.solo_recovery_until>t))
+      .sort((a,b)=>b.created_at-a.created_at)
+      .map(r=>({code:r.code,name:r.name,solo:isSoloHumanBotMatch(r),
+        recovery_until:r.game.solo_recovery_until?iso(r.game.solo_recovery_until):null,
+        player_count:r.game.turn_order.length}));
+  },
+
   list_public_rooms() {
     const t = now();
     const rows = [];
@@ -366,7 +379,11 @@ const handlers = {
   join_room({ p_token, p_code }) {
     const me = auth(p_token);
     const r = findRoom(p_code);
-    if (isMember(r, me.id)) return { code: r.code, already: true };
+    if (isMember(r, me.id)) {
+      if (isSoloHumanBotMatch(r) && r.game.solo_recovery_until && now()>=r.game.solo_recovery_until) fail("ROOM_NOT_FOUND",404);
+      if (isSoloHumanBotMatch(r))r.game.solo_force_pause=false;
+      return { code: r.code, already: true };
+    }
     if (r.status === "playing") fail("GAME_STARTED");
     if (r.members.filter(m=>!m.spectator).length >= r.max_players) fail("ROOM_FULL");
     leaveOtherRooms(me.id, r.id);

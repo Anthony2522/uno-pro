@@ -90,10 +90,10 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("baralho de 227 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
+test("baralho de 228 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,227);
-  for(const c of ["N","P","M"])assert.equal(deck.filter(x=>x===c).length,1);
+  assert.equal(deck.length,228);
+  for(const c of ["N","P","M","Q"])assert.equal(deck.filter(x=>x===c).length,1);
   assert.equal(deck.filter(c=>c==="B").length,1);
   assert.equal(deck.filter(c=>c==="X").length,1);
   for(const col of ["r","y","g","b"])
@@ -117,7 +117,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   room.hands.get(a.guest_id).cards=["b1","r5"];
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,226);
+  assert.equal(g.draw_pile.length,227);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -952,7 +952,7 @@ test("se um humano vencer contra dois bots, partida encerra imediatamente",()=>{
   assert.equal(g.placements.length,2);
 });
 
-test("quando o último humano sai e ficam somente bots, o jogo termina",()=>{
+test("sair da partida solo não expulsa e dá cinco minutos para retornar",()=>{
   const a=call("register_guest",{p_nickname:"Saiu"});
   const code=call("create_room",{p_token:a.token,p_name:"Só robôs",p_max_players:4}).code;
   call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
@@ -960,8 +960,15 @@ test("quando o último humano sai e ficam somente bots, o jogo termina",()=>{
   call("start_game",{p_token:a.token,p_code:code});
   const r=store.roomsByCode.get(code);
   call("leave_room",{p_token:a.token,p_code:code});
-  assert.equal(r.game.status,"finished");
-  assert.equal(r.status,"waiting");
+  assert.equal(r.game.status,"playing");
+  assert.equal(r.status,"playing");
+  assert.ok(r.game.solo_recovery_until>Date.now()+295000);
+  assert.ok(r.members.some(m=>m.guest_id===a.guest_id));
+  assert.equal(call("list_rejoinable_rooms",{p_token:a.token}).some(v=>v.code===code),true);
+  call("join_room",{p_token:a.token,p_code:code});
+  assert.equal(r.game.solo_force_pause,false);
+  proSweep();
+  assert.equal(r.game.solo_recovery_until,null);
 });
 
 test("o anfitrião edita regras e cartas antes da primeira partida e após uma rodada",()=>{
@@ -1733,4 +1740,148 @@ test("Jogador único entre bots preserva a partida durante desconexão longa",()
   assert.deepEqual(room.hands.get(a.guest_id).cards,savedCards);
   assert.equal(g.turn_order[g.turn_idx],a.guest_id);
   assert.equal(g.timeout_counts[a.guest_id]||0,0);
+});
+
+test("Espelho é coringa único e começa copiando o coringa comum",()=>{
+  const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
+  assert.equal(g.last_wild,"W");
+  room.hands.get(a.guest_id).cards=["Q","r3"];
+  g.discard_pile=["b1"];g.current_color="b";
+  s.play(a,"Q","y");
+  assert.equal(g.discard_pile.at(-1),"Q","identidade física preservada");
+  assert.equal(g.mirror_played_as,"W");
+  assert.equal(g.current_color,"y");
+  assert.equal(g.last_wild,"W","Espelho não se copia a si mesmo");
+  const state=call("get_room_state",{p_token:a.token,p_code:s.code}).game;
+  assert.equal(state.last_wild,"W");
+  assert.equal(state.mirror_played_as,"W");
+});
+test("Espelho copia +4 do último coringa e preserva a dívida",()=>{
+  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b4"];g.current_color="b";g.last_wild="W4";
+  room.hands.get(a.guest_id).cards=["Q","r5"];
+  room.hands.get(b.guest_id).cards=["W4","r5"];
+  s.play(a,"Q","r");
+  assert.equal(g.card_moves.at(-1).mirror_as,"W4");
+  assert.equal(g.turn_cards[0],"W4");
+  s.end(a);
+  assert.equal(g.pending_draw,4);
+  assert.equal(g.last_wild,"W4");
+  assert.equal(g.discard_pile.at(-1),"Q");
+});
+test("Espelho também copia +5 e pode rebater a dívida de +5",()=>{
+  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["W5"];g.current_color="b";g.last_wild="W5";
+  g.pending_draw=5;g.pending_uncounterable=true;g.pending_source=b.guest_id;
+  room.hands.get(a.guest_id).cards=["Q","r2"];
+  room.hands.get(b.guest_id).cards=["W5","y2"];
+  s.play(a,"Q","g");s.end(a);
+  assert.equal(g.pending_draw,10);
+  assert.equal(g.pending_uncounterable,true);
+});
+test("Espelho copia Bomba e Metralhadora com seus efeitos",()=>{
+  const s=setup(),{g,room,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b1"];g.current_color="b";g.last_wild="B";
+  room.hands.get(a.guest_id).cards=["Q","r3"];
+  room.hands.get(b.guest_id).cards=["r2","y4"];
+  room.hands.get(bot).cards=["b5","g6"];
+  s.play(a,"Q","r");
+  assert.equal(room.hands.get(b.guest_id).cards.length,4);
+  assert.equal(room.hands.get(bot).cards.length,4);
+  assert.equal(g.last_wild,"B");
+  s.setTurn(b.guest_id);g.discard_pile=["r2"];g.current_color="r";
+  g.last_wild="M";room.hands.get(b.guest_id).cards=["Q","r3"];
+  room.hands.get(a.guest_id).cards=["W4","r4","g3"];
+  s.play(b,"Q","y");
+  assert.equal(g.discard_pile.at(-1),"Q");
+  assert.equal(g.turn_cards.at(-1),"M");
+  assert.equal(g.last_wild,"M");
+});
+test("Espelho imita Detetive, inclusive alvo e escolha de cor posterior",()=>{
+  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["r2"];g.current_color="r";g.last_wild="X";
+  room.hands.get(a.guest_id).cards=["Q","r3"];
+  room.hands.get(b.guest_id).cards=["b2","g2"];
+  call("play_card",{p_token:a.token,p_code:s.code,p_card:"Q",p_target_id:b.guest_id});
+  assert.equal(g.detective_pending_color,a.guest_id);
+  const view=call("get_room_state",{p_token:a.token,p_code:s.code}).game;
+  assert.deepEqual(view.detective.cards,["b2","g2"]);
+  call("resolve_detective",{p_token:a.token,p_code:s.code,p_color:"g"});
+  assert.equal(g.current_color,"g");
+  assert.equal(g.last_wild,"X");
+});
+test("Espelho pode funcionar como Negação para cancelar compra",()=>{
+  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+  g.last_wild="N";g.discard_pile=["bD"];g.current_color="b";
+  g.pending_draw=2;g.pending_source=b.guest_id;
+  room.hands.get(a.guest_id).cards=["Q","r3"];
+  call("negate_effect",{p_token:a.token,p_code:s.code,p_color:"r"});
+  assert.equal(g.pending_draw,0);
+  assert.equal(room.hands.get(a.guest_id).cards.includes("Q"),false);
+  assert.equal(g.discard_pile.at(-1),"Q");
+  assert.equal(g.effects.at(-1).type,"negation");
+});
+test("Multijogador pode voltar ao sair, mas não depois de expulso por inatividade",()=>{
+  const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
+  call("leave_room",{p_token:a.token,p_code:s.code});
+  assert.equal(g.status,"playing");
+  assert.ok(room.members.some(m=>m.guest_id===a.guest_id));
+  assert.ok(call("list_rejoinable_rooms",{p_token:a.token}).some(r=>r.code===s.code&&!r.solo));
+  call("join_room",{p_token:a.token,p_code:s.code});
+  assert.ok(room.members.some(m=>m.guest_id===a.guest_id));
+  g.turn_started_at=Date.now()-60000;
+  proSweep();
+  s.setTurn(a.guest_id);g.turn_started_at=Date.now()-60000;
+  proSweep();
+  assert.ok(!room.members.some(m=>m.guest_id===a.guest_id));
+  assert.ok(!call("list_rejoinable_rooms",{p_token:a.token}).some(r=>r.code===s.code));
+});
+test("Partida solo recuperável desaparece após cinco minutos",()=>{
+  const a=call("register_guest",{p_nickname:"PrazoSolo"});
+  const code=call("create_room",{p_token:a.token,p_name:"Salva por cinco",p_max_players:3,p_is_public:false}).code;
+  call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
+  call("start_game",{p_token:a.token,p_code:code});
+  const r=store.roomsByCode.get(code);
+  call("leave_room",{p_token:a.token,p_code:code});
+  const available=call("list_rejoinable_rooms",{p_token:a.token});
+  assert.ok(available.some(v=>v.code===code&&v.solo&&v.recovery_until));
+  r.game.solo_recovery_until=Date.now()-1;
+  assert.ok(!call("list_rejoinable_rooms",{p_token:a.token}).some(v=>v.code===code));
+  proSweep();
+  assert.equal(store.roomsByCode.has(code),false);
+});
+
+test("Último coringa do próprio portador muda o Espelho na mesma jogada",()=>{
+  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","Q","r3"];
+  room.hands.get(b.guest_id).cards=["W4","r4"];
+  s.play(a,"W4","g");
+  assert.equal(g.last_wild,"W4");
+  s.play(a,"Q","r");
+  assert.deepEqual(g.turn_cards,["W4","W4"]);
+  assert.equal(g.last_wild,"W4");
+  assert.equal(g.card_moves.at(-1).mirror_as,"W4");
+  s.end(a);
+  assert.equal(g.pending_draw,8,"soma da carta verdadeira com o Espelho");
+});
+test("Espelho em outra mão não é duplicado quando o baralho infinito reinicia",()=>{
+  const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b3"];g.current_color="b";g.draw_pile=[];
+  room.hands.get(a.guest_id).cards=["Q","r2"];
+  const draw=call("draw_card",{p_token:a.token,p_code:s.code});
+  assert.ok(draw.card);
+  assert.ok(room.hands.get(a.guest_id).cards.includes("Q"));
+  assert.equal(g.draw_pile.includes("Q"),false,"não existem duas cartas Espelho em circulação");
+});
+test("Retorno de sala privada não revela partidas de outros jogadores",()=>{
+  const a=call("register_guest",{p_nickname:"Privado1"});
+  const outsider=call("register_guest",{p_nickname:"Privado2"});
+  const code=call("create_room",{p_token:a.token,p_code:"",p_name:"Só minha",p_max_players:3,p_is_public:false}).code;
+  call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"hard"});
+  call("start_game",{p_token:a.token,p_code:code});
+  call("leave_room",{p_token:a.token,p_code:code});
+  assert.ok(call("list_rejoinable_rooms",{p_token:a.token}).some(x=>x.code===code));
+  assert.ok(!call("list_rejoinable_rooms",{p_token:outsider.token}).some(x=>x.code===code));
+  assert.ok(!call("list_public_rooms",{}).some(x=>x.code===code));
 });

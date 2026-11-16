@@ -69,27 +69,32 @@ function Symbol({ card, corner }: { card: string; corner?: boolean }) {
 
 export function UnoCard({
   card,
+  mirrorAs,
   size = "md",
   className,
   rotate = 0,
   animate = false,
 }: {
   card: string;
+  mirrorAs?: string|undefined;
   size?: CardSize;
   className?: string;
   rotate?: number;
   animate?: boolean;
 }) {
-  const wild = isWild(card);
-  const color = wild ? null : card[0];
+  const isMirror=card==="Q";
+  const face=isMirror?(mirrorAs&&mirrorAs!=="Q"?mirrorAs:"W"):card;
+  const wild = isWild(face);
+  const color = wild ? null : face[0];
   return (
     <div
       role="img"
-      aria-label={cardLabel(card)}
+      aria-label={cardLabel(card,mirrorAs)}
       style={{ ["--rot" as string]: `${rotate}deg`, transform: `rotate(${rotate}deg)` }}
       className={cn(
         "@container relative aspect-[2/3] shrink-0 rounded-[12%] bg-uno-paper p-[6%] shadow-card",
         WIDTH[size],
+        isMirror && "uno-mirror-card",
         animate && "animate-card-in",
         className,
       )}
@@ -107,19 +112,23 @@ export function UnoCard({
             wild ? "text-uno-paper drop-shadow-[0_2px_0_var(--uno-ink)]" : INK[color!],
           )}
         >
-          {size !== "xs" && <Symbol card={card} />}
+          {size !== "xs" && (face==="W"?<span className="block size-[34cqw] rounded-full bg-wild ring-[3cqw] ring-white/85" />:<Symbol card={face} />)}
         </div>
         {size !== "xs" && (
           <>
             <div className="absolute left-[7%] top-[5%] z-10 font-display font-black italic leading-none text-uno-paper drop-shadow-[0_1px_0_var(--uno-ink)]">
-              {card === "W" ? <span className="block size-[14cqw] rounded-full bg-wild ring-1 ring-uno-paper" /> : <Symbol card={card} corner />}
+              {face === "W" ? <span className="block size-[14cqw] rounded-full bg-wild ring-1 ring-uno-paper" /> : <Symbol card={face} corner />}
             </div>
             <div className="absolute bottom-[5%] right-[7%] z-10 rotate-180 font-display font-black italic leading-none text-uno-paper drop-shadow-[0_1px_0_var(--uno-ink)]">
-              {card === "W" ? <span className="block size-[14cqw] rounded-full bg-wild ring-1 ring-uno-paper" /> : <Symbol card={card} corner />}
+              {face === "W" ? <span className="block size-[14cqw] rounded-full bg-wild ring-1 ring-uno-paper" /> : <Symbol card={face} corner />}
             </div>
           </>
         )}
       </div>
+      {isMirror&&<>
+        <div aria-hidden className="uno-mirror-sheen pointer-events-none absolute inset-[6%] z-20 rounded-[9%]"/>
+        <div aria-hidden className="pointer-events-none absolute bottom-[10%] left-[10%] z-30 rounded-full border border-white/80 bg-white/20 px-[5cqw] py-[2cqw] text-[11cqw] font-black not-italic leading-none tracking-wide text-white shadow-[0_0_8px_white]">✧</div>
+      </>}
     </div>
   );
 }

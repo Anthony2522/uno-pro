@@ -84,7 +84,7 @@ export function LeaveButton({ onConfirm, inGame }: { onConfirm: () => void; inGa
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Sair da sala?</AlertDialogTitle>
             <AlertDialogDescription>
-              {inGame ? "A partida continua sem você e suas cartas voltam para o baralho." : "Você pode voltar depois pelo mesmo link, se ainda houver vaga."}
+              {inGame ? "Você poderá voltar a esta partida pela tela inicial, enquanto sua vaga estiver preservada." : "Você pode voltar depois pelo mesmo link, se ainda houver vaga."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

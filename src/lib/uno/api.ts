@@ -57,6 +57,9 @@ export type GameState = {
   lock_color?: CardColor|null;
   lock_target?: CardColor|null;
   solo_paused?: boolean;
+  solo_recovery_until?: string|null;
+  last_wild?: string;
+  mirror_played_as?: string|null;
   beer_remaining?: string[];
   beer_due_at?: string|null;
   vortex_pending?: {actor:string;remaining:number;total:number}|null;
@@ -66,7 +69,7 @@ export type GameState = {
   machine_gun_new?: {card:string;nonce:number;at:string}|null;
   skip_reaction?: {target:string|null;expires_at:string}|null;
   detective?: {target:string;target_name:string;cards:string[];expires_at:string}|null;
-  card_moves?: Array<{id:number;by:string;name:string;card:string;previous_top:string;at:number}>;
+  card_moves?: Array<{id:number;by:string;name:string;card:string;mirror_as?:string|null;previous_top:string;at:number}>;
   offline_deadline_at?: string|null;
   last_action: LastAction;
   round: number;
@@ -102,6 +105,8 @@ export type RoomState = {
   members: Member[];
   game: GameState | null;
 };
+
+export type RejoinableRoom = {code:string;name:string;solo:boolean;recovery_until:string|null;player_count:number};
 
 export type PublicRoom = {
   code: string;
@@ -151,6 +156,7 @@ export const api = {
   updateNickname: (token: string, nickname: string) =>
     call<{ guest_id: string; nickname: string }>("update_nickname", { p_token: token, p_nickname: nickname }),
   listPublicRooms: () => call<PublicRoom[]>("list_public_rooms"),
+  listRejoinableRooms: (token:string) => call<RejoinableRoom[]>("list_rejoinable_rooms",{p_token:token}),
   devStatus: (token:string)=>call<{is_dev:boolean}>("dev_status",{p_token:token}),
   devAuth: (token:string,key:string)=>call<{is_dev:boolean}>("dev_auth",{p_token:token,p_key:key}),
   devDeletePublicRoom: (token:string,code:string)=>call("dev_delete_public_room",{p_token:token,p_code:code}),
