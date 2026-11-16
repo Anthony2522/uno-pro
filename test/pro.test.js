@@ -1333,6 +1333,7 @@ test("um jogador que age entre os tempos esgotados zera sua contagem",()=>{
 
 test("Negação no primeiro de três bloqueios preserva os demais sem bloquear o autor",()=>{
   const s=setup(),{room,g,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.turn_order=[a.guest_id,b.guest_id,bot];g.turn_idx=0; // Evita depender do embaralhamento aleatório dos assentos.
   g.discard_pile=["bS"];g.current_color="b";g.direction=1;
   room.hands.get(a.guest_id).cards=["bS","yS","rS","r3"];
   room.hands.get(b.guest_id).cards=["N","g4","b2"];
