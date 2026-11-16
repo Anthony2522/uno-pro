@@ -361,7 +361,7 @@ const handlers = {
     const nm = cleanText(p_name);
     if (len(nm) < 2 || len(nm) > 32) fail("INVALID_ROOM_NAME");
     const max = p_max_players;
-    if (typeof max !== "number" || !Number.isInteger(max) || max < 2 || max > 8) fail("INVALID_MAX_PLAYERS");
+    if (typeof max !== "number" || !Number.isInteger(max) || max < 2 || max > 20) fail("INVALID_MAX_PLAYERS");
     if (store.rooms.size >= LIMITS.maxRooms) sweep();
     if (store.rooms.size >= LIMITS.maxRooms) fail("SERVER_BUSY", 503);
     leaveOtherRooms(me.id, null);
@@ -486,7 +486,21 @@ const handlers = {
     if (players.length < 2) fail("NOT_ENOUGH_PLAYERS");
     let dp = newDeck(r.cards_enabled);
     r.hands = new Map();
-    for (const p of players) r.hands.set(p, { cards: dp.splice(0, r.initial_cards ?? 8), uno_called: false, uno_since: null });
+    // A 20-player room with 20 initial cards needs more than a single deck.
+    // Refill while dealing so every player receives exactly the configured amount.
+    for (const p of players) {
+      const cards=[];
+      for (let i=0;i<(r.initial_cards??8);i++) {
+        if(!dp.length) {
+          dp=newDeck(r.cards_enabled);
+          // Preserve the Mirror's uniqueness when a large room needs a second deck.
+          if(cards.includes("Q")||[...r.hands.values()].some(h=>h.cards.includes("Q")))
+            dp=dp.filter(c=>c!=="Q");
+        }
+        cards.push(dp.shift());
+      }
+      r.hands.set(p,{cards,uno_called:false,uno_since:null});
+    }
     let top;
     for (;;) {
       top = dp.shift();
