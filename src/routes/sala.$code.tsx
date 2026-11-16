@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword } from "lucide-react";
+import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
@@ -187,7 +187,8 @@ function RoomPage() {
           <span className="max-w-[14rem] truncate text-sm font-semibold">{state.room.name}</span>
           <span className="font-display text-xs tracking-widest text-cyan">{state.room.code}{g && playing ? ` · rodada ${g.round}` : ""}</span>
         </div>
-        {playing && <CopyInviteButton code={state.room.code} compact />}
+        {state.room.local_only && <span className="inline-flex items-center gap-1 rounded-full border border-cyan/40 bg-cyan/10 px-2 py-1 text-xs font-bold text-cyan"><WifiOff className="size-3.5"/> Offline</span>}
+        {playing && !state.room.local_only && <CopyInviteButton code={state.room.code} compact />}
         <LeaveButton inGame={playing} onConfirm={() => void doLeave()} />
       </AppHeader>
       <ConnectionBanner show={connection === "reconnecting"} />
