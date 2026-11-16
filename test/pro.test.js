@@ -555,9 +555,10 @@ test("bot fácil mantém seus tempos e difícil pode demorar seis segundos",()=>
   const s=setup(),{room,g}=s;
   s.setTurn(s.a.guest_id);
   const h=room.hands.get(s.bot);
-  h.cards=["b1"];h.uno_called=false;h.uno_since=Date.now()-50;h.bot_uno_plan=null;
+  h.cards=["b1"];h.uno_called=false;h.uno_since=Date.now()-50;
+  h.bot_uno_plan={since:h.uno_since,due:h.uno_since}; // Teste do caminho de fala imediata, sem depender do sorteio.
   proSweep();
-  assert.equal(h.uno_called,true,"bot difícil deveria gritar UNO imediatamente");
+  assert.equal(h.uno_called,true,"bot difícil grita UNO no prazo agendado");
   assert.ok(g.effects.some(e=>e.type==="uno"&&e.by===s.bot));
 });
 
