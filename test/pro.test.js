@@ -1850,3 +1850,38 @@ test("Partida solo recuperável desaparece após cinco minutos",()=>{
   proSweep();
   assert.equal(store.roomsByCode.has(code),false);
 });
+
+test("Último coringa do próprio portador muda o Espelho na mesma jogada",()=>{
+  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","Q","r3"];
+  room.hands.get(b.guest_id).cards=["W4","r4"];
+  s.play(a,"W4","g");
+  assert.equal(g.last_wild,"W4");
+  s.play(a,"Q","r");
+  assert.deepEqual(g.turn_cards,["W4","W4"]);
+  assert.equal(g.last_wild,"W4");
+  assert.equal(g.card_moves.at(-1).mirror_as,"W4");
+  s.end(a);
+  assert.equal(g.pending_draw,8,"soma da carta verdadeira com o Espelho");
+});
+test("Espelho em outra mão não é duplicado quando o baralho infinito reinicia",()=>{
+  const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b3"];g.current_color="b";g.draw_pile=[];
+  room.hands.get(a.guest_id).cards=["Q","r2"];
+  const draw=call("draw_card",{p_token:a.token,p_code:s.code});
+  assert.ok(draw.card);
+  assert.ok(room.hands.get(a.guest_id).cards.includes("Q"));
+  assert.equal(g.draw_pile.includes("Q"),false,"não existem duas cartas Espelho em circulação");
+});
+test("Retorno de sala privada não revela partidas de outros jogadores",()=>{
+  const a=call("register_guest",{p_nickname:"Privado1"});
+  const outsider=call("register_guest",{p_nickname:"Privado2"});
+  const code=call("create_room",{p_token:a.token,p_code:"",p_name:"Só minha",p_max_players:3,p_is_public:false}).code;
+  call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"hard"});
+  call("start_game",{p_token:a.token,p_code:code});
+  call("leave_room",{p_token:a.token,p_code:code});
+  assert.ok(call("list_rejoinable_rooms",{p_token:a.token}).some(x=>x.code===code));
+  assert.ok(!call("list_rejoinable_rooms",{p_token:outsider.token}).some(x=>x.code===code));
+  assert.ok(!call("list_public_rooms",{}).some(x=>x.code===code));
+});
