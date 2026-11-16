@@ -142,7 +142,7 @@ function evaluate(plan,color,context,remaining) {
     // itself the winning move or the sole legal way out of an immediate debt.
     const effect=resolved(c,mirrorAs);
     if(effect==="N"){
-      const phase=len<=2?.06:len<=4?.45:len<=7?1:1.25;
+      const phase=len<=2?.45:len<=4?.65:len<=7?1:1.25;
       score-=tune.negationKeep*phase*(c==="Q"?.73:1);
     }
     else if(effect==="W")score-=4*protectionScale*tune.wildKeep;
