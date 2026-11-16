@@ -5,6 +5,7 @@
 import crypto from "node:crypto";
 import {store,newDeck,setClock} from "../server/game.js";
 import {proRpc,proSweep} from "../server/pro.js";
+import {HARD_AI_WEIGHTS} from "../server/hardBotStrategy.js";
 
 if(process.env.UNO_SELF_PLAY!=="1")throw Error("Set UNO_SELF_PLAY=1 for isolated tournament");
 const rawNow=Date.now,rawRandom=Math.random,rawRandomInt=crypto.randomInt;
@@ -17,6 +18,7 @@ const makeRandom=seed=>()=>{
 };
 const rawArgs=process.argv;
 const full=rawArgs.includes("--full"),quick=rawArgs.includes("--quick");
+const validateOnly=rawArgs.includes("--validate");
 const stageSeeds=full?48:quick?5:10;
 const finalSeeds=full?360:quick?20:60;
 const selfSeeds=full?80:quick?5:12;
@@ -83,7 +85,7 @@ function match(seed,variants){
     for(steps=0;steps<4000&&g.status==="playing";steps++){
       virtualNow+=1500;
       const previous=room.game.last_action;
-      try{proSweep()}catch(err){firstError=String(err?.code||err?.stack||err);break;}
+      try{proSweep()}catch(err){firstError=String(err?.stack||err?.code||err);break;}
       if(g.last_action!==previous){decisionCount++;if(g.last_action?.card)seenSpecial.add(g.last_action.card);}
       if(g.last_action?.type==="stack_take")draws+=g.last_action.n||0;
     }
@@ -141,6 +143,18 @@ function selfPlay(n,seeds,baseSeed,variant){
   return {players:n,games:seeds,wins};
 }
 try{
+  if(validateOnly){
+    const deployed={name:"deployed-hard",params:{...HARD_AI_WEIGHTS}};
+    const independent=playSeries(deployed,baseline,full?500:160,105000);
+    const self2=selfPlay(2,full?120:25,890001,deployed);
+    const self3=selfPlay(3,full?120:25,890901,deployed);
+    const report={method:"independent_full_game_holdout",seedOffset,players:[2,3],
+      activeCards:228,allRules:true,deployedWeights:deployed.params,
+      headToHead:independent,self2,self3,totalMatches,failed,
+      avgSteps:Math.round(totalSteps/totalMatches),errors};
+    console.log("UNO_VALIDATE_RESULT "+JSON.stringify(report));
+    if(failed>totalMatches*.025||independent.twoWinPct<=50||independent.threeWinPct<=33.33)process.exitCode=1;
+  }else{
   const league=[];
   let champion=tuned[0];
   for(let generation=0;generation<3;generation++){
@@ -167,6 +181,7 @@ try{
     failed,errors};
   console.log("UNO_TRAIN_RESULT "+JSON.stringify(report));
   if(failed>totalMatches*.025)process.exitCode=1;
+  }
 }finally{
   Date.now=rawNow;setClock(rawNow);Math.random=rawRandom;crypto.randomInt=rawRandomInt;
 }
