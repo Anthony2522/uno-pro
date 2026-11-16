@@ -49,7 +49,12 @@ function game(r){if(!r.game||r.game.status!=="playing")fail("GAME_NOT_ACTIVE");r
 function ready(room){if(!room.rules)room.rules={...DEFAULT_RULES};return room.rules;}
 function hand(room,id){const h=room.hands.get(id);if(!h)fail("NOT_MEMBER",403);return h;}
 function draw(room,id,n){const g=room.game,h=hand(room,id),got=[];
-  for(let k=0;k<n;k++){if(!g.draw_pile.length){g.draw_pile=newDeck();}
+  for(let k=0;k<n;k++){if(!g.draw_pile.length){
+    g.draw_pile=newDeck();
+    // The Mirror is unique even if the infinite draw pile is regenerated.
+    if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
+      g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
+  }
     const card=g.draw_pile.shift();if(card)got.push(card);}
   h.cards.push(...got);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;return got;}
 function shuffle(a){const b=[...a];for(let k=b.length-1;k>0;k--){const j=crypto.randomInt(k+1);[b[k],b[j]]=[b[j],b[k]];}return b;}
