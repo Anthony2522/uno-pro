@@ -136,6 +136,8 @@ function draw(room, gid, n) {
     if (g.draw_pile.length === 0) {
       // Endless fresh deck; keep discard history so the visible top card never changes.
       g.draw_pile = newDeck();
+      if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
+        g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
     }
     drawn.push(g.draw_pile.shift());
   }
