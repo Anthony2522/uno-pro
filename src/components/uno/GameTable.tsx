@@ -42,7 +42,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
   const lastMoveId=useRef<number|null>(null);
   const motionTimers=useRef(new Map<number,ReturnType<typeof setTimeout>>());
-  const [flights,setFlights]=useState<Array<{id:number;card:string;mirrorAs?:string|null;fromX:number;fromY:number;toX:number;toY:number}>>([]);
+  const [flights,setFlights]=useState<Array<{id:number;card:string;mirrorAs:string|null|undefined;fromX:number;fromY:number;toX:number;toY:number}>>([]);
   const [pileCover,setPileCover]=useState<{id:number;card:string}|null>(null);
   const handViewportRef=useRef<HTMLDivElement|null>(null);
   const [fitColumns,setFitColumns]=useState(6);
