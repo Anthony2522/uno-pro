@@ -1912,3 +1912,27 @@ test("Configuração pública Google não expõe credenciais do armazenamento",(
   assert.equal(typeof config.persistent_rooms_configured,"boolean");
   assert.equal("UPSTASH_REDIS_REST_TOKEN" in config,false);
 });
+
+test("Somente o humano de uma partida contra bots pode exportar o salvamento completo",()=>{
+  const player=call("register_guest",{p_nickname:"SoloSalvo"});
+  const outsider=call("register_guest",{p_nickname:"Fora"});
+  const {code}=call("create_room",{p_token:player.token,p_name:"Resgate offline",p_max_players:4});
+  call("add_bot",{p_token:player.token,p_code:code,p_difficulty:"hard"});
+  call("add_bot",{p_token:player.token,p_code:code,p_difficulty:"easy"});
+  call("start_game",{p_token:player.token,p_code:code});
+  const room=store.roomsByCode.get(code);
+  const backup=call("export_solo_snapshot",{p_token:player.token,p_code:code});
+  assert.equal(backup.version,1);
+  assert.equal(backup.code,code);
+  assert.equal(backup.room.game.status,"playing");
+  assert.equal(backup.guests.length,3);
+  assert.equal(backup.room.hands.length,3);
+  assert.deepEqual(backup.room.hands.find(([id])=>id===player.guest_id)[1].cards,
+    room.hands.get(player.guest_id).cards);
+  assert.ok(!JSON.stringify(backup).includes(player.token),"never transmit raw player session token");
+  assert.throws(()=>call("export_solo_snapshot",{p_token:outsider.token,p_code:code}),
+    /NOT_MEMBER/,"other users cannot read bot hands");
+  const multi=setup();
+  assert.throws(()=>call("export_solo_snapshot",{p_token:multi.a.token,p_code:multi.code}),
+    /NOT_SOLO_BOT_GAME/,"cannot export matches with another human");
+});
