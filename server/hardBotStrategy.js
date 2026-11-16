@@ -2,6 +2,14 @@
 // Receives only its own cards, the PUBLIC opponents' card counts, the
 // published turn order, the discard, optional rules and public observations.
 // Neither this module nor its callers pass opponents' hidden card identities.
+// Selected from three successive generations of complete 228-card bot self-play.
+// Original baseline is preserved separately for independently seeded validation.
+export const HARD_AI_WEIGHTS=Object.freeze({
+  negationKeep:21.96, drawKeep:.756, wildKeep:1,
+  handShape:1, aggression:1.4, urgency:1.4,
+  perCard:1, colorFit:1, vortexValue:1,
+  shieldValue:1, swordValue:1, lockValue:1, restrictionsValue:1,
+});
 const COLORS=["b","y","g","r"];
 const WILDS=new Set(["W","W4","W5","X","B","N","P","M","Q"]);
 // Q is physically a wild even before another one is played. Its *effect*
@@ -98,21 +106,7 @@ function threatened(color,nextId,counts,history) {
 function evaluate(plan,color,context,remaining) {
   const {hand,turnOrder:order,selfId,turnIndex,direction,counts,rules,
     history,pendingDraw=0,mirrorAs="W",profile={}}=context;
-  const tune={
-    negationKeep:profile?.negationKeep??16.5,
-    drawKeep:profile?.drawKeep??1.0,
-    wildKeep:profile?.wildKeep??1.0,
-    handShape:profile?.handShape??1.0,
-    aggression:profile?.aggression??1.0,
-    urgency:profile?.urgency??1.0,
-    perCard:profile?.perCard??1.0,
-    colorFit:profile?.colorFit??1.0,
-    vortexValue:profile?.vortexValue??1.0,
-    shieldValue:profile?.shieldValue??1.0,
-    swordValue:profile?.swordValue??1.0,
-    lockValue:profile?.lockValue??1.0,
-    restrictionsValue:profile?.restrictionsValue??1.0,
-  };
+  const tune={...HARD_AI_WEIGHTS,...profile};
   if(!plan.length) return -Infinity;
   const n=order.length;
   const len=hand.length;
