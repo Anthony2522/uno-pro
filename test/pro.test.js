@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {store, newDeck, CUSTOM_CARD_KEYS, normalizeCardsEnabled, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
 import {serializeState,hydrateState} from "../server/persistence.js";
 import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
-import { inferColorGaps } from "../server/hardBotStrategy.js";
+import { inferColorGaps,chooseHardPlan } from "../server/hardBotStrategy.js";
 const call=(fn,args)=>proRpc(fn,args);
 function setup(rules) {
   const a=call("register_guest",{p_nickname:"Alice"}),b=call("register_guest",{p_nickname:"Bruno"});
@@ -252,13 +252,13 @@ test("timeout após rebater +4 finaliza a jogada sem cobrar o próprio jogador",
 
 test("probabilidades exatas dos bots no desafio do 9 e no corte",()=>{
   assert.equal(chooseNineDelay("easy",()=>0.01),0);
-  assert.equal(chooseNineDelay("easy",()=>0.29),0);
-  assert.equal(chooseNineDelay("easy",()=>0.30),8000);
+  assert.equal(chooseNineDelay("easy",()=>0.19999),0);
+  assert.equal(chooseNineDelay("easy",()=>0.20),8000);
   assert.equal(chooseNineDelay("easy",()=>0.95),8000);
-  assert.equal(chooseNineDelay("hard",()=>0.09),0);
-  assert.equal(chooseNineDelay("hard",()=>0.10),2000);
-  assert.equal(chooseNineDelay("hard",()=>0.49),2000);
-  assert.equal(chooseNineDelay("hard",()=>0.50),5000);
+  assert.equal(chooseNineDelay("hard",()=>0.49999),0);
+  assert.equal(chooseNineDelay("hard",()=>0.50),2000);
+  assert.equal(chooseNineDelay("hard",()=>0.74999),2000);
+  assert.equal(chooseNineDelay("hard",()=>0.75),5000);
   assert.equal(chooseCutDelay("easy",()=>0),40000);
   assert.equal(chooseCutDelay("hard",()=>0.09),10000);
   assert.equal(chooseCutDelay("hard",()=>0.11),25000);
@@ -546,8 +546,8 @@ test("duas cartas +2 Volta: acumulam, invertem, voltam ao atacante",()=>{
   assert.equal(r.hands.get(b.guest_id).cards.length,8);
 });
 
-test("bot grita UNO em 0/8 segundos ou esquece; difícil é imediato",()=>{
-  assert.equal(chooseBotUnoDelay("hard",()=>0.99),0);
+test("bot fácil mantém seus tempos e difícil pode demorar seis segundos",()=>{
+  assert.equal(chooseBotUnoDelay("hard",()=>0.99),6000);
   assert.equal(chooseBotUnoDelay("easy",()=>0.1999),0);
   assert.equal(chooseBotUnoDelay("easy",()=>0.20),8000);
   assert.equal(chooseBotUnoDelay("easy",()=>0.7999),8000);
@@ -555,9 +555,10 @@ test("bot grita UNO em 0/8 segundos ou esquece; difícil é imediato",()=>{
   const s=setup(),{room,g}=s;
   s.setTurn(s.a.guest_id);
   const h=room.hands.get(s.bot);
-  h.cards=["b1"];h.uno_called=false;h.uno_since=Date.now()-50;h.bot_uno_plan=null;
+  h.cards=["b1"];h.uno_called=false;h.uno_since=Date.now()-50;
+  h.bot_uno_plan={since:h.uno_since,due:h.uno_since}; // Teste do caminho de fala imediata, sem depender do sorteio.
   proSweep();
-  assert.equal(h.uno_called,true,"bot difícil deveria gritar UNO imediatamente");
+  assert.equal(h.uno_called,true,"bot difícil grita UNO no prazo agendado");
   assert.ok(g.effects.some(e=>e.type==="uno"&&e.by===s.bot));
 });
 
@@ -1332,6 +1333,7 @@ test("um jogador que age entre os tempos esgotados zera sua contagem",()=>{
 
 test("Negação no primeiro de três bloqueios preserva os demais sem bloquear o autor",()=>{
   const s=setup(),{room,g,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.turn_order=[a.guest_id,b.guest_id,bot];g.turn_idx=0; // Evita depender do embaralhamento aleatório dos assentos.
   g.discard_pile=["bS"];g.current_color="b";g.direction=1;
   room.hands.get(a.guest_id).cards=["bS","yS","rS","r3"];
   room.hands.get(b.guest_id).cards=["N","g4","b2"];
@@ -2048,4 +2050,95 @@ test("espadas de A e B se somam em +6 quando B rebate e C aceita a dívida",()=>
   assert.ok(strikes.length>=1);
   assert.equal(strikes.at(-1).n,6,"o golpe notifica o bônus total +6");
   assert.equal(g.pending_sword_bonus,0,"a batalha foi encerrada e o bônus zerado");
+});
+
+test("bot difícil grita UNO imediatamente em 80% dos casos e após 6s em 20%",()=>{
+  assert.equal(chooseBotUnoDelay("hard",()=>0),0);
+  assert.equal(chooseBotUnoDelay("hard",()=>.799999),0);
+  assert.equal(chooseBotUnoDelay("hard",()=>.8),6000);
+  assert.equal(chooseBotUnoDelay("hard",()=>.9999),6000);
+  assert.equal(chooseBotUnoDelay("easy",()=>.15),0);
+  assert.equal(chooseBotUnoDelay("easy",()=>.5),8000);
+  assert.equal(chooseBotUnoDelay("easy",()=>.95),null);
+});
+test("planejador difícil reconhece Espelho copiando +5, +4 e Negação",()=>{
+  const common={turnOrder:["eu","rival"],turnIndex:0,selfId:"eu",counts:{rival:4},
+    direction:1,rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+    history:{},random:()=>0};
+  const pending=chooseHardPlan({...common,hand:["Q","b4"],mirrorAs:"W5",
+    currentColor:"r",topCard:"r4",pendingDraw:5,pendingUncounterable:true});
+  assert.equal(pending.kind,"play");
+  assert.equal(pending.cards[0],"Q","Espelho reflete +5 e consegue rebater dívida de +5");
+  const four=chooseHardPlan({...common,hand:["Q","b4"],mirrorAs:"W4",
+    currentColor:"r",topCard:"r4",pendingDraw:4,pendingUncounterable:false});
+  assert.equal(four.kind,"play");
+  assert.equal(four.cards[0],"Q","Espelho reflete +4 e pode rebater");
+  const mirrorNegation=chooseHardPlan({...common,hand:["Q","r3"],mirrorAs:"N",
+    currentColor:"r",topCard:"r8"});
+  assert.equal(mirrorNegation.cards[0],"r3","Espelho-Negação preservado quando existe alternativa");
+  const wild=chooseHardPlan({...common,hand:["Q","b4"],mirrorAs:"W",
+    currentColor:"r",topCard:"r8"});
+  assert.equal(wild.cards[0],"Q","Espelho básico permanece jogável");
+});
+test("difícil guarda Negação para defesa em vez de descartá-la cedo",()=>{
+  const common={turnOrder:["eu","rival"],turnIndex:0,selfId:"eu",counts:{rival:7},
+    direction:1,rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+    history:{},random:()=>0,mirrorAs:"W"};
+  const play=chooseHardPlan({...common,
+    hand:["N","r3","g7","b8","r4","y0","W4","g2"],
+    currentColor:"r",topCard:"r7"});
+  assert.equal(play.kind,"play");
+  assert.ok(!play.cards.includes("N"),"tem alternativa e deve guardar Negação");
+  const only=chooseHardPlan({...common,hand:["N","b1"],currentColor:"r",topCard:"r7"});
+  assert.equal(only.cards[0],"N","Negação ainda é jogável quando única opção");
+});
+
+test("bot fácil e difícil aguardam Vórtice concluir em vez de encerrar a vez antes",()=>{
+  for(const difficulty of ["easy","hard"]){
+    const scenario=setup(),{room,g,bot}=scenario;
+    store.guestsById.get(bot).difficulty=difficulty;
+    g.turn_idx=g.turn_order.indexOf(bot);g.turn_cards=[];g.turn_mode=null;g.turn_step=0;
+    g.pending_draw=0;g.nine=null;g.has_drawn=false;g.bot_move={id:bot,due:Date.now()-1,played:0};
+    g.current_color="b";g.discard_pile=["b2"];
+    room.hands.get(bot).cards=["bV","bV","g4"];
+    proSweep();
+    assert.ok(g.vortex_queue,`Vórtice deveria iniciar para ${difficulty}`);
+    assert.equal(g.status,"playing");
+    g.vortex_queue.next_at=Date.now()-1;
+    assert.doesNotThrow(()=>proSweep(),`não pode finalizar antes de puxar cartas (${difficulty})`);
+    if(g.vortex_queue){
+      g.vortex_queue.next_at=Date.now()-1;
+      assert.doesNotThrow(()=>proSweep(),`conclusão de Vórtice não pode lançar exceção (${difficulty})`);
+    }
+    assert.equal(g.vortex_queue,null,`Vórtice finaliza para ${difficulty}`);
+    assert.equal(g.turn_cards.length,0);
+  }
+});
+
+test("difícil valoriza Vórtice pela quantidade de cartas realmente puxadas",()=>{
+  const context={hand:["bV","b2","b4","b5","r7"],topCard:"b0",currentColor:"b",
+    direction:1,turnOrder:["eu","rival"],turnIndex:0,selfId:"eu",
+    counts:{rival:6},rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+    mirrorAs:"W",history:{},random:()=>0};
+  const decision=chooseHardPlan(context);
+  assert.equal(decision.kind,"play");
+  assert.deepEqual(decision.cards,["bV"],"Vórtice limpa bV,b2,b4,b5 de uma vez");
+  const winning=chooseHardPlan({...context,hand:["bV","b2","b4","b5"]});
+  assert.deepEqual(winning.cards,["bV"],"Vórtice garante vitória ao puxar todas as cartas restantes");
+  const mixed=chooseHardPlan({...context,hand:["bV","rV","y7"]});
+  assert.ok(mixed.cards.length<=1,"não inventa combo manual após o Vórtice iniciar");
+});
+
+test("bot pode usar Negação reativa contra Bloqueio mesmo afetado pela Cerveja",()=>{
+  const scen=setup(),{room,g,a,b,bot}=scen;
+  g.turn_order=[a.guest_id,b.guest_id,bot];g.direction=1;g.turn_idx=room.game.turn_order.indexOf(bot);
+  room.hands.get(bot).cards=["N","r4","g2"];
+  g.beer_remaining=[bot];
+  g.skip_reaction={actor:a.guest_id,target:bot,cursor:g.turn_idx,
+    remaining:1,declined:[],deadline:Date.now()+9000};
+  g.discard_pile=["rS"];g.current_color="r";g.nine=null;
+  assert.doesNotThrow(()=>proSweep(),"Negação de defesa é exceção à jogada forçada da Cerveja");
+  assert.equal(room.hands.get(bot).cards.includes("N"),false);
+  assert.equal(g.skip_reaction,null);
+  assert.ok(g.effects.some(e=>e.type==="negation"&&e.by===bot));
 });

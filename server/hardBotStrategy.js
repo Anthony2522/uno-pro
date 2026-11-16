@@ -2,14 +2,25 @@
 // Receives only its own cards, the PUBLIC opponents' card counts, the
 // published turn order, the discard, optional rules and public observations.
 // Neither this module nor its callers pass opponents' hidden card identities.
+// Selected from three successive generations of complete 228-card bot self-play.
+// Original baseline is preserved separately for independently seeded validation.
+export const HARD_AI_WEIGHTS=Object.freeze({
+  negationKeep:21.96, drawKeep:.756, wildKeep:1,
+  handShape:1, aggression:1.4, urgency:1.4,
+  perCard:1, colorFit:1, vortexValue:1,
+  shieldValue:1, swordValue:1, lockValue:1, restrictionsValue:1,
+});
 const COLORS=["b","y","g","r"];
-const WILDS=new Set(["W","W4","W5","X","B","N","P","M"]);
-const number=c=>/^[0-9]$/.test(value(c));
-const value=c=>WILDS.has(c)?c:c.slice(1);
+const WILDS=new Set(["W","W4","W5","X","B","N","P","M","Q"]);
+// Q is physically a wild even before another one is played. Its *effect*
+// changes with the latest real wild, without revealing an opponent's hand.
+const resolved=(card,mirrorAs="W")=>card==="Q"?(mirrorAs||"W"):card;
+const value=(c,mirrorAs="W")=>WILDS.has(c)?resolved(c,mirrorAs):c.slice(1);
+const number=(c,mirrorAs="W")=>/^[0-9]$/.test(value(c,mirrorAs));
 const wild=c=>WILDS.has(c);
-const drawValue=c=>c==="W5"?5:c==="W4"?4:c?.slice(1)==="D"||c?.slice(1)==="T"?2:0;
-const attack=c=>drawValue(c)>0;
-const canCounter=(c,uncounterable)=>uncounterable?c==="W5":attack(c);
+const drawValue=(c,mirrorAs="W")=>{const e=resolved(c,mirrorAs);return e==="W5"?5:e==="W4"?4:e?.slice(1)==="D"||e?.slice(1)==="T"?2:0;};
+const attack=(c,mirrorAs="W")=>drawValue(c,mirrorAs)>0;
+const canCounter=(c,uncounterable,mirrorAs="W")=>uncounterable?resolved(c,mirrorAs)==="W5":attack(c,mirrorAs);
 const advance=(idx,dir,steps,n)=>(idx+dir*steps%n+n*100)%n;
 const playable=(c,top,color)=>wild(c)||c[0]===color||(!wild(top)&&value(c)===value(top));
 const sum=(a)=>a.reduce((x,y)=>x+y,0);
@@ -35,7 +46,7 @@ export function inferColorGaps(actions=[]) {
   return scores;
 }
 
-function handQuality(cards,rules) {
+function handQuality(cards,rules,mirrorAs="W") {
   const colored=cards.filter(c=>COLORS.includes(c[0]));
   const colorCounts=Object.fromEntries(COLORS.map(c=>[c,0]));
   for(const c of colored)colorCounts[c[0]]++;
@@ -55,7 +66,7 @@ function handQuality(cards,rules) {
     const nums=new Set(colored.filter(c=>c[0]===color&&number(c)).map(c=>Number(value(c))));
     for(const x of nums)if(nums.has(x+1))adj++;
   }
-  const wilds=cards.filter(wild).length, attacks=cards.filter(attack).length;
+  const wilds=cards.filter(wild).length, attacks=cards.filter(c=>attack(c,mirrorAs)).length;
   const remaining=cards.length;
   const specialWeight=remaining<=3?.25:remaining<=6?1:remaining<=10?.83:.45;
   const defense=(attacks>0?3.6:0)+(attacks>1?1.3:0);
@@ -94,7 +105,8 @@ function threatened(color,nextId,counts,history) {
 
 function evaluate(plan,color,context,remaining) {
   const {hand,turnOrder:order,selfId,turnIndex,direction,counts,rules,
-    history,pendingDraw=0}=context;
+    history,pendingDraw=0,mirrorAs="W",profile={}}=context;
+  const tune={...HARD_AI_WEIGHTS,...profile};
   if(!plan.length) return -Infinity;
   const n=order.length;
   const len=hand.length;
@@ -102,11 +114,11 @@ function evaluate(plan,color,context,remaining) {
   const remainder=remaining.length;
   let skips=0,reverses=0,owed=0,hasBomb=false;
   for(const c of plan){
-    if(value(c)==="S")skips++;
-    if(value(c)==="R"){reverses++;if(n===2)skips++;}
-    if(value(c)==="T"&&n>2)reverses++;
-    owed+=drawValue(c);
-    if(c==="B")hasBomb=true;
+    if(value(c,mirrorAs)==="S")skips++;
+    if(value(c,mirrorAs)==="R"){reverses++;if(n===2)skips++;}
+    if(value(c,mirrorAs)==="T"&&n>2)reverses++;
+    owed+=drawValue(c,mirrorAs);
+    if(resolved(c,mirrorAs)==="B")hasBomb=true;
   }
   const {nextIndex,skipped}=nextSeat(order,turnIndex,direction,skips,reverses);
   const nextId=order[nextIndex];
@@ -119,29 +131,66 @@ function evaluate(plan,color,context,remaining) {
   const threatTotal=otherThreat.reduce((v,x)=>v+x.level,0);
   const urgency=threatTotal>0?1:0;
   // Small hands must finish; intermediate hands protect valuable resources.
-  const basePerCard=len>=7?7.5:len>=4?6.3:11.0;
-  let score=plan.length*basePerCard+handQuality(remaining,rules)*.91;
-  const released=plan.filter(attack);
-  const resources=plan.filter(c=>attack(c)||wild(c));
+  const basePerCard=(len>=7?7.5:len>=4?6.3:11.0)*tune.perCard;
+  // Vortex automatically plays ALL remaining cards of its color, not just V itself.
+  // Previous hard AI evaluated it as only a one-card discard, often leaving a
+  // powerful multi-discard on the table. Its follow-up is server-controlled.
+  const vortexColors=new Set(plan.filter(c=>value(c,mirrorAs)==="V").map(c=>c[0]));
+  const pulled=remaining.filter(c=>vortexColors.has(c[0]));
+  const afterVortex=remaining.filter(c=>!vortexColors.has(c[0]));
+  if(vortexColors.size&&afterVortex.length===0)return 999_000;
+  let score=plan.length*basePerCard+
+    pulled.length*basePerCard*tune.vortexValue+
+    handQuality(afterVortex,rules,mirrorAs)*.91*tune.handShape;
+  const released=plan.filter(c=>attack(c,mirrorAs));
+  const resources=plan.filter(c=>attack(c,mirrorAs)||wild(c));
   const protectionScale=len<=3?.10:len<=6?1.20:len<=10?1:.72;
+  // All effects below are computed only from our hand and public rival counts.
+  const specialPlayed=plan.map(c=>value(c,mirrorAs));
+  if(specialPlayed.includes("H")){
+    score+=tune.shieldValue*(context.shieldArmed?-3:5.5+Math.min(2,threatTotal*.20));
+  }
+  if(specialPlayed.includes("E")){
+    const futureAttacks=afterVortex.some(c=>attack(c,mirrorAs));
+    score+=tune.swordValue*(context.swordArmed?-2:futureAttacks?5.2:2.0);
+  }
+  if(specialPlayed.includes("L")){
+    score+=tune.lockValue*(2.4+Math.max(0,Math.min(8,danger*1.25)));
+  }
+  if(specialPlayed.includes("P")){
+    score+=tune.restrictionsValue*(1.4+danger*1.05);
+  }
+  if(specialPlayed.includes("M")){
+    score+=tune.restrictionsValue*(.8+Math.min(3,threatTotal*.55));
+  }
+  // Beer is compulsory random play for rivals, and may help a near-winner.
+  if(specialPlayed.includes("C") && danger)score-=danger*.9;
+  if(specialPlayed.includes("9")&&n>=3&&value(plan.at(-1),mirrorAs)==="9")
+    score+=Math.min(4,2+threatTotal*.3);
   for(const c of resources){
-    if(c==="W")score-=4*protectionScale;
-    else if(c==="W4")score-=7.8*protectionScale;
-    else if(c==="W5")score-=10*protectionScale;
-    else if(c==="X")score-=2.6*protectionScale;
-    else if(c==="B"||c==="M"||c==="P")score-=3.3*protectionScale;
-    else if(c==="N")score-=4.6*protectionScale;
-    else if(drawValue(c))score-=(2.8+drawValue(c)*.45)*protectionScale;
+    // Negação is a scarce universal defense. Save it, except when it is
+    // itself the winning move or the sole legal way out of an immediate debt.
+    const effect=resolved(c,mirrorAs);
+    if(effect==="N"){
+      const phase=len<=2?.45:len<=4?.65:len<=7?1:1.25;
+      score-=tune.negationKeep*phase*(c==="Q"?.73:1);
+    }
+    else if(effect==="W")score-=4*protectionScale*tune.wildKeep;
+    else if(effect==="W4")score-=7.8*protectionScale*tune.drawKeep;
+    else if(effect==="W5")score-=10*protectionScale*tune.drawKeep;
+    else if(effect==="X")score-=2.6*protectionScale*tune.wildKeep;
+    else if(effect==="B"||effect==="M"||effect==="P")score-=3.3*protectionScale*tune.wildKeep;
+    else if(drawValue(c,mirrorAs))score-=(2.8+drawValue(c,mirrorAs)*.45)*protectionScale*tune.drawKeep;
   }
   const nextDangerCount=Math.max(0,Math.min(1,(nextCount-1)/9));
   const retaliationRisk=nextCount>7?.5:nextCount>4?.29:.12;
   if(owed){
     const effect=threatLevel(nextCount);
-    score+=Math.min(owed,12)*(effect?2.8+effect*.95:.24);
+    score+=Math.min(owed,12)*(effect?2.8+effect*.95:.24)*tune.aggression;
     if(effect)score+=effect*4;
     else score-=Math.min(6,owed)*retaliationRisk;
     if(pendingDraw)score+=Math.min(12,pendingDraw)*2.5;
-    if(nextCount>8 && !threatTotal && released.length && remaining.filter(attack).length===0){
+    if(nextCount>8 && !threatTotal && released.length && remaining.filter(c=>attack(c,mirrorAs)).length===0){
       score-=Math.min(15,owed+pendingDraw)*1.4; // counter-war can boomerang
     }
   }else if(pendingDraw)score-=10000; // not legal in engine; defensive guard
@@ -155,7 +204,7 @@ function evaluate(plan,color,context,remaining) {
   }
   if(danger){
     // If next player is critical, a draw attack or a skip is worth sacrificing resources.
-    if(owed)score+=danger*3.8;
+    if(owed)score+=danger*3.8*tune.urgency;
     else score-=danger*5.4;
   }
   if(urgency && !owed && !skips && !hasBomb && nextCount>3){
@@ -172,7 +221,7 @@ function evaluate(plan,color,context,remaining) {
   // Choose a color matching our remaining hand unless public evidence of
   // a rival's difficulty with that color is reasonably strong.
   const ownMatching=remaining.filter(c=>c[0]===color).length;
-  score+=ownMatching*1.65;
+  score+=ownMatching*1.65*tune.colorFit;
   if(ownMatching===0 && remaining.length && !remaining.some(wild))score-=3.2;
   if(urgency)score+=threatened(color,nextId,counts,history);
   // Better future draw odds from multiple colors and kept flexible cards.
@@ -186,7 +235,7 @@ function evaluate(plan,color,context,remaining) {
 
 function enumerate(context) {
   const {hand,rules,topCard,currentColor,pendingDraw=0,
-    pendingUncounterable=false}=context;
+    pendingUncounterable=false,mirrorAs="W"}=context;
   const counts=new Map();
   for(const c of hand)counts.set(c,(counts.get(c)||0)+1);
   const keys=[...counts.keys()];
@@ -197,16 +246,18 @@ function enumerate(context) {
     if(nodes++>=maxNodes)return;
     if(plan.length){
       plans.push([...plan]);
-      if(plan.length>=maxDepth)return;
+      // A Vortex immediately starts a server-controlled pull. There can be no
+      // additional manual cards in that plan, even another differently colored Vortex.
+      if(plan.some(card=>value(card,mirrorAs)==="V")||plan.length>=maxDepth)return;
     }
     for(const c of keys){
       if(!counts.get(c))continue;
       if(!plan.length){
-        if(pendingDraw?!canCounter(c,pendingUncounterable):!playable(c,topCard,currentColor))continue;
+        if(pendingDraw?!canCounter(c,pendingUncounterable,mirrorAs):!playable(c,topCard,currentColor))continue;
       }else{
-        const first=plan[0],prev=plan.at(-1),same=value(c)===value(first);
-        const delta=Number(value(c))-Number(value(prev));
-        const isRun=number(c)&&number(prev)&&c[0]===prev[0]&&
+        const first=plan[0],prev=plan.at(-1),same=value(c,mirrorAs)===value(first,mirrorAs);
+        const delta=Number(value(c,mirrorAs))-Number(value(prev,mirrorAs));
+        const isRun=number(c,mirrorAs)&&number(prev,mirrorAs)&&c[0]===prev[0]&&
           Math.abs(delta)===1 && (!step||Math.sign(delta)===step);
         if(mode==="repeat" && !same)continue;
         if(mode==="sequence" && !isRun)continue;
@@ -214,8 +265,8 @@ function enumerate(context) {
       }
       let nextMode=mode,nextStep=step;
       if(plan.length===1){
-        if(value(plan[0])===value(c)){nextMode="repeat";}
-        else {nextMode="sequence";nextStep=Math.sign(Number(value(c))-Number(value(plan[0])));}
+        if(value(plan[0],mirrorAs)===value(c,mirrorAs)){nextMode="repeat";}
+        else {nextMode="sequence";nextStep=Math.sign(Number(value(c,mirrorAs))-Number(value(plan[0],mirrorAs)));}
       }
       counts.set(c,counts.get(c)-1);
       plan.push(c);walk(plan,nextMode,nextStep);plan.pop();
@@ -249,11 +300,11 @@ export function chooseHardPlan(context){
     const many=others.filter(id=>(counts[id]??0)>8).length;
     const threat=others.some(id=>(counts[id]??100)<=3);
     const hugeHand=mine.length>=7;
-    const soleDefense=mine.filter(attack).length===1;
+    const soleDefense=mine.filter(c=>attack(c,context.mirrorAs)).length===1;
     const nextId=turnOrder[(context.turnIndex+context.direction+turnOrder.length)%turnOrder.length];
     const bigHandNext=(counts[nextId]??0)>=9;
     const likelyCounterWar=bigHandNext&&!threat&&hugeHand&&soleDefense;
-    const acceptance=handQuality(mine,context.rules)*.91-context.pendingDraw*3.1+
+    const acceptance=handQuality(mine,context.rules,context.mirrorAs)*.91*(context.profile?.handShape??1)-context.pendingDraw*3.1+
       (likelyCounterWar?23:0);
     scored.push({kind:"accept",cards:[],color:null,target:null,score:acceptance});
   }

@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import {googleLogin,googleClientId} from "./googleAuth.js";
 import { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import { chooseHardPlan } from "./hardBotStrategy.js";
+import { chooseHardPlan as chooseHardPlanBaseline } from "./hardBotStrategyBaseline.js";
 export { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, CUSTOM_CARD_KEYS, normalizeCardsEnabled, LIMITS, isSoloHumanBotMatch, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
@@ -24,7 +25,7 @@ const clock = () => Date.now();
 const isDraw = c => c?.slice(1)==="D" || c?.slice(1)==="T" || c==="W4";
 export function chooseNineDelay(difficulty, random=Math.random) {
   const r=random();
-  return difficulty==="hard" ? (r<.10?0:r<.50?2000:5000) : (r<.30?0:8000);
+  return difficulty==="hard" ? (r<.50?0:r<.75?2000:5000) : (r<.20?0:8000);
 }
 export function chooseCutDelay(difficulty, random=Math.random) {
   if(difficulty!=="hard")return 40000;
@@ -91,7 +92,7 @@ function botCutTick(r) {
       for(const card of hand(r,id).cards)if(counts[card[0]]!==undefined)counts[card[0]]++;
       const color=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
       play(r,id,w.top,color);
-      if(g.status==="playing" && current(g)===id) finish(r);
+      if(g.status==="playing" && current(g)===id && !g.vortex_queue) finish(r);
     } catch (e) { if(!(e instanceof RpcError))throw e; }
     break;
   }
@@ -125,7 +126,7 @@ function announceUno(r,id) {
   g.seq++;bump(r);
 }
 export function chooseBotUnoDelay(difficulty,random=Math.random){
-  if(difficulty==="hard")return 0;
+  if(difficulty==="hard")return random()<.80?0:6000;
   const roll=random();
   return roll<.20?0:roll<.80?8000:null; // null = forget to shout UNO
 }
@@ -380,7 +381,7 @@ function negateEffect(r,id,color){
   }
   if(powerless){g.powerless_remaining=[];g.powerless_target=null;}
   if(locked){g.lock_remaining=[];g.lock_target=null;g.lock_color=null;}
-  const result=play(r,id,reactionCard,color);
+  const result=play(r,id,reactionCard,color,undefined,{defensiveNegation:true});
   // Negation is a reaction, not the player's regular move. After defending,
   // the player may still start a legal play or draw from the new color.
   if(g.status==="playing"&&current(g)===id){
@@ -494,12 +495,12 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
     g.nine={source:actor,count:trailingNines,eligible,pressed:[],botTimes,started_at:start,deadline:start+9200};}
   bump(r);if(!g.nine&&!deferDebt)resolveDebt(r);
 }
-function play(r,id,card,color,targetId){
+function play(r,id,card,color,targetId,options={}){
   const g=game(r),rules=ready(r),h=hand(r,id);let series=g.turn_cards||[];
   if(g.detective_pending_color)fail("DETECTIVE_COLOR_PENDING");
   if(g.wild_pending_color)fail("WILD_COLOR_PENDING");
   if(g.vortex_queue)fail("VORTEX_RESOLVING");
-  if(current(g)===id && (g.beer_remaining||[]).includes(id) && !g.beer_resolving)fail("BEER_FORCED");
+  if(current(g)===id && (g.beer_remaining||[]).includes(id) && !g.beer_resolving && !options.defensiveNegation)fail("BEER_FORCED");
   const cutting=current(g)!==id||(g.skip_reaction?.target===id&&card===top(g));
   if(g.skip_reaction && !cutting)fail("SKIP_DECISION_PENDING");
   // No cooldown for initial plays or cuts while an announcement is shown.
@@ -680,11 +681,14 @@ function hardBotTick(r,id,h){
   if(!turn.plan){
     const counts=Object.fromEntries(g.turn_order.filter(p=>p!==id)
       .map(p=>[p,r.hands.get(p)?.cards.length??0]));
-    const decision=chooseHardPlan({
+    const choose=store.guestsById.get(id)?.ai_variant==="original-hard"?chooseHardPlanBaseline:chooseHardPlan;
+    const decision=choose({
       hand:h.cards.filter(c=>allowedDuringRestrictions(g,c,id)),topCard:top(g),currentColor:g.current_color,
       direction:g.direction,turnOrder:[...g.turn_order],turnIndex:g.turn_idx,
       selfId:id,counts,history:g.public_history||{},rules:ready(r),
       pendingDraw:g.pending_draw,pendingUncounterable:g.pending_uncounterable,
+      mirrorAs:g.last_wild||"W", swordArmed:!!g.swords?.[id], shieldArmed:!!g.shields?.[id],
+      profile:store.guestsById.get(id)?.ai_profile||null,
       random:Math.random
     });
     if(decision.kind==="accept"){finish(r,true);return;}
@@ -706,7 +710,7 @@ function hardBotTick(r,id,h){
   const card=turn.plan.shift();
   if(!h.cards.includes(card))throw new Error("INVALID_HARD_BOT_PLAN");
   play(r,id,card,wild(card)?turn.color:undefined,reflected(g,card)==="X"?turn.target:undefined);
-  if(g.status!=="playing"||current(g)!==id||!g.turn_cards?.length)return;
+  if(g.status!=="playing"||current(g)!==id||!g.turn_cards?.length||g.vortex_queue)return;
   if(turn.plan.length===0){finish(r);return;}
   turn.due=clock()+2000;
 }
@@ -764,7 +768,7 @@ function botTick(r){
     negateEffect(r,id,colorForNegation());return;
   }
   if(g.pending_draw>0&&hasNegation(r,id)&&!g.turn_cards.length&&
-    (g.pending_uncounterable||!counter(r,id)||g.pending_draw>=5)){
+    (!counter(r,id)||(!hard&&g.pending_draw>=5))){
     negateEffect(r,id,colorForNegation());return;
   }
   if(!g.bot_move || g.bot_move.id!==id){
@@ -774,10 +778,10 @@ function botTick(r){
   if(hard&&bot.ai_variant!=="legacy")return hardBotTick(r,id,h);
   if(g.pending_draw && g.turn_cards.length===0 && !counter(r,id)&&!hasNegation(r,id)){finish(r,true);return;}
   const score=c=>{
-    const match=h.cards.filter(x=>x!==c && value(x)===value(c)).length;
-    const run=h.cards.filter(x=>x[0]===c[0] && /^[0-9]$/.test(value(x)) && /^[0-9]$/.test(value(c)) &&
-      Math.abs(Number(value(x))-Number(value(c)))===1).length;
-    return match*4+run*2+weight(c)*3+(value(c)==="S"?4:0)+(value(c)==="R"?2:0)-(wild(c)?2:0);
+    const match=h.cards.filter(x=>x!==c && value(reflected(g,x))===value(reflected(g,c))).length;
+    const run=h.cards.filter(x=>x[0]===c[0] && /^[0-9]$/.test(value(reflected(g,x))) && /^[0-9]$/.test(value(reflected(g,c))) &&
+      Math.abs(Number(value(reflected(g,x)))-Number(value(reflected(g,c))))===1).length;
+    return match*4+run*2+weight(reflected(g,c))*3+(value(reflected(g,c))==="S"?4:0)+(value(reflected(g,c))==="R"?2:0)-(wild(c)?2:0);
   };
   const chooseColor=()=>{
     const counts={r:0,y:0,g:0,b:0};
@@ -796,8 +800,8 @@ function botTick(r){
   }else{
     const series=g.turn_cards,first=series[0],prev=series.at(-1);
     options=h.cards.filter(c=>{
-      const same=value(first)===value(c),delta=Number(value(c))-Number(value(prev));
-      const run=/^\d$/.test(value(c)) && /^\d$/.test(value(prev)) && c[0]===prev[0] &&
+      const same=value(first)===value(reflected(g,c)),delta=Number(value(reflected(g,c)))-Number(value(prev));
+      const run=/^\d$/.test(value(reflected(g,c))) && /^\d$/.test(value(prev)) && c[0]===prev[0] &&
         Math.abs(delta)===1 && (!g.turn_step || Math.sign(delta)===g.turn_step);
       if(!allowedDuringRestrictions(g,c))return false;
       if(!allowedDuringRestrictions(g,c))return false;
@@ -811,13 +815,13 @@ function botTick(r){
   const target=reflected(g,pick)==="X"?g.turn_order.filter(p=>p!==id)
     .sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0]:undefined;
   play(r,id,pick,chooseColor(),target);
-  if(g.status!=="playing" || current(g)!==id||!g.turn_cards?.length)return;
+  if(g.status!=="playing" || current(g)!==id||!g.turn_cards?.length||g.vortex_queue)return;
   g.bot_move={id,due:clock()+(hard?2000:5000),played:(g.bot_move?.played||0)+1};
   // Keep the turn open for an additional card only when a valid combo exists.
   const series=g.turn_cards,first=series[0],prev=series.at(-1);
   const hasCombo=h.cards.some(c=>{
-    const same=value(first)===value(c),delta=Number(value(c))-Number(value(prev));
-    const run=/^\d$/.test(value(c))&&/^\d$/.test(value(prev))&&c[0]===prev[0]&&
+    const same=value(first)===value(reflected(g,c)),delta=Number(value(reflected(g,c)))-Number(value(prev));
+    const run=/^\d$/.test(value(reflected(g,c)))&&/^\d$/.test(value(prev))&&c[0]===prev[0]&&
       Math.abs(delta)===1&&(!g.turn_step||Math.sign(delta)===g.turn_step);
     return g.turn_mode==="repeat"?same:g.turn_mode==="sequence"?run:
       (same&&rules.repeat)||(run&&rules.sequence);
@@ -828,7 +832,8 @@ function botTick(r){
 // unattended bot-only tournament. Keep any already-earned human placement.
 function finishWhenOnlyBots(r){
   const g=r.game;
-  if(!g||g.status!=="playing"||!g.turn_order.length||g.turn_order.some(id=>!isBot(id)))return false;
+  if(!g||g.status!=="playing"||!g.turn_order.length||g.turn_order.some(id=>!isBot(id))||
+     (process.env.UNO_SELF_PLAY==="1"&&g.self_play_benchmark===true))return false;
   g.placements??=[];
   const ranking=g.turn_order.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length);
   while(g.placements.length<(g.winners_target??2) && ranking.length){
