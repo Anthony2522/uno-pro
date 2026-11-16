@@ -11,6 +11,9 @@ export const COLOR_NAMES: Record<CardColor, string> = {
 const ROACH_CARD=/^[rygb]A@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export function isRoach(card:string):boolean{return ROACH_CARD.test(card);}
 export function roachId(card:string):string|null{return isRoach(card)?card.slice(3):null;}
+export function sameCardFace(a:string,b:string):boolean {
+  return a===b||(isRoach(a)&&isRoach(b)&&a[0]===b[0]);
+}
 
 export function isWild(card: string): boolean {
   return card === "W" || card === "W4" || card === "W5" || card === "X" || card === "B" || card === "N" || card === "P" || card === "M" || card === "Q";
