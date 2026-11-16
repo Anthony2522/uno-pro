@@ -85,7 +85,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 227 cards. */
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 228 cards (including one Mirror Wild). */
 export function newDeck() {
   const d = [];
   for (const col of ["r", "y", "g", "b"]) {
