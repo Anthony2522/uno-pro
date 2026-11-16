@@ -15,6 +15,7 @@ export type SoloBackup=Omit<Saved,"token"|"source">;
 let active:Saved|null=null;
 let timer:number|null=null;
 let hiddenSince:number|null=null;
+let visibilityHandlerInstalled=false;
 let lastSaveVersion=-1;
 let storageError=false;
 const read=(key:string):Saved|null=>{
@@ -88,6 +89,12 @@ function hydrate(save:Saved){
 }
 function startTicker(){
   if(timer!==null)return;
+  if(!visibilityHandlerInstalled){
+    visibilityHandlerInstalled=true;
+    document.addEventListener?.("visibilitychange",()=>{
+      if(document.visibilityState==="hidden")hiddenSince??=Date.now();
+    });
+  }
   timer=window.setInterval(()=>{
     if(!active)return;
     const room=store.roomsByCode.get(active.code);
@@ -142,6 +149,7 @@ export function rescueSoloMatch(code:string){
   const backup=read(BACKUP_KEY);
   if(!backup||backup.code!==code.toUpperCase())return false;
   hydrate(backup);
+  void navigator.storage?.persist?.().catch(()=>{});
   return true;
 }
 export function getRecoverableSoloRoom(code:string){
