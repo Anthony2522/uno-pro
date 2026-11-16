@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import type { RoomState } from "@/lib/uno/api";
-import { cardLabel, cardValue, COLOR_NAMES, isPlayable, isWild, type CardColor } from "@/lib/uno/cards";
+import { cardLabel, cardValue, COLOR_NAMES, isPlayable, type CardColor } from "@/lib/uno/cards";
 import { describeAction } from "@/lib/uno/describe";
 import { sfx } from "@/lib/uno/sound";
 import { cn } from "@/lib/utils";
