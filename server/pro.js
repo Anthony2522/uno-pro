@@ -36,6 +36,9 @@ const value = c => isRoach(c)?"A":wild(c) ? c : c.slice(1);
 const wild = c => c==="W"||c==="W4"||c==="W5"||c==="X"||c==="B"||c==="N"||c==="P"||c==="M"||c==="Q";
 // The Mirror is one physical card. Its current effect follows the most recent REAL wild.
 const reflected=(g,c)=>c==="Q"?(g.last_wild||"W"):c;
+// The chain UUID identifies *copies*, not the card face. Two Baratas of the
+// same color are visibly identical for the jump-in rule, even across chains.
+const sameCardFace=(a,b)=>a===b||(isRoach(a)&&isRoach(b)&&a[0]===b[0]);
 const hasNegation=(r,id)=>hand(r,id).cards.some(c=>reflected(r.game,c)==="N");
 const negationCard=(r,id)=>hand(r,id).cards.includes("N")?"N":(r.game.last_wild==="N"&&hand(r,id).cards.includes("Q")?"Q":null);
 const COLORS = ["r","y","g","b"];
@@ -75,7 +78,7 @@ function planBotCut(r,source) {
   const topCard=top(g),start=clock();
   const due={};
   if(ready(r).cut)for(const id of g.turn_order) {
-    if(id===source || !isBot(id) || !hand(r,id).cards.includes(topCard))continue;
+    if(id===source || !isBot(id) || !hand(r,id).cards.some(card=>sameCardFace(card,topCard)))continue;
     const difficulty=store.guestsById.get(id)?.difficulty;
     due[id]=start+chooseCutDelay(difficulty);
   }
@@ -85,13 +88,15 @@ function botCutTick(r) {
   const g=r.game,w=g?.bot_cut;
   if(!w || g.status!=="playing" || g.nine || actionLocked(g) || !ready(r).cut || w.top!==top(g))return;
   for(const [id,due] of Object.entries(w.due)) {
-    if(clock()<due || id===current(g) || !g.turn_order.includes(id) || !hand(r,id).cards.includes(w.top))continue;
+    if(clock()<due || id===current(g) || !g.turn_order.includes(id) || !hand(r,id).cards.some(card=>sameCardFace(card,w.top)))continue;
     if(g.pending_draw && !canCounter(g,w.top))continue;
     try {
       const counts={r:0,y:0,g:0,b:0};
       for(const card of hand(r,id).cards)if(counts[card[0]]!==undefined)counts[card[0]]++;
       const color=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
-      play(r,id,w.top,color);
+      const cuttingCard=hand(r,id).cards.find(card=>sameCardFace(card,w.top));
+      if(!cuttingCard)continue;
+      play(r,id,cuttingCard,color);
       if(g.status==="playing" && current(g)===id && !g.vortex_queue) finish(r);
     } catch (e) { if(!(e instanceof RpcError))throw e; }
     break;
@@ -546,7 +551,7 @@ function play(r,id,card,color,targetId,options={}){
   if(cutting){
     const debt=g.pending_draw>0;
     if(g.skip_reaction)g.skip_reaction=null;
-    if(!rules.cut||!g.turn_order.includes(id)||card!==top(g))fail("CUT_NOT_ALLOWED");
+    if(!rules.cut||!g.turn_order.includes(id)||!sameCardFace(card,top(g)))fail("CUT_NOT_ALLOWED");
     if(debt && !canCounter(g,card))fail("CUT_NOT_ALLOWED");
     if(series.length)finish(r,false,true);
     if(g.status!=="playing"||g.nine||(g.pending_draw && !canCounter(g,card)))fail("CUT_NOT_ALLOWED");
