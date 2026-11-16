@@ -55,7 +55,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const lockedColor = myTurn && game.lock_remaining?.includes(me) ? game.lock_color : null;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","H","E","L","V","C","W","D","T","W4","W5","X","B","N","P","M","Q"];
+    const colors=["b","y","g","r"], special=["R","S","H","E","L","V","C","A","W","D","T","W4","W5","X","B","N","P","M","Q"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>rank(a)-rank(b)||col(a)-col(b));
