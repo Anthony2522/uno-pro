@@ -31,7 +31,7 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = "
   o.stop(ctx.currentTime + start + dur + 0.02);
 }
 
-export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch" | "bomb" | "negation" | "machinegun" | "powerless" | "shield_armed" | "shield_defense";
+export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch" | "bomb" | "negation" | "machinegun" | "powerless" | "shield_armed" | "shield_defense" | "sword_strike";
 
 export function sfx(kind: Sfx) {
   if (typeof window === "undefined" || isMuted()) return;
@@ -77,6 +77,8 @@ export function sfx(kind: Sfx) {
       tone(480,.09,.15,"triangle",.06);
       tone(980,.22,.16,"sine",.06);
       break;
+    case "sword_strike":
+      tone(700,0,.13,"sawtooth",.09);tone(1120,.13,.2,"triangle",.07);tone(180,.28,.33,"sawtooth",.07);break;
     case "shield_armed":
       [480,640,840].forEach((f,i)=>tone(f,i*.09,.24,"sine",.055));break;
     case "shield_defense":
