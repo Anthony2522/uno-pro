@@ -40,6 +40,8 @@ export function cardLabel(card: string): string {
   if (cardValue(card) === "H") return `Escudo ${COLOR_NAMES[card[0] as CardColor]}`;
   if (cardValue(card) === "V") return `Vórtice ${COLOR_NAMES[card[0] as CardColor]}`;
   if (cardValue(card) === "C") return `Cerveja ${COLOR_NAMES[card[0] as CardColor]}`;
+  if (cardValue(card) === "L") return `Cadeado ${COLOR_NAMES[card[0] as CardColor]}`;
+  if (cardValue(card) === "E") return `Espada ${COLOR_NAMES[card[0] as CardColor]}`;
   const color = COLOR_NAMES[card[0] as CardColor] ?? "";
   const v = cardValue(card);
   const name = v === "S" ? "Pular" : v === "R" ? "Inverter" : v === "D" ? "+2" : v === "T" ? "+2 Volta" : v;
@@ -67,7 +69,7 @@ export function sortHand(cards: string[]): string[] {
     if (c === "M") return 407;
     const ci = COLORS.indexOf(c[0] as CardColor) * 100;
     const v = cardValue(c);
-    const vi = v === "S" ? 10 : v === "R" ? 11 : v === "D" ? 12 : v === "T" ? 13 : v === "H" ? 14 : v === "V" ? 15 : v === "C" ? 16 : Number(v);
+    const vi = v === "S" ? 10 : v === "R" ? 11 : v === "D" ? 12 : v === "T" ? 13 : v === "H" ? 14 : v === "V" ? 15 : v === "C" ? 16 : v === "L" ? 17 : v === "E" ? 18 : Number(v);
     return ci + vi;
   };
   return [...cards].sort((a, b) => order(a) - order(b));
