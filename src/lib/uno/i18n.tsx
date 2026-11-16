@@ -4,6 +4,13 @@ export type Language="pt"|"en";
 const dictionary:Record<string,string>={
   "Escudo": "Shield",
   "Escudo ativo": "Shield active",
+  "Cadeado": "Lock",
+  "Espada": "Sword",
+  "Espada ativa": "Sword active",
+  "Cadeado: só": "Lock: only",
+  "sem coringas": "no wilds",
+  "Usar Negação": "Use Negation",
+  "Cadeado: nesta vez só pode jogar cartas da cor exigida, sem coringas. Use Negação para cancelar.": "Lock: you may only play cards of the required color this turn, no wilds. Use Negation to cancel.",
   "Vórtice": "Vortex",
   "Cerveja": "Beer",
   "Cerveja: jogada automática": "Beer: automatic move",
