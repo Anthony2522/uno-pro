@@ -1,4 +1,4 @@
-// Complete-rule, 228-card self-play league. Each active seat is an actual HARD bot,
+// Complete-rule, 232-card self-play league. Each active seat is an actual HARD bot,
 // running the production UNO engine on a deterministic virtual clock.
 // The single host is a non-participating spectator; no hidden opponent hands are given to AI.
 // Usage: UNO_SELF_PLAY=1 node scripts/hard-self-play.mjs [--full|--quick]
@@ -69,10 +69,10 @@ function match(seed,variants){
     g.placements=[];g.winners_target=1;g.nine=null;g.effects=[];g.public_history={};
     g.turn_cards=[];g.turn_mode=null;g.turn_step=0;g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
     g.bot_move=null;g.bot_cut=null;g.last_wild=null;g.mirror_played_as=null;g.status="playing";room.status="playing";
-    // Seed again after setup. All seats see the same physical 228-card distribution for a given seed.
+    // Seed again after setup. All seats see the same physical 232-card distribution for a given seed.
     rand=makeRandom(seed*971+5107);Math.random=rand;crypto.randomInt=(cap)=>Math.floor(rand()*cap);
     const d=newDeck();
-    if(d.length!==228||!d.includes("Q")||!d.includes("rE")||!d.includes("bH")||!d.includes("rC"))throw Error("incomplete deck");
+    if(d.length!==232||!d.includes("Q")||!d.includes("rE")||!d.includes("bH")||!d.includes("rC")||!d.some(c=>/^rA@/.test(c)))throw Error("incomplete deck");
     const topIndex=d.findIndex(c=>/^[rygb][0-9]$/.test(c));
     const [first]=d.splice(topIndex,1);
     g.discard_pile=[first];g.current_color=first[0];g.turn_start_color=first[0];
@@ -149,7 +149,7 @@ try{
     const self2=selfPlay(2,full?120:25,890001,deployed);
     const self3=selfPlay(3,full?120:25,890901,deployed);
     const report={method:"independent_full_game_holdout",seedOffset,players:[2,3],
-      activeCards:228,allRules:true,deployedWeights:deployed.params,
+      activeCards:232,allRules:true,deployedWeights:deployed.params,
       headToHead:independent,self2,self3,totalMatches,failed,
       avgSteps:Math.round(totalSteps/totalMatches),errors};
     console.log("UNO_VALIDATE_RESULT "+JSON.stringify(report));
@@ -174,7 +174,7 @@ try{
   const holdout=playSeries(champion,baseline,finalSeeds,99000);
   const self2=selfPlay(2,selfSeeds,790001,champion);
   const self3=selfPlay(3,selfSeeds,790901,champion);
-  const report={method:"full_228_card_turn_engine_selfplay",
+  const report={method:"full_232_card_turn_engine_selfplay",
     rules:{nine:true,cut:true,repeat:true,sequence:true,stack:true},
     cards:"all optional enabled",seedOffset,stageSeeds,finalSeeds,selfSeeds,
     champion,holdout,self2,self3,totalMatches,avgSteps:Math.round(totalSteps/totalMatches),
