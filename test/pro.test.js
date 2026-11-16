@@ -1493,6 +1493,12 @@ test("Vórtice baixa todas as cartas da cor em ordem aleatória e soma efeitos",
   room.hands.get(b.guest_id).cards=["r1","g1"];
   room.hands.get(bot).cards=["g2","y2"];
   s.play(a,"bV");
+  assert.equal(g.vortex_queue.cards.length,5);
+  assert.equal(g.discard_pile.at(-1),"bV");
+  proSweep();
+  assert.equal(g.card_moves.filter(m=>m.by===a.guest_id).length,1,"aguarda intervalo antes de puxar");
+  assert.throws(()=>s.end(a),/VORTEX_RESOLVING/);
+  for(let i=0;i<6;i++){if(g.vortex_queue)g.vortex_queue.next_at=Date.now()-1;proSweep();}
   assert.deepEqual(room.hands.get(a.guest_id).cards,["r3"]);
   assert.equal(g.shields[a.guest_id],1);
   assert.deepEqual(g.discard_pile.slice(-6).sort(),chosen.filter(c=>c!=="r3").sort());
@@ -1513,6 +1519,11 @@ test("Cerveja tira a escolha do adversário e joga uma carta válida aleatória"
   s.play(a,"bC");s.end(a);
   assert.ok(g.beer_remaining.includes(b.guest_id));
   assert.throws(()=>s.play(b,"b5"),/BEER_FORCED/);
+  const before=g.card_moves.length;
+  proSweep();
+  assert.equal(g.card_moves.length,before,"nenhuma carta antes dos 3 segundos");
+  assert.equal(call("get_room_state",{p_token:b.token,p_code:s.code}).game.beer_remaining.includes(b.guest_id),true);
+  g.beer_due=Date.now()-1;
   proSweep();
   assert.deepEqual(room.hands.get(b.guest_id).cards,["r6"]);
   assert.equal(g.discard_pile.at(-1),"b5");
@@ -1527,7 +1538,7 @@ test("Cerveja compra uma carta, joga se servir, senão passa",()=>{
   room.hands.get(bot).cards=["r1","y2"];
   g.draw_pile=["b7","r8"];
   s.play(a,"bC");s.end(a);
-  proSweep();
+  g.beer_due=Date.now()-1;proSweep();
   assert.equal(g.discard_pile.at(-1),"b7");
   assert.deepEqual(room.hands.get(b.guest_id).cards,["r5","g6"]);
   assert.ok(!g.beer_remaining.includes(b.guest_id));
@@ -1540,9 +1551,74 @@ test("Cerveja compra e passa quando a carta comprada não combina",()=>{
   room.hands.get(bot).cards=["r1","y2"];
   g.draw_pile=["r7","b8"];
   s.play(a,"bC");s.end(a);
-  proSweep();
+  g.beer_due=Date.now()-1;proSweep();
   assert.equal(g.discard_pile.at(-1),"bC");
   assert.deepEqual(room.hands.get(b.guest_id).cards,["r5","g6","r7"]);
   assert.ok(!g.beer_remaining.includes(b.guest_id));
   assert.equal(g.turn_order[g.turn_idx],bot);
+});
+
+test("Coringa comum é descartado no clique antes da cor, inclusive em corte",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["W"];g.current_color="r";
+  room.hands.get(a.guest_id).cards=["r5","y1"];
+  room.hands.get(b.guest_id).cards=["W","b7","g4"];
+  const played=call("play_card",{p_token:b.token,p_code:s.code,p_card:"W"});
+  assert.equal(played.pending_color,true);
+  assert.equal(g.turn_order[g.turn_idx],b.guest_id,"corte aconteceu antes da escolha");
+  assert.equal(g.discard_pile.at(-1),"W");
+  assert.equal(g.wild_pending_color,b.guest_id);
+  assert.equal(call("get_room_state",{p_token:b.token,p_code:s.code}).game.wild_pending_color,true);
+  assert.equal(call("get_room_state",{p_token:a.token,p_code:s.code}).game.wild_pending_color,false);
+  assert.throws(()=>s.end(b),/WILD_COLOR_PENDING/);
+  assert.throws(()=>call("play_card",{p_token:a.token,p_code:s.code,p_card:"r5"}),/WILD_COLOR_PENDING/);
+  call("resolve_wild_color",{p_token:b.token,p_code:s.code,p_color:"g"});
+  assert.equal(g.current_color,"g");assert.equal(g.wild_pending_color,null);
+  s.end(b);
+});
+test("Coringa +4 colocado sem cor aplica dívida apenas após resolver a cor",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b6"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","r2"];
+  room.hands.get(b.guest_id).cards=["r1","y8"];
+  s.play(a,"W4");
+  assert.equal(g.discard_pile.at(-1),"W4");
+  assert.equal(g.pending_draw,0);
+  call("resolve_wild_color",{p_token:a.token,p_code:s.code,p_color:"r"});
+  s.end(a);
+  assert.equal(g.pending_draw,0,"a dívida foi aplicada e comprada automaticamente pelo próximo jogador sem contra-ataque");
+  assert.ok(room.hands.get(b.guest_id).cards.length>=6);
+});
+test("Cerveja dá 3 segundos para cada adversário antes da jogada forçada",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bC","r9"];
+  room.hands.get(b.guest_id).cards=["b5","r6"];
+  room.hands.get(bot).cards=["b7","r2"];
+  s.play(a,"bC");s.end(a);
+  const firstDue=g.beer_due;
+  assert.ok(firstDue>Date.now()+2500);
+  proSweep();assert.equal(g.discard_pile.at(-1),"bC");
+  g.beer_due=Date.now()-1;proSweep();
+  assert.equal(g.discard_pile.at(-1),"b5");
+  assert.equal(g.turn_order[g.turn_idx],bot);
+  assert.ok(g.beer_due>Date.now()+2500,"novo adversário recebe outra espera de 3s");
+  proSweep();assert.equal(g.discard_pile.at(-1),"b5");
+  g.beer_due=Date.now()-1;proSweep();
+  assert.equal(g.discard_pile.at(-1),"b7");
+});
+
+test("Cerveja respeita Escudo antes de sortear a carta da vez",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bC","r9"];
+  room.hands.get(b.guest_id).cards=["b5","r6"];
+  room.hands.get(s.bot).cards=["g1","y2"];
+  s.play(a,"bC");s.end(a);
+  g.pending_draw=2;g.pending_source=a.guest_id;g.shields[b.guest_id]=1;
+  g.beer_due=Date.now()-1;proSweep();
+  assert.equal(g.shields[b.guest_id],undefined,"o escudo foi consumido");
+  assert.equal(g.pending_draw,0,"dívida cancelada antes da escolha da Cerveja");
+  assert.equal(g.discard_pile.at(-1),"b5");
+  assert.ok(g.effects.some(e=>e.type==="shield_defense"&&e.reason==="draw"));
 });
