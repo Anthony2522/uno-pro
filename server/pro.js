@@ -567,6 +567,8 @@ function resolveWildColor(r,id,color){
   const g=game(r);
   if(g.wild_pending_color!==id||current(g)!==id)fail("WILD_COLOR_NOT_PENDING");
   if(!COLORS.includes(color))fail("COLOR_REQUIRED");
+  // Choosing a color does not consume the owner’s normal turn time.
+  g.turn_started_at+=Math.max(0,clock()-(g.wild_pending_since||clock()));
   g.current_color=color;g.wild_pending_color=null;g.wild_pending_since=null;
   g.last_action={type:"wild_color",by:id,name:name(id),color};
   g.seq++;bump(r);
