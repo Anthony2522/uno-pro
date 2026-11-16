@@ -160,7 +160,7 @@ function evaluate(plan,color,context,remaining) {
     if(effect)score+=effect*4;
     else score-=Math.min(6,owed)*retaliationRisk;
     if(pendingDraw)score+=Math.min(12,pendingDraw)*2.5;
-    if(nextCount>8 && !threatTotal && released.length && remaining.filter(attack).length===0){
+    if(nextCount>8 && !threatTotal && released.length && remaining.filter(c=>attack(c,mirrorAs)).length===0){
       score-=Math.min(15,owed+pendingDraw)*1.4; // counter-war can boomerang
     }
   }else if(pendingDraw)score-=10000; // not legal in engine; defensive guard
