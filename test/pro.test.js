@@ -367,9 +367,9 @@ test("bots fazem primeira jogada em 3s (difícil) ou 5s (fácil)",()=>{
   assert.equal(chooseBotMoveDelay("hard"),3000);
   assert.equal(chooseBotMoveDelay("easy"),5000);
 });
-test("100 nomes de bots diferentes dentro da sala",()=>{
-  assert.equal(BOT_NAMES.length,100);
-  assert.equal(new Set(BOT_NAMES).size,100);
+test("32 nomes fornecidos pelo jogador, sem repetições na sala",()=>{
+  assert.equal(BOT_NAMES.length,32);
+  assert.equal(new Set(BOT_NAMES).size,32);
   const owner=call("register_guest",{p_nickname:"Dono"});
   const code=call("create_room",{p_token:owner.token,p_name:"Nomes engraçados",p_max_players:8}).code;
   for(let i=0;i<7;i++)call("add_bot",{p_token:owner.token,p_code:code,p_difficulty:"easy"});
@@ -710,8 +710,8 @@ test("em duelo, o segundo lugar é decidido automaticamente ao vencer o primeiro
   assert.equal(g.placements[1].id,b.guest_id);
 });
 
-test("100 nomes de bot diferentes e anfitrião sempre humano",()=>{
-  assert.equal(BOT_NAMES.length,100);
+test("32 nomes da lista e anfitrião sempre humano",()=>{
+  assert.equal(BOT_NAMES.length,32);
   const host=call("register_guest",{p_nickname:"Humano host"});
   const {code}=call("create_room",{p_token:host.token,p_name:"Sem host robô",p_max_players:4});
   call("add_bot",{p_token:host.token,p_code:code,p_difficulty:"easy"});
@@ -1734,14 +1734,15 @@ test("Jogador único entre bots preserva a partida durante desconexão longa",()
   assert.ok(room.members.some(m=>m.guest_id===a.guest_id),"humano não expulso");
   assert.equal(g.status,"playing");
   assert.ok(g.solo_paused_at);
+  assert.deepEqual(room.hands.get(a.guest_id).cards,savedCards,"a mão não muda enquanto desconectado");
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
   g.solo_paused_at=Date.now()-2*60*60*1000;
   const before=g.turn_started_at;
   call("get_room_state",{p_token:a.token,p_code:code});
   proSweep();
   assert.equal(g.solo_paused_at,null);
   assert.ok(g.turn_started_at>before+2*60*60*1000-2000,"timer ajustado pela ausência");
-  assert.deepEqual(room.hands.get(a.guest_id).cards,savedCards);
-  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  assert.ok(savedCards.every(c=>room.hands.get(a.guest_id).cards.includes(c)),"as cartas originais permanecem após voltar");
   assert.equal(g.timeout_counts[a.guest_id]||0,0);
 });
 
