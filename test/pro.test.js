@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {store, newDeck} from "../server/game.js";
+import {store, newDeck, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
 import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
 import { inferColorGaps } from "../server/hardBotStrategy.js";
 const call=(fn,args)=>proRpc(fn,args);
@@ -90,9 +90,9 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("baralho de 211 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
+test("baralho de 227 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,211);
+  assert.equal(deck.length,227);
   for(const c of ["N","P","M"])assert.equal(deck.filter(x=>x===c).length,1);
   assert.equal(deck.filter(c=>c==="B").length,1);
   assert.equal(deck.filter(c=>c==="X").length,1);
@@ -103,6 +103,8 @@ test("baralho de 211 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora
   assert.equal(deck.filter(c=>c==="W5").length,2);
   for(const col of ["r","y","g","b"]){
     assert.equal(deck.filter(c=>c===col+"T").length,2);
+    assert.equal(deck.filter(c=>c===col+"L").length,2,"Cadeado");
+    assert.equal(deck.filter(c=>c===col+"E").length,2,"Espada");
     assert.equal(deck.filter(c=>c===col+"H").length,2);
     assert.equal(deck.filter(c=>c===col+"V").length,2);
     assert.equal(deck.filter(c=>c===col+"C").length,1);
@@ -115,7 +117,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   room.hands.get(a.guest_id).cards=["b1","r5"];
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
-  assert.equal(g.draw_pile.length,210);
+  assert.equal(g.draw_pile.length,226);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -1621,4 +1623,114 @@ test("Cerveja respeita Escudo antes de sortear a carta da vez",()=>{
   assert.equal(g.pending_draw,0,"dívida cancelada antes da escolha da Cerveja");
   assert.equal(g.discard_pile.at(-1),"b5");
   assert.ok(g.effects.some(e=>e.type==="shield_defense"&&e.reason==="draw"));
+});
+
+test("Cadeado restringe cada rival à cor e não permite coringas",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bL","r9"];
+  room.hands.get(b.guest_id).cards=["rL","W4","b5","g7"];
+  room.hands.get(bot).cards=["b3","r2"];
+  s.play(a,"bL");s.end(a);
+  assert.equal(g.lock_color,"b");
+  assert.deepEqual(g.lock_remaining,[b.guest_id,bot]);
+  assert.ok(g.effects.some(e=>e.type==="lock"&&e.color==="b"));
+  assert.throws(()=>s.play(b,"rL"),/LOCK_COLOR_ONLY/,"mesmo símbolo de outra cor não vale");
+  assert.throws(()=>s.play(b,"W4","b"),/LOCK_COLOR_ONLY/,"coringas não furam o cadeado");
+  s.play(b,"b5");s.end(b);
+  assert.deepEqual(g.lock_remaining,[bot],"restrição termina depois do turno de Bruno, mas permanece no bot");
+  assert.equal(g.lock_color,"b");
+  assert.equal(call("get_room_state",{p_token:a.token,p_code:s.code}).game.lock_color,"b");
+});
+test("Negação cancela Cadeado de todos e permite jogar normalmente",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["g7"];g.current_color="g";
+  room.hands.get(a.guest_id).cards=["gL","r9"];
+  room.hands.get(b.guest_id).cards=["N","r3","y6"];
+  s.play(a,"gL");s.end(a);
+  assert.equal(g.lock_remaining.length,2);
+  call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"r"});
+  assert.deepEqual(g.lock_remaining,[]);
+  assert.equal(g.lock_color,null);
+  assert.equal(g.lock_target,null);
+  s.play(b,"r3");s.end(b);
+  assert.equal(g.discard_pile.at(-1),"r3");
+});
+test("Espada não acumula e adiciona exatamente +3 ao próximo come",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b1"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bE","bE","r2","bD"];
+  s.play(a,"bE");s.play(a,"bE");s.end(a);
+  assert.equal(g.swords[a.guest_id],1);
+  s.setTurn(a.guest_id);g.discard_pile=["b2"];g.current_color="b";
+  room.hands.get(b.guest_id).cards=["W4","g3","r1"];
+  s.play(a,"bD");s.end(a);
+  assert.equal(g.swords[a.guest_id],undefined,"espada gasta após o come");
+  assert.equal(g.pending_draw,5,"+2 e espada +3");
+  assert.equal(g.pending_sword_bonus,3);
+  const old=room.hands.get(b.guest_id).cards.length;
+  s.end(b);
+  assert.equal(room.hands.get(b.guest_id).cards.length,old+5);
+  assert.ok(g.effects.some(e=>e.type==="sword_strike"&&e.target===b.guest_id&&e.n===3));
+  assert.equal(g.pending_sword_bonus,0,"não reaplicar espada depois de cobrar a dívida");
+});
+test("Espada persiste se não jogar come; Escudo impede golpe animado",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b6"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bE","b7","bD","r2"];
+  s.play(a,"bE");s.end(a);
+  assert.equal(g.swords[a.guest_id],1);
+  s.setTurn(a.guest_id);g.discard_pile=["b4"];g.current_color="b";
+  s.play(a,"b7");s.end(a);
+  assert.equal(g.swords[a.guest_id],1,"não gastar na jogada comum");
+  s.setTurn(a.guest_id);g.discard_pile=["b7"];g.current_color="b";
+  room.hands.get(b.guest_id).cards=["r1","y2","g3"];
+  g.shields[b.guest_id]=1;
+  s.play(a,"bD");s.end(a);
+  assert.equal(g.pending_draw,0,"escudo cancela dívida completa");
+  assert.equal(g.swords[a.guest_id],undefined);
+  assert.equal(g.effects.some(e=>e.type==="sword_strike"),false,"sem animação quando ninguém compra");
+});
+test("Espada somada ao come continua na dívida após revides",()=>{
+  const s=setup(),{room,g,a,b,bot}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bE","bD","r2"];
+  room.hands.get(b.guest_id).cards=["W4","r4","g3"];
+  room.hands.get(bot).cards=["r6","g7"];
+  s.play(a,"bE");s.end(a);
+  s.setTurn(a.guest_id);g.discard_pile=["b5"];g.current_color="b";
+  s.play(a,"bD");s.end(a);
+  assert.equal(g.pending_draw,5);
+  s.play(b,"W4","r");s.end(b);
+  assert.equal(g.pending_draw,0,"bot sem counter compra depois do revide");
+  assert.equal(room.hands.get(bot).cards.length,11,"bot comprou 2 + 3 + 4");
+  assert.ok(g.effects.some(e=>e.type==="sword_strike"&&e.target===bot));
+});
+test("Jogador único entre bots preserva a partida durante desconexão longa",()=>{
+  const a=call("register_guest",{p_nickname:"Humano"});
+  const code=call("create_room",{p_token:a.token,p_name:"Solo protegido",p_max_players:4}).code;
+  call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"hard"});
+  call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
+  call("start_game",{p_token:a.token,p_code:code});
+  const room=store.roomsByCode.get(code),g=room.game;
+  assert.equal(isSoloHumanBotMatch(room),true);
+  g.turn_idx=g.turn_order.indexOf(a.guest_id);
+  const savedCards=[...room.hands.get(a.guest_id).cards];
+  g.turn_started_at=Date.now()-90000;
+  store.guestsById.get(a.guest_id).last_seen=Date.now()-2*60*60*1000;
+  room.updated_at=Date.now()-2*60*60*1000;
+  proSweep();basicSweep();
+  assert.ok(store.roomsByCode.has(code),"sala protegida permanece");
+  assert.ok(room.members.some(m=>m.guest_id===a.guest_id),"humano não expulso");
+  assert.equal(g.status,"playing");
+  assert.ok(g.solo_paused_at);
+  g.solo_paused_at=Date.now()-2*60*60*1000;
+  const before=g.turn_started_at;
+  call("get_room_state",{p_token:a.token,p_code:code});
+  proSweep();
+  assert.equal(g.solo_paused_at,null);
+  assert.ok(g.turn_started_at>before+2*60*60*1000-2000,"timer ajustado pela ausência");
+  assert.deepEqual(room.hands.get(a.guest_id).cards,savedCards);
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  assert.equal(g.timeout_counts[a.guest_id]||0,0);
 });

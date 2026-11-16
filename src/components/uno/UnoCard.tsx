@@ -1,4 +1,4 @@
-import { Ban, Repeat2, Eye, Bomb, Shield, ShieldOff, ZapOff, Crosshair, Beer } from "lucide-react";
+import { Ban, Repeat2, Eye, Bomb, Shield, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cardLabel, cardValue, isWild } from "@/lib/uno/cards";
 
@@ -31,6 +31,8 @@ function Symbol({ card, corner }: { card: string; corner?: boolean }) {
   if (v === "V") return <img src="/vortice.svg" alt="" draggable={false}
     className={corner ? "h-[16cqw] w-[20cqw] object-contain brightness-0 invert" : "h-[49cqw] w-[66cqw] object-contain"}/>;
   if (v === "C") return <Beer className={corner ? "size-[18cqw]" : "size-[48cqw]"} strokeWidth={2.7}/>;
+  if (v === "L") return <LockKeyhole className={corner ? "size-[18cqw]" : "size-[48cqw]"} strokeWidth={3}/>;
+  if (v === "E") return <Sword className={corner ? "size-[18cqw]" : "size-[49cqw]"} strokeWidth={3}/>;
   if(v==="X")return (
     <span className="flex w-[80cqw] flex-col items-center justify-center leading-none">
       <Eye className={corner?"size-[19cqw]":"size-[42cqw]"} strokeWidth={3}/>
