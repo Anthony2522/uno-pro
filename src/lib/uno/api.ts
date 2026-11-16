@@ -154,7 +154,7 @@ export const api = {
   authConfig: () => call<{google_client_id:string;persistent_rooms_configured:boolean}>("auth_config"),
   googleLogin: (credential:string,token?:string) => call<Guest>("google_login",{p_credential:credential,p_token:token??null}),
   whoami: (token: string) =>
-    call<{ guest_id: string; nickname: string; room_code: string | null }>("whoami", { p_token: token }),
+    call<{ guest_id: string; nickname: string; room_code: string | null;google_linked:boolean }>("whoami", { p_token: token }),
   updateNickname: (token: string, nickname: string) =>
     call<{ guest_id: string; nickname: string }>("update_nickname", { p_token: token, p_nickname: nickname }),
   listPublicRooms: () => call<PublicRoom[]>("list_public_rooms"),
