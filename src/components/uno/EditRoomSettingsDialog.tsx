@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle,DialogTrigger } from "@/components/ui/dialog";
 import type { RuleSettings,RoomState } from "@/lib/uno/api";
+import {DEFAULT_CARD_SETTINGS,type CardSettings} from "@/lib/uno/cardSettings";
 import { errorMessage } from "@/lib/uno/errors";
 import { AdvancedRoomSettingsFields } from "./AdvancedRoomSettingsFields";
 
@@ -11,24 +12,26 @@ export function EditRoomSettingsDialog({
   room,onSave
 }:{
   room:RoomState["room"];
-  onSave:(startingCards:number,rules:RuleSettings)=>Promise<void>;
+  onSave:(startingCards:number,rules:RuleSettings,cards:CardSettings)=>Promise<void>;
 }){
   const [open,setOpen]=useState(false);
   const [startingCards,setStartingCards]=useState(room.initial_cards);
   const [rules,setRules]=useState<RuleSettings>({...room.rules});
+  const [cards,setCards]=useState<CardSettings>({...DEFAULT_CARD_SETTINGS,...room.cards_enabled});
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string|null>(null);
   useEffect(()=>{
     if(!open)return;
     setStartingCards(room.initial_cards);
     setRules({...room.rules});
+    setCards({...DEFAULT_CARD_SETTINGS,...room.cards_enabled});
     setError(null);
   },[open]);
   async function submit(e:FormEvent){
     e.preventDefault();if(busy)return;
     setBusy(true);setError(null);
     try{
-      await onSave(startingCards,rules);
+      await onSave(startingCards,rules,cards);
       toast.success("Configurações da sala atualizadas!");
       setOpen(false);
     }catch(err){setError(errorMessage(err));}
@@ -48,8 +51,8 @@ export function EditRoomSettingsDialog({
       </DialogHeader>
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col gap-3">
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y pr-2">
-          <AdvancedRoomSettingsFields startingCards={startingCards} rules={rules}
-            onStartingCardsChange={setStartingCards} onRulesChange={setRules}/>
+          <AdvancedRoomSettingsFields startingCards={startingCards} rules={rules} cards={cards}
+            onStartingCardsChange={setStartingCards} onRulesChange={setRules} onCardsChange={setCards}/>
         </div>
         {error&&<p role="alert" className="shrink-0 text-sm text-destructive">{error}</p>}
         <Button type="submit" variant="hero" className="h-11 w-full shrink-0 rounded-xl" disabled={busy}>
