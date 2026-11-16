@@ -12,6 +12,7 @@ import { WaitingRoom } from "@/components/uno/WaitingRoom";
 import { WinnerOverlay } from "@/components/uno/WinnerOverlay";
 import { Button } from "@/components/ui/button";
 import { api, type GameState, type RuleSettings } from "@/lib/uno/api";
+import type {CardSettings} from "@/lib/uno/cardSettings";
 import { errorMessage, toGameError } from "@/lib/uno/errors";
 import { sfx } from "@/lib/uno/sound";
 import { useRoom } from "@/lib/uno/useRoom";
@@ -287,8 +288,8 @@ function RoomPage() {
       )}
       {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))}
         onUpdateWinners={updateWinners}
-        onUpdateSettings={async (startingCards:number,rules:RuleSettings)=>{
-          await api.updateRoomSettings(token,code,startingCards,rules);
+        onUpdateSettings={async (startingCards:number,rules:RuleSettings,cards:CardSettings)=>{
+          await api.updateRoomSettings(token,code,startingCards,rules,cards);
           void refresh();
         }} />}
       <WinnerOverlay
