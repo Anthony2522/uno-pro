@@ -693,7 +693,7 @@ function hardBotTick(r,id,h){
   }
   const card=turn.plan.shift();
   if(!h.cards.includes(card))throw new Error("INVALID_HARD_BOT_PLAN");
-  play(r,id,card,wild(card)?turn.color:undefined,card==="X"?turn.target:undefined);
+  play(r,id,card,wild(card)?turn.color:undefined,reflected(g,card)==="X"?turn.target:undefined);
   if(g.status!=="playing"||current(g)!==id||!g.turn_cards?.length)return;
   if(turn.plan.length===0){finish(r);return;}
   turn.due=clock()+2000;
@@ -729,7 +729,7 @@ function beerTick(r){
     if(chosen){
       const color=wild(chosen)?COLORS[crypto.randomInt(COLORS.length)]:undefined;
       const others=g.turn_order.filter(id=>id!==actor);
-      const targetId=chosen==="X"?others[crypto.randomInt(others.length)]:undefined;
+      const targetId=reflected(g,chosen)==="X"?others[crypto.randomInt(others.length)]:undefined;
       play(r,actor,chosen,color,targetId);
       if(g.status==="playing"&&current(g)===actor&&g.turn_cards?.length&&!g.vortex_queue)finish(r);
     }else{
@@ -748,10 +748,10 @@ function botTick(r){
     const counts=Object.fromEntries(["b","r","y","g"].map(c=>[c,h.cards.filter(x=>x[0]===c).length]));
     return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
   };
-  if(((g.powerless_remaining||[]).includes(id)||(g.lock_remaining||[]).includes(id))&&h.cards.includes("N")){
+  if(((g.powerless_remaining||[]).includes(id)||(g.lock_remaining||[]).includes(id))&&hasNegation(r,id)){
     negateEffect(r,id,colorForNegation());return;
   }
-  if(g.pending_draw>0&&h.cards.includes("N")&&!g.turn_cards.length&&
+  if(g.pending_draw>0&&hasNegation(r,id)&&!g.turn_cards.length&&
     (g.pending_uncounterable||!counter(r,id)||g.pending_draw>=5)){
     negateEffect(r,id,colorForNegation());return;
   }
@@ -760,7 +760,7 @@ function botTick(r){
   }
   if(clock()<g.bot_move.due || (g.turn_cards.length===0 && actionLocked(g)))return;
   if(hard&&bot.ai_variant!=="legacy")return hardBotTick(r,id,h);
-  if(g.pending_draw && g.turn_cards.length===0 && !counter(r,id)&&!h.cards.includes("N")){finish(r,true);return;}
+  if(g.pending_draw && g.turn_cards.length===0 && !counter(r,id)&&!hasNegation(r,id)){finish(r,true);return;}
   const score=c=>{
     const match=h.cards.filter(x=>x!==c && value(x)===value(c)).length;
     const run=h.cards.filter(x=>x[0]===c[0] && /^[0-9]$/.test(value(x)) && /^[0-9]$/.test(value(c)) &&
@@ -796,7 +796,7 @@ function botTick(r){
   if(!options.length){finish(r,true);return;}
   options.sort((a,b)=>score(b)-score(a));
   const pick=hard || Math.random()<.6 ? options[0] : options[Math.floor(Math.random()*options.length)];
-  const target=pick==="X"?g.turn_order.filter(p=>p!==id)
+  const target=reflected(g,pick)==="X"?g.turn_order.filter(p=>p!==id)
     .sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0]:undefined;
   play(r,id,pick,chooseColor(),target);
   if(g.status!=="playing" || current(g)!==id||!g.turn_cards?.length)return;
@@ -1063,7 +1063,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
-    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
+    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:"W",mirror_played_as:null,lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
     for(const h of r.hands.values())h.uno_since=null;
     return result;
@@ -1103,6 +1103,8 @@ export function proRpc(fn,args={}){
       const personal=g.private_notices?.[result.me];
       result.game.private_notice=personal?{...personal,at:stamp(personal.at)}:null;
       result.game.pending_uncounterable=!!g.pending_uncounterable;
+      result.game.last_wild=g.last_wild||"W";
+      result.game.mirror_played_as=g.mirror_played_as||null;
       result.game.card_moves=[...(g.card_moves||[])];
       result.game.offline_deadline_at=g.solo_paused_at?null:g.offline_since && current(g)===result.game.current_player
         ?stamp(Math.min(g.turn_started_at+50000,g.offline_since+30000)):null;
