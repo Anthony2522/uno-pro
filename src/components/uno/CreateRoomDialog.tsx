@@ -33,6 +33,7 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
       setError(null);
       setAdvanced(false);
       setStartingCards(8);
+      setMax(offline?3:6);
       setWinners(2);
       setCards({...DEFAULT_CARD_SETTINGS});
       setRules({repeat:true,sequence:true,nine:true,cut:true,stack:true});
@@ -115,25 +116,24 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
           </fieldset>}
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">{offline?"Você + quantos bots?":"Máximo de jogadores"}</legend>
-            <div className="grid grid-cols-7 gap-1.5" role="radiogroup">
-              {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  role="radio"
-                  aria-checked={max === n}
-                  aria-label={`${n} jogadores`}
-                  onClick={() => {setMax(n);setWinners(v=>Math.min(v,n-1));}}
-                  className={cn(
-                    "h-11 rounded-xl border font-display font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    max === n ? "border-brand-soft bg-gradient-brand text-primary-foreground shadow-glow" : "border-glass-border bg-navy/40 hover:border-brand-soft/50",
-                  )}
-                >
-                  {n}
-                </button>
+            <legend className="text-sm font-medium">{offline?"Quantidade de bots":"Máximo de jogadores"}</legend>
+            <select
+              value={offline?max-1:max}
+              onChange={e=>{
+                const next=Number(e.target.value)+(offline?1:0);
+                setMax(next);
+                setWinners(v=>Math.min(v,next-1));
+              }}
+              aria-label={offline?"Quantidade de bots":"Máximo de jogadores"}
+              className="h-12 w-full rounded-xl border border-glass-border bg-navy px-3 text-base text-foreground"
+            >
+              {Array.from({length:19},(_,i)=>offline?i+1:i+2).map(n=>(
+                <option key={n} value={n}>{n} {offline?(n===1?"bot":"bots"):(n===1?"jogador":"jogadores")}</option>
               ))}
-            </div>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {offline?`Você + ${max-1} ${max===2?"bot":"bots"} = ${max} jogadores na sala.`:`Capacidade máxima: ${max} jogadores (limite de 20).`}
+            </p>
           </fieldset>
 
 
