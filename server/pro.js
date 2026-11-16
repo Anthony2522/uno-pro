@@ -381,7 +381,7 @@ function negateEffect(r,id,color){
   }
   if(powerless){g.powerless_remaining=[];g.powerless_target=null;}
   if(locked){g.lock_remaining=[];g.lock_target=null;g.lock_color=null;}
-  const result=play(r,id,reactionCard,color);
+  const result=play(r,id,reactionCard,color,undefined,{defensiveNegation:true});
   // Negation is a reaction, not the player's regular move. After defending,
   // the player may still start a legal play or draw from the new color.
   if(g.status==="playing"&&current(g)===id){
@@ -495,12 +495,12 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
     g.nine={source:actor,count:trailingNines,eligible,pressed:[],botTimes,started_at:start,deadline:start+9200};}
   bump(r);if(!g.nine&&!deferDebt)resolveDebt(r);
 }
-function play(r,id,card,color,targetId){
+function play(r,id,card,color,targetId,options={}){
   const g=game(r),rules=ready(r),h=hand(r,id);let series=g.turn_cards||[];
   if(g.detective_pending_color)fail("DETECTIVE_COLOR_PENDING");
   if(g.wild_pending_color)fail("WILD_COLOR_PENDING");
   if(g.vortex_queue)fail("VORTEX_RESOLVING");
-  if(current(g)===id && (g.beer_remaining||[]).includes(id) && !g.beer_resolving)fail("BEER_FORCED");
+  if(current(g)===id && (g.beer_remaining||[]).includes(id) && !g.beer_resolving && !options.defensiveNegation)fail("BEER_FORCED");
   const cutting=current(g)!==id||(g.skip_reaction?.target===id&&card===top(g));
   if(g.skip_reaction && !cutting)fail("SKIP_DECISION_PENDING");
   // No cooldown for initial plays or cuts while an announcement is shown.
