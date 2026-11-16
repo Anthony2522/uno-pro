@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { RpcError } from "./server/game.js";
 import { proRpc as rpc, RPC_NAMES, onBumpPro as onBump, proSweep as sweep } from "./server/pro.js";
 import { TokenBucket } from "./server/rateLimit.js";
+import { scheduleSave, restoreState, flushState, persistenceEnabled } from "./server/persistence.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, "dist");
@@ -42,6 +43,7 @@ function send(res, event, data) {
 }
 
 onBump((scope, code) => {
+  scheduleSave();
   if (scope === "lobby") for (const res of subs.lobby) send(res, "bump", { scope: "lobby" });
   else {
     const set = subs.room.get(code);
@@ -151,7 +153,8 @@ async function handleRpc(req, res, url) {
     return json(res, 429, { error: { code: "RATE_LIMITED", message: "Muitas salas criadas. Aguarde um minuto." } });
   }
   try {
-    const data = rpc(fn, args);
+    const data = await rpc(fn, args);
+    if (fn === "register_guest" || fn === "google_login") scheduleSave();
     return json(res, 200, { data });
   } catch (e) {
     if (e instanceof RpcError) return json(res, e.status, { error: { code: e.code, message: e.code } });
@@ -246,12 +249,21 @@ if (isMain) {
     registerLimiter.gc();
     createLimiter.gc();
   }, 60_000);
-  server.listen(PORT, HOST, () => console.log(`UNO Pro ouvindo em http://${HOST}:${PORT}`));
+  restoreState().then(restored => {
+    console.log(`[startup] persistent state: ${persistenceEnabled() ? (restored ? "restored" : "fresh") : "not configured"}`);
+    server.listen(PORT, HOST, () => console.log(`UNO Pro ouvindo em http://${HOST}:${PORT}`));
+  }).catch(error=>{
+    console.error("[startup] refusing to serve without configured persistent state:", error);
+    process.exitCode=1;clearInterval(sweeper);clearInterval(limiterGc);
+  });
   const stop = () => {
     clearInterval(sweeper);
     clearInterval(limiterGc);
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 3000).unref();
+    server.close(async () => {
+      try { await flushState(); } catch(e) { console.error("[shutdown] flush failed:",e); }
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 5000).unref();
   };
   process.on("SIGTERM", stop);
   process.on("SIGINT", stop);
