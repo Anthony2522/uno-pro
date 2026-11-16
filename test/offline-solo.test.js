@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import {pathToFileURL} from "node:url";
 import {build} from "esbuild";
+import {proRpc} from "../server/pro.js";
+import {store} from "../server/game.js";
 
 async function bundledRuntime(){
   const result=await build({
@@ -52,6 +54,43 @@ test("solo offline reuses shared full engine and survives browser reload",async(
     assert.equal(rescue.rescueSoloMatch(code),true);
     const recovered=rescue.localRpc("get_room_state",{p_code:code});
     assert.deepEqual(recovered.game.my_hand,initialHand);
+  }finally{
+    if(saved.localStorage===undefined)delete globalThis.localStorage;
+    else globalThis.localStorage=saved.localStorage;
+    if(saved.window===undefined)delete globalThis.window;
+    else globalThis.window=saved.window;
+    if(saved.document===undefined)delete globalThis.document;
+    else globalThis.document=saved.document;
+    if(saved.navigator)Object.defineProperty(globalThis,"navigator",saved.navigator);
+    else delete globalThis.navigator;
+  }
+});
+
+test("a full server solo snapshot can be resumed in the browser after ROOM_NOT_FOUND",async()=>{
+  const player=proRpc("register_guest",{p_nickname:"Recuperado"});
+  const {code}=proRpc("create_room",{p_token:player.token,p_name:"Sala perdida",p_max_players:4});
+  proRpc("add_bot",{p_token:player.token,p_code:code,p_difficulty:"hard"});
+  proRpc("add_bot",{p_token:player.token,p_code:code,p_difficulty:"easy"});
+  proRpc("start_game",{p_token:player.token,p_code:code});
+  const serverHand=[...store.roomsByCode.get(code).hands.get(player.guest_id).cards];
+  const snapshot=proRpc("export_solo_snapshot",{p_token:player.token,p_code:code});
+  const map=new Map([["unopro.solo.server-backup.v1",
+    JSON.stringify({...snapshot,token:player.token,source:"rescued"})]]);
+  const saved={localStorage:globalThis.localStorage,window:globalThis.window,
+    document:globalThis.document,navigator:Object.getOwnPropertyDescriptor(globalThis,"navigator")};
+  globalThis.localStorage={getItem:key=>map.get(key)??null,setItem:(key,value)=>{map.set(key,String(value))}};
+  globalThis.window={setInterval:()=>1};
+  globalThis.document={visibilityState:"visible"};
+  Object.defineProperty(globalThis,"navigator",{configurable:true,value:{storage:{persist:async()=>true}}});
+  try{
+    const moduleUrl=await bundledRuntime();
+    const browser=await import(moduleUrl+"#server-rescue");
+    assert.equal(browser.getRecoverableSoloRoom(code),true);
+    assert.equal(browser.rescueSoloMatch(code),true);
+    const restored=browser.localRpc("get_room_state",{p_code:code});
+    assert.deepEqual(restored.game.my_hand,serverHand);
+    assert.equal(restored.members.filter(x=>x.bot).length,2);
+    assert.equal(restored.room.local_only,true);
   }finally{
     if(saved.localStorage===undefined)delete globalThis.localStorage;
     else globalThis.localStorage=saved.localStorage;
