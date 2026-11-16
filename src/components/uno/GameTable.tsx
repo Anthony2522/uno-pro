@@ -267,8 +267,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         {myTurn && !forcedByBeer && !!pending && played.length===0 && (hand.some(c=>game.pending_uncounterable?c==="W5":c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T")) && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
             <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
-            <p className="mt-1 text-sm text-cyan">Revidar → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length])?.nickname??"Jogador"}</strong>
-              {!game.pending_uncounterable && hand.some(c=>cardValue(c)==="T") && game.turn_order.length>2 && <> · +2 Volta → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)-game.direction+game.turn_order.length)%game.turn_order.length])?.nickname??"Jogador"}</strong></>}
+            <p className="mt-1 text-sm text-cyan">Revidar → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong>
+              {!game.pending_uncounterable && hand.some(c=>cardValue(c)==="T") && game.turn_order.length>2 && <> · +2 Volta → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)-game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong></>}
             </p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <Button variant="glass" className="rounded-xl" onClick={actions.accept} disabled={busy}>Comprar {pending} e passar</Button>
