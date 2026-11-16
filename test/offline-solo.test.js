@@ -116,7 +116,7 @@ test("sala offline aceita configurações antes de iniciar: número de bots, ven
     const options={
       name:"Partida personalizada",maxPlayers:5,startingCards:6,winners:1,
       rules:{repeat:false,sequence:false,nine:false,cut:false,stack:true},
-      cards:{T:false,H:false,E:true,L:true,V:false,C:false,W5:false,X:false,B:true,N:true,P:true,M:false,Q:true}
+      cards:{T:false,H:false,E:true,L:true,V:false,C:false,A:false,W5:false,X:false,B:true,N:true,P:true,M:false,Q:true}
     };
     const code=runtime.startLocalSolo("Jogador",options);
     const state=runtime.localRpc("get_room_state",{p_code:code});
@@ -155,7 +155,7 @@ test("sala offline permite escolher 19 bots (20 jogadores no total)",async()=>{
     const code=runtime.startLocalSolo("Anfitrião",{name:"19 bots",maxPlayers:20,
       startingCards:8,winners:2,
       rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
-      cards:{T:true,H:true,E:true,L:true,V:true,C:true,W5:true,X:true,B:true,N:true,P:true,M:true,Q:true}
+      cards:{T:true,H:true,E:true,L:true,V:true,C:true,A:true,W5:true,X:true,B:true,N:true,P:true,M:true,Q:true}
     });
     const state=runtime.localRpc("get_room_state",{p_code:code});
     assert.equal(state.room.max_players,20);
