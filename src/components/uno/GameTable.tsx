@@ -321,7 +321,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             type="button"
             onClick={actions.draw}
             disabled={!myTurn || forcedByBeer || game.has_drawn || played.length>0 || !!pending || !!nine || !!game.detective_pending_color || busy}
-            aria-label={`Comprar carta. ${game.draw_count} cartas no baralho`}
+            aria-label="Comprar carta do baralho infinito"
             className={cn(
               "group relative rounded-[12%] transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:cursor-default",
               myTurn && !game.has_drawn && "hover:-translate-y-1 hover:rotate-[-3deg]",
@@ -330,9 +330,6 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <CardBack size="lg" className="uno-center-card absolute left-1 top-1 opacity-60" />
             <CardBack size="lg" className="uno-center-card absolute left-0.5 top-0.5 opacity-80" />
             <CardBack size="lg" className={cn("uno-center-card relative", myTurn && !game.has_drawn && "shadow-glow")} />
-            <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-navy px-2 py-0.5 font-display text-xs font-bold tabular-nums ring-1 ring-glass-border">
-              {game.draw_count}
-            </span>
           </button>
 
           <div data-discard-pile className={cn("relative rounded-[14%] ring-4 ring-offset-4 ring-offset-navy transition-all", RING[game.current_color])}>
@@ -371,8 +368,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<Shield aria-label="Escudo ativo" className="ml-1 inline-block size-3.5 align-[-2px] text-cyan" strokeWidth={2.7}/>}{(game.swords?.[me]||0)>0&&<Sword aria-label="Espada ativa" className="ml-1 inline-block size-3.5 align-[-2px] text-amber-300" strokeWidth={2.7}/>} </span>
           <HandCardsGuide cards={hand} trigger={
             <button type="button" title="Ver o significado das cartas especiais que tenho"
-              className="glass flex h-9 min-w-0 w-full max-w-44 items-center justify-center gap-1 rounded-xl px-1.5 text-xs sm:px-3">
-              <BookOpen className="size-4 shrink-0"/><span className="truncate">{language==="en"?"What do my cards do?":"O que minhas cartas fazem?"}</span>
+              className="glass flex min-h-12 min-w-0 w-full max-w-44 items-center justify-center gap-1 rounded-xl px-1.5 py-1 text-[10px] leading-tight sm:px-2 sm:text-xs">
+              <BookOpen className="size-4 shrink-0"/><span className="min-w-0 whitespace-normal break-words text-center text-balance">{language==="en"?"What do my cards do?":"O que minhas cartas fazem?"}</span>
             </button>
           }/>
           <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3"
