@@ -18,7 +18,7 @@ const MESSAGES: Record<string, string> = {
   COLOR_REQUIRED: "Escolha uma cor para o coringa.",
   WILD_COLOR_PENDING: "Aguarde a escolha de cor do coringa.",
   WILD_COLOR_NOT_PENDING: "Não há cor de coringa pendente para você.",
-  VORTEX_RESOLVING: "O Vórtice ainda está puxando cartas."
+  VORTEX_RESOLVING: "O Vórtice ainda está puxando cartas.",
   ALREADY_DRAWN: "Você já comprou nesta vez.",
   MUST_DRAW_FIRST: "Compre uma carta antes de passar.",
   UNO_NOT_ALLOWED: "Você só pode gritar UNO com 1 carta (ou com 2, na sua vez).",
