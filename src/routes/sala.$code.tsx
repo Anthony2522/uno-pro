@@ -143,8 +143,8 @@ function RoomPage() {
 
   const g = state.game;
   const playing = state.room.status === "playing" && g?.status === "playing";
-  const visibleEffects=playing?(g?.effects||[]).filter(e=>effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
-  const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+5000):[];
+  const visibleEffects=playing?(g?.effects||[]).filter(e=>e.type!=="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
+  const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+3300):[];
   const isHost = state.room.host_id === state.me;
   const finished = g?.status === "finished";
   const winner = finished && g.winner_id ? state.members.find((m) => m.id === g.winner_id) : undefined;
@@ -280,8 +280,16 @@ function RoomPage() {
         <div className="pointer-events-none fixed inset-0 z-[76] flex flex-col items-center justify-center gap-3 px-3">
           {shieldDefenses.map(e=>(
             <div key={e.id} role="status" className="uno-shield-defense flex w-full max-w-lg flex-col items-center gap-2 rounded-3xl border-2 border-cyan/80 bg-navy/95 px-6 py-5 text-center shadow-glow-cyan">
-              <Shield className="size-16 text-cyan drop-shadow-[0_0_20px_#67e8f9]" strokeWidth={2.6}/>
-              <p className="font-display text-xl font-black text-white sm:text-2xl">{e.target_name??e.name} foi defendido(a) pelo Escudo</p>
+              <div className="uno-shield-shatter relative h-28 w-28" aria-hidden="true">
+                <Shield className="uno-shield-left absolute inset-0 h-full w-full text-cyan" strokeWidth={2.8}/>
+                <Shield className="uno-shield-right absolute inset-0 h-full w-full text-cyan" strokeWidth={2.8}/>
+                <svg className="uno-shield-fracture absolute inset-0 h-full w-full" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+                  <path d="M48 6L57 32L43 50L58 67L49 95" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <p className="uno-shield-text font-display text-lg font-black text-white sm:text-2xl">
+                {language==="en"?`${e.target_name??e.name} was protected by the Shield`:`${e.target_name??e.name} foi defendido(a) pelo Escudo`}
+              </p>
             </div>
           ))}
         </div>
