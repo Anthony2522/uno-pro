@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowDownWideNarrow, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff } from "lucide-react";
+import { ArrowDownWideNarrow, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
@@ -50,9 +50,10 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const reactingToSkip=!!game.skip_reaction && game.skip_reaction.target===me;
   const myTurn = game.current_player === me && !game.skip_reaction;
   const forcedByBeer = myTurn && !!game.beer_remaining?.includes(me);
+  const lockedColor = myTurn && game.lock_remaining?.includes(me) ? game.lock_color : null;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","H","V","C","W","D","T","W4","W5","X","B","N","P","M"];
+    const colors=["b","y","g","r"], special=["R","S","H","E","L","V","C","W","D","T","W4","W5","X","B","N","P","M"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>sortMode==="color"?(col(a)-col(b)||rank(a)-rank(b)):(rank(a)-rank(b)||col(a)-col(b)));
@@ -104,6 +105,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const canPlay = (c:string) => {
     if(busy || nine || game.detective_pending_color || game.wild_color_pending_player || game.vortex_pending || forcedByBeer)return false;
     if(game.powerless_remaining?.includes(me) && !/^[rygb][0-9]$/.test(c))return false;
+    if(lockedColor && (isWild(c) || c[0]!==lockedColor))return false;
     if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || (game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T"));
     if(pending&&!played.length)return game.pending_uncounterable ? c==="W5" : c==="W5"||c==="W4"||cardValue(c)==="D"||cardValue(c)==="T";
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
@@ -183,7 +185,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     }
   },[game.card_moves,me]);
   function onCard(c: string) {
-    if (!canPlay(c)) {sfx("error");toast.error("Essa carta não pode ser jogada agora.",{duration:3000});return;}
+    if (!canPlay(c)) {sfx("error");toast.error(lockedColor?`Cadeado: só cartas ${COLOR_NAMES[lockedColor]}, sem coringas.`:"Essa carta não pode ser jogada agora.",{duration:3000});return;}
     if(c==="X"){setDetectiveDismissed(false);setPendingDetective(true);return;}
     // A wild, even a jump-in, is placed on the discard pile before choosing its color.
     actions.play(c);
@@ -225,6 +227,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                 <span className="ml-2 inline-flex items-center gap-1 font-display text-sm font-bold tabular-nums">
                   {p.card_count}
                   {(game.shields?.[p.id]||0)>0 && <Shield aria-label="Escudo ativo" className="size-3.5 shrink-0 text-cyan" strokeWidth={2.7}/>}
+                  {(game.swords?.[p.id]||0)>0 && <Sword aria-label="Espada ativa" className="size-3.5 shrink-0 text-amber-300" strokeWidth={2.7}/>} 
                 </span>
               </div>
             </div>
@@ -291,6 +294,12 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             Aguardando a decisão de bloqueio…
           </p>
         )}
+        {myTurn&&!forcedByBeer&&lockedColor&&(
+          <div role="status" className="relative z-20 max-w-md rounded-xl border border-warning/40 bg-navy/95 px-3 py-2 text-center text-xs font-bold text-warning">
+            <span className="inline-flex items-center justify-center gap-1.5"><LockKeyhole className="size-4"/> Cadeado: só {COLOR_NAMES[lockedColor]}, sem coringas.</span>
+            {hasNegation&&<Button variant="glass" className="ml-2 h-8 rounded-lg" disabled={busy} onClick={()=>setPendingNegation(true)}>Usar Negação</Button>}
+          </div>
+        )}
         {myTurn&&!forcedByBeer&&game.powerless_target===me&&(
           <div role="status" className="relative z-20 rounded-xl border border-warning/30 bg-navy/95 px-3 py-2 text-center text-xs text-warning">
             Sem poderes nesta vez: só números podem ser jogados.
@@ -355,7 +364,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       {/* My area */}
       <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
         <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
-          <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<Shield aria-label="Escudo ativo" className="ml-1 inline-block size-3.5 align-[-2px] text-cyan" strokeWidth={2.7}/>}</span>
+          <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<Shield aria-label="Escudo ativo" className="ml-1 inline-block size-3.5 align-[-2px] text-cyan" strokeWidth={2.7}/>}{(game.swords?.[me]||0)>0&&<Sword aria-label="Espada ativa" className="ml-1 inline-block size-3.5 align-[-2px] text-amber-300" strokeWidth={2.7}/>} </span>
           <button type="button" title={sortMode==="color"?"Organizado por cor. Clique para organizar por número.":"Organizado por número. Clique para organizar por cor."}
             aria-label={sortMode==="color"?"Ordenar por número":"Ordenar por cor"}
             onClick={()=>setSortMode(v=>v==="color"?"number":"color")}
