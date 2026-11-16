@@ -107,6 +107,11 @@ function evaluate(plan,color,context,remaining) {
     urgency:profile?.urgency??1.0,
     perCard:profile?.perCard??1.0,
     colorFit:profile?.colorFit??1.0,
+    vortexValue:profile?.vortexValue??1.0,
+    shieldValue:profile?.shieldValue??1.0,
+    swordValue:profile?.swordValue??1.0,
+    lockValue:profile?.lockValue??1.0,
+    restrictionsValue:profile?.restrictionsValue??1.0,
   };
   if(!plan.length) return -Infinity;
   const n=order.length;
@@ -133,10 +138,41 @@ function evaluate(plan,color,context,remaining) {
   const urgency=threatTotal>0?1:0;
   // Small hands must finish; intermediate hands protect valuable resources.
   const basePerCard=(len>=7?7.5:len>=4?6.3:11.0)*tune.perCard;
-  let score=plan.length*basePerCard+handQuality(remaining,rules,mirrorAs)*.91*tune.handShape;
+  // Vortex automatically plays ALL remaining cards of its color, not just V itself.
+  // Previous hard AI evaluated it as only a one-card discard, often leaving a
+  // powerful multi-discard on the table. Its follow-up is server-controlled.
+  const vortexColors=new Set(plan.filter(c=>value(c,mirrorAs)==="V").map(c=>c[0]));
+  const pulled=remaining.filter(c=>vortexColors.has(c[0]));
+  const afterVortex=remaining.filter(c=>!vortexColors.has(c[0]));
+  if(vortexColors.size&&afterVortex.length===0)return 999_000;
+  let score=plan.length*basePerCard+
+    pulled.length*basePerCard*tune.vortexValue+
+    handQuality(afterVortex,rules,mirrorAs)*.91*tune.handShape;
   const released=plan.filter(c=>attack(c,mirrorAs));
   const resources=plan.filter(c=>attack(c,mirrorAs)||wild(c));
   const protectionScale=len<=3?.10:len<=6?1.20:len<=10?1:.72;
+  // All effects below are computed only from our hand and public rival counts.
+  const specialPlayed=plan.map(c=>value(c,mirrorAs));
+  if(specialPlayed.includes("H")){
+    score+=tune.shieldValue*(context.shieldArmed?-3:5.5+Math.min(2,threatTotal*.20));
+  }
+  if(specialPlayed.includes("E")){
+    const futureAttacks=afterVortex.some(c=>attack(c,mirrorAs));
+    score+=tune.swordValue*(context.swordArmed?-2:futureAttacks?5.2:2.0);
+  }
+  if(specialPlayed.includes("L")){
+    score+=tune.lockValue*(2.4+Math.max(0,Math.min(8,danger*1.25)));
+  }
+  if(specialPlayed.includes("P")){
+    score+=tune.restrictionsValue*(1.4+danger*1.05);
+  }
+  if(specialPlayed.includes("M")){
+    score+=tune.restrictionsValue*(.8+Math.min(3,threatTotal*.55));
+  }
+  // Beer is compulsory random play for rivals, and may help a near-winner.
+  if(specialPlayed.includes("C") && danger)score-=danger*.9;
+  if(specialPlayed.includes("9")&&n>=3&&value(plan.at(-1),mirrorAs)==="9")
+    score+=Math.min(4,2+threatTotal*.3);
   for(const c of resources){
     // Negação is a scarce universal defense. Save it, except when it is
     // itself the winning move or the sole legal way out of an immediate debt.
