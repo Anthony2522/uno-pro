@@ -726,6 +726,12 @@ function hardBotTick(r,id,h){
       selfId:id,counts,history:g.public_history||{},rules:ready(r),
       pendingDraw:g.pending_draw,pendingUncounterable:g.pending_uncounterable,
       mirrorAs:g.last_wild||"W", swordArmed:!!g.swords?.[id], shieldArmed:!!g.shields?.[id],
+      roachTargets:Object.fromEntries(h.cards.filter(isRoach).map(card=>{
+        const chain=g.roach_chains?.[roachChainId(card)];
+        const origin=chain?.origin??id,visited=chain?.received??[];
+        const eligible=g.turn_order.filter(p=>p!==id&&p!==origin&&!visited.includes(p));
+        return [card,eligible.length];
+      })),
       profile:store.guestsById.get(id)?.ai_profile||null,
       random:Math.random
     });
