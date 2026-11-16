@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import type { RoomState } from "@/lib/uno/api";
-import { cardLabel, cardValue, COLOR_NAMES, isPlayable, type CardColor } from "@/lib/uno/cards";
+import { cardLabel, cardValue, COLOR_NAMES, isPlayable, isWild, type CardColor } from "@/lib/uno/cards";
 import { describeAction } from "@/lib/uno/describe";
+import { useLanguage } from "@/lib/uno/i18n";
 import { sfx } from "@/lib/uno/sound";
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "./ColorPicker";
@@ -31,6 +32,7 @@ export type GameActions = {
 
 export function GameTable({ state, busy, actions }: { state: RoomState; busy: boolean; actions: GameActions }) {
   const game = state.game!;
+  const {language}=useLanguage();
   const me = state.me;
   const [pendingDetective,setPendingDetective]=useState(false);
   const [pendingNegation,setPendingNegation]=useState(false);
@@ -185,7 +187,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     }
   },[game.card_moves,me]);
   function onCard(c: string) {
-    if (!canPlay(c)) {sfx("error");toast.error(lockedColor?`Cadeado: só cartas ${COLOR_NAMES[lockedColor]}, sem coringas.`:"Essa carta não pode ser jogada agora.",{duration:3000});return;}
+    if (!canPlay(c)) {sfx("error");toast.error(lockedColor?(language==="en"?`Lock: only ${({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[lockedColor]} cards, no wilds.`:`Cadeado: só cartas ${COLOR_NAMES[lockedColor]}, sem coringas.`):"Essa carta não pode ser jogada agora.",{duration:3000});return;}
     if(c==="X"){setDetectiveDismissed(false);setPendingDetective(true);return;}
     // A wild, even a jump-in, is placed on the discard pile before choosing its color.
     actions.play(c);
@@ -296,7 +298,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         )}
         {myTurn&&!forcedByBeer&&lockedColor&&(
           <div role="status" className="relative z-20 max-w-md rounded-xl border border-warning/40 bg-navy/95 px-3 py-2 text-center text-xs font-bold text-warning">
-            <span className="inline-flex items-center justify-center gap-1.5"><LockKeyhole className="size-4"/> Cadeado: só {COLOR_NAMES[lockedColor]}, sem coringas.</span>
+            <span className="inline-flex items-center justify-center gap-1.5"><LockKeyhole className="size-4"/> {language==="en"?`Lock: only ${({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[lockedColor]} cards, no wilds.`:`Cadeado: só ${COLOR_NAMES[lockedColor]}, sem coringas.`}</span>
             {hasNegation&&<Button variant="glass" className="ml-2 h-8 rounded-lg" disabled={busy} onClick={()=>setPendingNegation(true)}>Usar Negação</Button>}
           </div>
         )}
