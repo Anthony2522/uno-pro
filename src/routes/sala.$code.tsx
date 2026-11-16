@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
 import { UnoCard } from "@/components/uno/UnoCard";
-import { cardLabel, COLOR_NAMES, type CardColor } from "@/lib/uno/cards";
+import { cardLabel } from "@/lib/uno/cards";
 import { useLanguage } from "@/lib/uno/i18n";
 import { ConnectionBanner, CopyInviteButton, LeaveButton } from "@/components/uno/RoomTopBar";
 import { WaitingRoom } from "@/components/uno/WaitingRoom";
