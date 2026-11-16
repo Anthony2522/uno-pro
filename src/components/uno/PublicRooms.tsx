@@ -1,7 +1,8 @@
+import { useEffect,useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Crown, RefreshCw, Users, WifiOff, Trash2 } from "lucide-react";
+import { Crown, RefreshCw, Users, WifiOff, Trash2, RotateCcw, Timer } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/uno/api";
+import { api,type RejoinableRoom } from "@/lib/uno/api";
 import { useReadyGuest } from "@/lib/uno/guest";
 import { useLanguage } from "@/lib/uno/i18n";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,17 @@ import { cn } from "@/lib/utils";
 export function PublicRooms({ onCreate }: { onCreate: () => void }) {
   const { rooms, offline, refresh } = useLobby();
   const {guest,isDev}=useReadyGuest();
-  const {tr}=useLanguage();
+  const {tr,language}=useLanguage();
+  const [recoverable,setRecoverable]=useState<RejoinableRoom[]>([]);
+  const [tick,setTick]=useState(Date.now());
+  useEffect(()=>{
+    let active=true;
+    const fetchRooms=()=>api.listRejoinableRooms(guest.token).then(data=>{if(active)setRecoverable(data)}).catch(()=>{});
+    void fetchRooms();
+    const poll=setInterval(fetchRooms,5000);
+    const ticker=setInterval(()=>setTick(Date.now()),1000);
+    return()=>{active=false;clearInterval(poll);clearInterval(ticker)};
+  },[guest.token]);
   const deletePublic=async(code:string,name:string)=>{
     if(!window.confirm(tr("Excluir esta sala pública?")+" "+name))return;
     try{await api.devDeletePublicRoom(guest.token,code);toast.success(tr("Sala excluída"));void refresh()}
@@ -32,6 +43,25 @@ export function PublicRooms({ onCreate }: { onCreate: () => void }) {
         </Button>
       </div>
 
+      {recoverable.some(r=>!r.recovery_until||new Date(r.recovery_until).getTime()>tick) && (
+        <div className="mb-4 space-y-2" aria-label={language==="en"?"Resume a match":"Retomar partidas"}>
+          <h3 className="flex items-center gap-2 text-sm font-bold text-cyan"><RotateCcw className="size-4"/>{language==="en"?"Your matches":"Suas partidas para voltar"}</h3>
+          {recoverable.filter(r=>!r.recovery_until||new Date(r.recovery_until).getTime()>tick).map(r=>(
+            <div key={r.code} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan/40 bg-cyan/10 px-3 py-3">
+              <div className="min-w-0">
+                <p className="truncate font-bold">{r.name} <span className="font-mono text-xs text-cyan">{r.code}</span></p>
+                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  {r.solo?(language==="en"?"Solo with bots":"Você + bots"):(language==="en"?"Multiplayer":"Multijogador")}
+                  {r.recovery_until&&<span className="ml-1 inline-flex items-center gap-1"><Timer className="size-3"/>{Math.ceil((new Date(r.recovery_until).getTime()-tick)/1000)}s</span>}
+                </p>
+              </div>
+              <Button asChild variant="cyan" className="h-10 rounded-xl">
+                <Link to="/sala/$code" params={{code:r.code}}>{language==="en"?"Resume match":"Retomar partida"}</Link>
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
       {offline && (
         <p role="status" className="mb-3 flex items-center gap-2 rounded-xl bg-destructive/15 px-3 py-2 text-sm text-destructive">
           <WifiOff className="size-4" /> Sem conexão com o servidor. Tentando novamente…
