@@ -76,7 +76,7 @@ export function UnoCard({
   animate = false,
 }: {
   card: string;
-  mirrorAs?: string;
+  mirrorAs?: string|undefined;
   size?: CardSize;
   className?: string;
   rotate?: number;
