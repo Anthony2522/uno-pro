@@ -170,7 +170,7 @@ export function startLocalSolo(nickname:string,options?:OfflineRoomConfig){
   const guest=proRpc("register_guest",{p_nickname:nickname.trim().slice(0,18)||"Jogador"});
   const created=proRpc("create_room",{
     p_token:guest.token,p_name:options?.name||"Solo offline",p_is_public:false,
-    p_max_players:options?.maxPlayers??4,
+    p_max_players:options?.maxPlayers??3,
     p_starting_cards:options?.startingCards??8,p_winners:options?.winners??2,
     p_rules:options?.rules??{repeat:true,sequence:true,nine:true,cut:true,stack:true},
     p_cards_enabled:options?.cards
