@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import {googleLogin,googleClientId} from "./googleAuth.js";
 import { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import { chooseHardPlan } from "./hardBotStrategy.js";
+import { chooseHardPlan as chooseHardPlanBaseline } from "./hardBotStrategyBaseline.js";
 export { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, CUSTOM_CARD_KEYS, normalizeCardsEnabled, LIMITS, isSoloHumanBotMatch, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
@@ -24,7 +25,7 @@ const clock = () => Date.now();
 const isDraw = c => c?.slice(1)==="D" || c?.slice(1)==="T" || c==="W4";
 export function chooseNineDelay(difficulty, random=Math.random) {
   const r=random();
-  return difficulty==="hard" ? (r<.10?0:r<.50?2000:5000) : (r<.30?0:8000);
+  return difficulty==="hard" ? (r<.50?0:r<.75?2000:5000) : (r<.20?0:8000);
 }
 export function chooseCutDelay(difficulty, random=Math.random) {
   if(difficulty!=="hard")return 40000;
@@ -125,7 +126,7 @@ function announceUno(r,id) {
   g.seq++;bump(r);
 }
 export function chooseBotUnoDelay(difficulty,random=Math.random){
-  if(difficulty==="hard")return 0;
+  if(difficulty==="hard")return random()<.80?0:6000;
   const roll=random();
   return roll<.20?0:roll<.80?8000:null; // null = forget to shout UNO
 }
@@ -680,11 +681,14 @@ function hardBotTick(r,id,h){
   if(!turn.plan){
     const counts=Object.fromEntries(g.turn_order.filter(p=>p!==id)
       .map(p=>[p,r.hands.get(p)?.cards.length??0]));
-    const decision=chooseHardPlan({
+    const choose=store.guestsById.get(id)?.ai_variant==="original-hard"?chooseHardPlanBaseline:chooseHardPlan;
+    const decision=choose({
       hand:h.cards.filter(c=>allowedDuringRestrictions(g,c,id)),topCard:top(g),currentColor:g.current_color,
       direction:g.direction,turnOrder:[...g.turn_order],turnIndex:g.turn_idx,
       selfId:id,counts,history:g.public_history||{},rules:ready(r),
       pendingDraw:g.pending_draw,pendingUncounterable:g.pending_uncounterable,
+      mirrorAs:g.last_wild||"W", swordArmed:!!g.swords?.[id], shieldArmed:!!g.shields?.[id],
+      profile:store.guestsById.get(id)?.ai_profile||null,
       random:Math.random
     });
     if(decision.kind==="accept"){finish(r,true);return;}
@@ -764,7 +768,7 @@ function botTick(r){
     negateEffect(r,id,colorForNegation());return;
   }
   if(g.pending_draw>0&&hasNegation(r,id)&&!g.turn_cards.length&&
-    (g.pending_uncounterable||!counter(r,id)||g.pending_draw>=5)){
+    (!counter(r,id)||(!hard&&g.pending_draw>=5))){
     negateEffect(r,id,colorForNegation());return;
   }
   if(!g.bot_move || g.bot_move.id!==id){
@@ -828,7 +832,8 @@ function botTick(r){
 // unattended bot-only tournament. Keep any already-earned human placement.
 function finishWhenOnlyBots(r){
   const g=r.game;
-  if(!g||g.status!=="playing"||!g.turn_order.length||g.turn_order.some(id=>!isBot(id)))return false;
+  if(!g||g.status!=="playing"||!g.turn_order.length||g.turn_order.some(id=>!isBot(id))||
+     (process.env.UNO_SELF_PLAY==="1"&&g.self_play_benchmark===true))return false;
   g.placements??=[];
   const ranking=g.turn_order.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length);
   while(g.placements.length<(g.winners_target??2) && ranking.length){
