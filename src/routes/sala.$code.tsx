@@ -15,6 +15,7 @@ import { api, type GameState, type RuleSettings } from "@/lib/uno/api";
 import { errorMessage, toGameError } from "@/lib/uno/errors";
 import { sfx } from "@/lib/uno/sound";
 import { useRoom } from "@/lib/uno/useRoom";
+import {offlineStorageError} from "@/lib/uno/offlineRuntime";
 
 export const Route = createFileRoute("/sala/$code")({
   head: ({ params }) => ({
@@ -192,6 +193,11 @@ function RoomPage() {
         <LeaveButton inGame={playing} onConfirm={() => void doLeave()} />
       </AppHeader>
       <ConnectionBanner show={connection === "reconnecting"} />
+      {state.room.local_only&&offlineStorageError()&&(
+        <p role="alert" className="relative z-40 bg-destructive/20 px-3 py-2 text-center text-xs font-bold text-destructive">
+          Seu navegador bloqueou o salvamento local. Libere espaço ou dados do site antes de fechar a partida.
+        </p>
+      )}
 
       {visibleEffects.length>0&&(
         <div className="pointer-events-none fixed inset-x-0 top-[4.5rem] z-[54] mx-auto flex w-full max-w-lg flex-col gap-2 px-3" role="status" aria-live="polite">
