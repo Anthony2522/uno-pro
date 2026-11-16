@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, type Guest } from "./api";
 import { toGameError } from "./errors";
+import {getRecoverableSoloRoom,getLocalMatch,getSoloServerBackup} from "./offlineRuntime";
 
 const KEY = "unopro.guest.v1";
 
@@ -70,12 +71,18 @@ export function GuestProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch((e) => {
-        if (toGameError(e).code === "INVALID_SESSION" && activeToken.current===g.token) {
-          activeToken.current=null;
-          setLastName(g.nickname);
-          store(null);
-          setGuest(null);
-          setStatus("needs-name");
+        if(toGameError(e).code==="INVALID_SESSION"&&activeToken.current===g.token){
+          // The server rebooted. Retain the nickname and browser-local match;
+          // silently get a new online token without discarding offline backups.
+          if(getLocalMatch()?.playing||getSoloServerBackup()){
+            // The solo backup keeps its original token and can be resumed offline.
+            return;
+          }
+          void api.registerGuest(g.nickname).then(next=>{
+            if(activeToken.current!==g.token)return;
+            activeToken.current=next.token;
+            store(next);setGuest(next);setIsDev(false);
+          }).catch(()=>{/* keep identity until the server is back */});
         }
       });
   }, []);
