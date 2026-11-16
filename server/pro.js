@@ -510,9 +510,9 @@ function play(r,id,card,color,targetId){
   if(!series.length){if(!g.pending_draw && !playable(card,g))fail("INVALID_CARD");}
   else{
     const first=series[0],prev=series.at(-1);
-    const same=value(first)===value(card);
-    const a=Number(value(card)),b=Number(value(prev));
-    const delta=a-b;const run=/^[0-9]$/.test(value(card))&&/^[0-9]$/.test(value(prev))&&card[0]===prev[0]&&Math.abs(delta)===1&&(!g.turn_step||Math.sign(delta)===g.turn_step);
+    const same=value(first)===value(effective);
+    const a=Number(value(effective)),b=Number(value(prev));
+    const delta=a-b;const run=/^[0-9]$/.test(value(effective))&&/^[0-9]$/.test(value(prev))&&effective[0]===prev[0]&&Math.abs(delta)===1&&(!g.turn_step||Math.sign(delta)===g.turn_step);
     if(g.turn_mode==="repeat"){if(!same)fail("INVALID_COMBO");}
     else if(g.turn_mode==="sequence"){if(!run)fail("INVALID_COMBO");}
     else if(same&&rules.repeat)g.turn_mode="repeat";
