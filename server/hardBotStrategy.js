@@ -252,7 +252,9 @@ function enumerate(context) {
     if(nodes++>=maxNodes)return;
     if(plan.length){
       plans.push([...plan]);
-      if(plan.length>=maxDepth)return;
+      // A Vortex immediately starts a server-controlled pull. There can be no
+      // additional manual cards in that plan, even another differently colored Vortex.
+      if(plan.some(card=>value(card,mirrorAs)==="V")||plan.length>=maxDepth)return;
     }
     for(const c of keys){
       if(!counts.get(c))continue;
