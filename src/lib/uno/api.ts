@@ -123,7 +123,7 @@ export type PublicRoom = {
 
 /** POSTs to the Node server (server.js). Errors carry the same codes the original backend raised. */
 async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
-  const code=typeof args.p_code==="string"?args.p_code.toUpperCase():null;
+  const code=typeof args["p_code"]==="string"?(args["p_code"] as string).toUpperCase():null;
   if(code&&hasLocalRoom(code))return localRpc<T>(fn,args);
   const rescue=():T|null=>{
     if(code&&getRecoverableSoloRoom(code)&&rescueSoloMatch(code))return localRpc<T>(fn,args);
