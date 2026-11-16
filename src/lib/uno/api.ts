@@ -2,7 +2,7 @@ import { GameError, toGameError } from "./errors";
 import type { CardColor } from "./cards";
 
 export type RuleSettings = { repeat: boolean; sequence: boolean; nine: boolean; cut: boolean; stack: boolean };
-export type Guest = { guest_id: string; token: string; nickname: string };
+export type Guest = { guest_id: string; token: string; nickname: string;google_linked?:boolean };
 
 export type Member = {
   id: string;
@@ -58,7 +58,7 @@ export type GameState = {
   lock_target?: CardColor|null;
   solo_paused?: boolean;
   solo_recovery_until?: string|null;
-  last_wild?: string;
+  last_wild?: string|null;
   mirror_played_as?: string|null;
   beer_remaining?: string[];
   beer_due_at?: string|null;
@@ -151,6 +151,8 @@ async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<
 
 export const api = {
   registerGuest: (nickname: string) => call<Guest>("register_guest", { p_nickname: nickname }),
+  authConfig: () => call<{google_client_id:string;persistent_rooms_configured:boolean}>("auth_config"),
+  googleLogin: (credential:string,token?:string) => call<Guest>("google_login",{p_credential:credential,p_token:token??null}),
   whoami: (token: string) =>
     call<{ guest_id: string; nickname: string; room_code: string | null }>("whoami", { p_token: token }),
   updateNickname: (token: string, nickname: string) =>
