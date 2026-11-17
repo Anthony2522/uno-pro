@@ -2,17 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import "./crazy.css";
 import { createCrazyWorld } from "./world";
+import { makeCrazyVisuals } from "./visuals";
 
 type Weapon = "sword" | "bow";
 type Bot = { mesh: THREE.Group; hp: number; alive: boolean; attackAt: number; position: THREE.Vector3 };
 const clamp = (v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
-export function CrazyArena({onExit}:{onExit:()=>void}) {
+export function CrazyArena({onExit}:{onExit:()=>void}){
+ const [round,setRound]=useState(0);
+ return <CrazyArenaRound key={round} onExit={onExit} onRestart={()=>setRound(v=>v+1)}/>;
+}
+function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}) {
  const mount=useRef<HTMLDivElement>(null);
  const keys=useRef(new Set<string>());
+ const ended=useRef(false);
  const actions=useRef({moveX:0,moveY:0,shield:false,attack:false,jump:false,weapon:"sword" as Weapon,yaw:0,pitch:0});
  const [weapon,setWeapon]=useState<Weapon>("sword"),[hp,setHp]=useState(100),[enemyHp,setEnemyHp]=useState(100),[seconds,setSeconds]=useState(0),[winner,setWinner]=useState("");
  const [charge,setCharge]=useState(0);
- const changeWeapon=()=>{const next=actions.current.weapon==="sword"?"bow":"sword";actions.current.weapon=next;actions.current.attack=false;actions.current.shield=false;setWeapon(next);};
+ const changeWeapon=()=>{if(ended.current)return;const next=actions.current.weapon==="sword"?"bow":"sword";actions.current.weapon=next;actions.current.attack=false;actions.current.shield=false;setWeapon(next);};
  useEffect(()=>{
   const root=mount.current;if(!root)return;
   const scene=new THREE.Scene();scene.background=new THREE.Color("#351c40");scene.fog=new THREE.Fog("#351c40",15,36);
@@ -22,16 +28,9 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   renderer.outputColorSpace=THREE.SRGBColorSpace;root.appendChild(renderer.domElement);
   const cleanupWorld=createCrazyWorld(scene);
   const geo=new THREE.BoxGeometry(1,1,1);
-  const skin=new THREE.MeshLambertMaterial({color:"#f5b17f"}),armor=new THREE.MeshLambertMaterial({color:"#bc2923"}),dark=new THREE.MeshLambertMaterial({color:"#33212d"});
-  const botGroup=new THREE.Group();scene.add(botGroup);
-  function part(parent:THREE.Group,x:number,y:number,z:number,sx:number,sy:number,sz:number,mat:THREE.Material){
-   const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(sx,sy,sz);parent.add(m);
-  }
-  part(botGroup,0,1.65,0,.7,.65,.6,skin);part(botGroup,0,1,0,.85,.85,.48,armor);
-  for(const x of [-.25,.25])part(botGroup,x,.35,0,.3,.7,.38,dark);
-  for(const x of [-.6,.6])part(botGroup,x,1.05,0,.3,.8,.4,armor);
-  part(botGroup,0,1.99,0,.8,.22,.65,dark);
-  const labelCanvas=document.createElement("canvas");labelCanvas.width=320;labelCanvas.height=82;
+  const visuals=makeCrazyVisuals();
+   const botRig=visuals.createWarrior("blue");const botGroup=botRig.group;scene.add(botGroup);
+   const labelCanvas=document.createElement("canvas");labelCanvas.width=320;labelCanvas.height=82;
   const labelTexture=new THREE.CanvasTexture(labelCanvas);labelTexture.colorSpace=THREE.SRGBColorSpace;
   const labelSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture,depthTest:true}));
   labelSprite.position.set(0,2.55,0);labelSprite.scale.set(2.3,.6,1);botGroup.add(labelSprite);
@@ -48,25 +47,33 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   botGroup.position.copy(bot.position);
   const player=new THREE.Vector3(0,0,4.5);
   let vy=0,ground=true,last=performance.now(),elapsed=0,lastSecond=-1,finished=false,swordAt=-10000,bowStart=0,arrowObjects:{mesh:THREE.Mesh,velocity:THREE.Vector3,ttl:number}[]=[];
-  const swordMat=new THREE.MeshLambertMaterial({color:"#c6c2d0"}),shieldMat=new THREE.MeshLambertMaterial({color:"#71361c"});
-  const handSword=new THREE.Mesh(geo,swordMat);handSword.scale.set(.18,.85,.19);scene.add(handSword);
-  const handShield=new THREE.Mesh(geo,shieldMat);handShield.scale.set(.75,.95,.18);scene.add(handShield);
-  const bow=new THREE.Mesh(geo,shieldMat);bow.scale.set(.12,1.25,.18);scene.add(bow);
-  const arrowMat=new THREE.MeshLambertMaterial({color:"#e3c6a0"});
-  const hurt=(amount:number)=>{bot.hp=Math.max(0,bot.hp-amount);setEnemyHp(Math.ceil(bot.hp));drawBotLife(Math.ceil(bot.hp));if(bot.hp===0){bot.alive=false;bot.mesh.visible=false;finished=true;setWinner("Vitória!");}};
+  const view=visuals.createViewWeapons(camera,"red");scene.add(camera);
+   const arrowMat=new THREE.MeshLambertMaterial({color:"#e3c6a0"});
+  const hurt=(amount:number)=>{bot.hp=Math.max(0,bot.hp-amount);setEnemyHp(Math.ceil(bot.hp));drawBotLife(Math.ceil(bot.hp));if(bot.hp===0){bot.alive=false;bot.mesh.visible=false;finished=true;ended.current=true;setWinner("Vitória!");}};
   const launch=(power:number)=>{const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(actions.current.pitch,actions.current.yaw,0,"YXZ"));const mesh=new THREE.Mesh(geo,arrowMat);mesh.scale.set(.09,.09,.55);mesh.position.copy(camera.position).addScaledVector(direction,.65);scene.add(mesh);arrowObjects.push({mesh,velocity:direction.multiplyScalar(7+power*11),ttl:3});};
-  const down=(e:KeyboardEvent)=>{keys.current.add(e.code);if(e.code==="Space")actions.current.jump=true;if(e.code==="KeyQ")changeWeapon();if(e.code==="Escape")document.exitPointerLock?.();};
-  const up=(e:KeyboardEvent)=>{keys.current.delete(e.code);};
-  const mouse=(e:MouseEvent)=>{if(document.pointerLockElement===renderer.domElement){actions.current.yaw-=e.movementX*.0027;actions.current.pitch=clamp(actions.current.pitch-e.movementY*.0027,-1.35,1.35);}};
-  const press=(e:MouseEvent)=>{if(e.button===0)actions.current.attack=true;if(e.button===2)actions.current.shield=true;};
-  const release=(e:MouseEvent)=>{if(e.button===0)actions.current.attack=false;if(e.button===2)actions.current.shield=false;};
-  const context=(e:Event)=>e.preventDefault();
-  renderer.domElement.addEventListener("click",()=>{if(matchMedia("(pointer:fine)").matches)renderer.domElement.requestPointerLock?.();});
-  window.addEventListener("keydown",down);window.addEventListener("keyup",up);window.addEventListener("mousemove",mouse);
-  window.addEventListener("mousedown",press);window.addEventListener("mouseup",release);renderer.domElement.addEventListener("contextmenu",context);
-  let frame=0;
+  const down=(e:KeyboardEvent)=>{
+    if(finished)return;
+    if(["Space","KeyE","KeyQ"].includes(e.code))e.preventDefault();
+    keys.current.add(e.code);
+    if(e.code==="Space"&&!e.repeat)actions.current.jump=true;
+    if(e.code==="KeyE"&&!e.repeat)changeWeapon();
+    if(e.code==="KeyQ")actions.current.shield=actions.current.weapon==="sword";
+    if(e.code==="Escape"&&document.pointerLockElement)document.exitPointerLock?.();
+   };
+   const up=(e:KeyboardEvent)=>{keys.current.delete(e.code);if(e.code==="KeyQ")actions.current.shield=false;};
+   const clearKeys=()=>{keys.current.clear();actions.current.shield=false;actions.current.attack=false;};
+   const mouse=(e:MouseEvent)=>{if(!finished&&document.pointerLockElement===renderer.domElement){actions.current.yaw-=e.movementX*.0027;actions.current.pitch=clamp(actions.current.pitch-e.movementY*.0027,-1.35,1.35);}};
+   const press=(e:MouseEvent)=>{if(finished||document.pointerLockElement!==renderer.domElement)return;if(e.button===0)actions.current.attack=true;if(e.button===2&&actions.current.weapon==="sword")actions.current.shield=true;};
+   const release=(e:MouseEvent)=>{if(e.button===0)actions.current.attack=false;if(e.button===2)actions.current.shield=false;};
+   const context=(e:Event)=>e.preventDefault();
+   const lockOnPlay=()=>{if(!finished&&matchMedia("(hover:hover) and (pointer:fine)").matches)renderer.domElement.requestPointerLock?.();};
+   renderer.domElement.addEventListener("click",lockOnPlay);
+   window.addEventListener("keydown",down);window.addEventListener("keyup",up);window.addEventListener("blur",clearKeys);window.addEventListener("mousemove",mouse);
+   window.addEventListener("mousedown",press);window.addEventListener("mouseup",release);renderer.domElement.addEventListener("contextmenu",context);
+   let frame=0;
   const animate=(now:number)=>{
    frame=requestAnimationFrame(animate);const dt=Math.min(.04,(now-last)/1000);last=now;
+   if(finished&&document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();
    if(!finished){elapsed+=dt;if(Math.floor(elapsed)!==lastSecond){lastSecond=Math.floor(elapsed);setSeconds(lastSecond);}}
    const a=actions.current,k=keys.current;
    if(!finished){
@@ -79,9 +86,10 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
     vy-=15*dt;player.y+=vy*dt;if(player.y<=0){player.y=0;vy=0;ground=true;}
     const dist=bot.position.distanceTo(new THREE.Vector3(player.x,0,player.z));
     if(bot.alive){
-     if(dist>1.5){const dir=new THREE.Vector3(player.x-bot.position.x,0,player.z-bot.position.z).normalize();bot.position.addScaledVector(dir,dt*1.25);bot.mesh.position.copy(bot.position);}
+     if(dist>1.5){const dir=new THREE.Vector3(player.x-bot.position.x,0,player.z-bot.position.z).normalize();bot.position.addScaledVector(dir,dt*1.25);bot.mesh.position.copy(bot.position);botRig.animate(now,true);}
      bot.mesh.rotation.y=Math.atan2(player.x-bot.position.x,player.z-bot.position.z);
-     if(dist<1.8&&now-bot.attackAt>1100){bot.attackAt=now;const toBot=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const facing=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));const blocked=a.shield&&a.weapon==="sword"&&facing.dot(toBot)>.2;setHp(h=>{const next=Math.max(0,h-(blocked?2:15));if(next===0){finished=true;setWinner("Derrota");}return next;});}
+     botRig.setEquipment(dist>3.4?"bow":"sword",false);
+     if(dist<1.8&&now-bot.attackAt>1100){bot.attackAt=now;const toBot=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const facing=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));const blocked=a.shield&&a.weapon==="sword"&&facing.dot(toBot)>.2;setHp(h=>{const next=Math.max(0,h-(blocked?2:15));if(next===0){finished=true;ended.current=true;setWinner("Derrota");}return next;});}
     }
     if(a.weapon==="sword"&&a.attack&&!a.shield&&now-swordAt>620){swordAt=now;if(bot.alive&&dist<2.5){const dir=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const forward=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));if(forward.dot(dir)>.35)hurt(20);}a.attack=false;}
     if(a.weapon==="bow"){if(a.attack){if(!bowStart)bowStart=now;setCharge(Math.min(100,Math.floor((now-bowStart)/12)));}else if(bowStart){launch(clamp((now-bowStart)/1200,0,1));bowStart=0;setCharge(0);}}else bowStart=0;
@@ -91,14 +99,11 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
     }
    }
    camera.position.set(player.x,player.y+1.65,player.z);camera.rotation.order="YXZ";camera.rotation.y=a.yaw;camera.rotation.x=a.pitch;
-   const positionHand=(mesh:THREE.Mesh,x:number,y:number,z:number)=>{mesh.position.copy(camera.localToWorld(new THREE.Vector3(x,y,z)));mesh.quaternion.copy(camera.quaternion);};
-   handSword.visible=a.weapon==="sword";handShield.visible=a.weapon==="sword";bow.visible=a.weapon==="bow";
-   positionHand(handSword,.58,-.5,-.95);handSword.rotation.z=now-swordAt<210?-Math.sin((now-swordAt)/210*Math.PI)*.8:0;
-   positionHand(handShield,-.65,a.shield?-.28:-.8,-.85);positionHand(bow,.65,-.4,-1);
+   view.setWeapon(a.weapon,a.shield);view.animate(now,now-swordAt,bowStart?Math.min(1,(now-bowStart)/1200):0,Math.hypot(a.moveX,a.moveY)>.05||k.size>0);
    renderer.render(scene,camera);
   };frame=requestAnimationFrame(animate);
   const resize=new ResizeObserver(()=>{camera.aspect=root.clientWidth/root.clientHeight;camera.updateProjectionMatrix();renderer.setSize(root.clientWidth,root.clientHeight);});resize.observe(root);
-  return ()=>{cancelAnimationFrame(frame);resize.disconnect();window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",press);window.removeEventListener("mouseup",release);renderer.domElement.removeEventListener("contextmenu",context);renderer.dispose();cleanupWorld();labelTexture.dispose();labelSprite.material.dispose();geo.dispose();for(const material of [skin,armor,dark,swordMat,shieldMat,arrowMat])material.dispose();root.removeChild(renderer.domElement);};
+  return ()=>{cancelAnimationFrame(frame);resize.disconnect();window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("blur",clearKeys);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",press);window.removeEventListener("mouseup",release);renderer.domElement.removeEventListener("contextmenu",context);renderer.domElement.removeEventListener("click",lockOnPlay);if(document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();renderer.dispose();cleanupWorld();visuals.dispose();labelTexture.dispose();labelSprite.material.dispose();geo.dispose();arrowMat.dispose();root.removeChild(renderer.domElement);};
  },[]);
  const look=useRef<{id:number,x:number,y:number}|null>(null);
  const stick=useRef<number|null>(null);
@@ -108,7 +113,7 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
  const hold=(key:"shield"|"attack")=>({onPointerDown:(e:React.PointerEvent)=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);actions.current[key]=true;},onPointerUp:()=>{actions.current[key]=false;},onPointerCancel:()=>{actions.current[key]=false;}});
  return <div className="crazy-game">
   <div className="crazy-canvas" ref={mount}/>
-  <div className="crazy-look" onPointerDown={e=>{look.current={id:e.pointerId,x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);}} onPointerMove={lookMove} onPointerUp={()=>look.current=null} onPointerCancel={()=>look.current=null}/>
+  <div className="crazy-look" onClick={()=>{if(!ended.current&&matchMedia("(hover:hover) and (pointer:fine)").matches)mount.current?.querySelector("canvas")?.requestPointerLock?.();}} onPointerDown={e=>{if(ended.current)return;look.current={id:e.pointerId,x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);}} onPointerMove={lookMove} onPointerUp={()=>look.current=null} onPointerCancel={()=>look.current=null}/>
   <header className="crazy-hud"><div className="crazy-brand"><img src="/crazy-battle-logo.webp" alt="Crazy Battle"/><button aria-label="Sair do treino" onClick={onExit}>✕</button></div><strong>⏱ {String(Math.floor(seconds/60)).padStart(2,"0")}:{String(seconds%60).padStart(2,"0")}</strong><span>👥 {hp>0?1:0}/{enemyHp>0?2:1}</span></header>
   <span className="sr-only">Vida do bot: {enemyHp}%</span>
   <div className="crazy-crosshair">＋</div>
@@ -116,6 +121,7 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   <button className="crazy-switch crazy-control" onClick={changeWeapon}>{weapon==="sword"?"🏹":"⚔️"} ⇄</button>
   <div className="crazy-joystick crazy-control" onPointerDown={joystick} onPointerMove={joystick} onPointerUp={clearStick} onPointerCancel={clearStick}><div/></div>
   <div className="crazy-actions">{weapon==="sword"?<><button className="crazy-control" {...hold("shield")}>🛡️</button><button className="crazy-control" {...hold("attack")}>⚔️</button></>:<button className="crazy-control crazy-bow" {...hold("attack")}>🏹 {charge>0?`${charge}%`:""}</button>}<button className="crazy-control crazy-jump" onPointerDown={e=>{e.preventDefault();actions.current.jump=true;}}>⬆</button></div>
-  {winner&&<div className="crazy-result"><h1>{winner}</h1><p>{winner==="Vitória!"?"Você derrotou o bot!":"O bot venceu esta rodada."}</p><button onClick={()=>location.reload()}>Jogar novamente</button><button onClick={onExit}>Voltar</button></div>}
+  {!winner&&<aside className="crazy-desktop-hints" aria-label="Atalhos de teclado e mouse"><div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Mover</span></div><div><kbd>ESPAÇO</kbd><span>Pular</span></div><div><kbd>E</kbd><span>Trocar arma</span></div>{weapon==="sword"&&<div><kbd>Q</kbd><span>Segurar escudo</span></div>}<div><kbd>🖱 1</kbd><span>{weapon==="bow"?"Segure e solte":"Atacar"}</span></div><div><kbd>ESC</kbd><span>Soltar cursor</span></div></aside>}
+   {winner&&<div className="crazy-result"><h1>{winner}</h1><p>{winner==="Vitória!"?"Você derrotou o bot!":"O bot venceu esta rodada."}</p><button onClick={onRestart}>Jogar novamente</button><button onClick={onExit}>Voltar</button></div>}
  </div>;
 }

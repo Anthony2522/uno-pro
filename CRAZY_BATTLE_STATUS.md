@@ -13,7 +13,7 @@ Crazy Battle possui rota `/crazy-battle`, componentes em `src/components/crazy/`
 
 - **Identidade:** arte oficial enviada pelo usuário em `public/crazy-battle-logo.webp` (versão otimizada/transparente); paleta vermelho/laranja/amarelo e controles translúcidos.
 - **Arena:** mundo voxel 16×16, limite físico vertical de 16 unidades, paredes, chão, pedras texturizadas, lava, tochas, bandeiras e céu aberto visualmente. Renderização estática com InstancedMesh, texturas 16×16 e poucos draw calls.
-- **Câmera e controles:** primeira pessoa, joystick e olhar multitouch em celulares, layout móvel 9:16, desktop WASD, mouse com pointer lock, espaço, tecla Q e botões de ataque/defesa.
+- **Câmera e controles:** primeira pessoa, joystick e olhar multitouch em celulares, layout móvel 9:16, desktop WASD, mouse com pointer lock, espaço para pular, E para trocar arma e Q mantida para defender. Os botões de toque são ocultados no desktop em favor de uma legenda de teclas, e o cursor é liberado ao fim da rodada.
 - **Armas:** espada e escudo com ataque direcional e cooldown; defesa mantida pressionada bloqueia 90% do dano frontal; arco carrega enquanto pressionado e dispara ao soltar, com flechas 3D, gravidade, colisão e munição ilimitada.
 - **HUD:** vida própria vertical com porcentagem e cor dinâmica; nome e vida dos inimigos flutuando acima da cabeça; mira, cronômetro, participantes, troca de armas, botões 1:1/2:1, feedback de golpes.
 - **Personagens:** proporção de cerca de dois blocos; armas e equipamentos visíveis, animações voxel simples de caminhada e golpes.
@@ -54,3 +54,14 @@ O backup mencionado acima preserva o código da branch `main` antes de Crazy Bat
 ## 7. Evolução futura
 
 Novos mapas, armas, partículas, habilidades e IA de bots devem ser adicionados nos módulos Crazy Battle, preservando a separação com UNO Pro. Registrar novas decisões e testes no documento do projeto e em changelog datado.
+
+## 8. 17/11/2026 — skins e controles desktop (PR #18)
+
+- **Backup anterior a esta atualização:** `backup/uno-pro-pre-skins-controls-2026-11-17`, commit `4b86363c911f306e8fc2f259f6fc5c4686d377b9`.
+- **Skins oficiais desta atualização:** `public/crazy/skins/warrior-red.png` e `warrior-blue.png`. Ambas são texturas PNG 64×64 no formato de UV clássico do Minecraft, adaptadas das duas artes previamente produzidas; não são simplesmente as planificações artísticas ampliadas. As faces são mapeadas para cabeça, torso, braços e pernas via `src/components/crazy/visuals.ts`.
+- **Jogadores:** escolha entre Guerreiro Rubro e Cavaleiro Azul no menu inicial e no lobby; identificação sincronizada pelo servidor. Bots usam aparências alternadas.
+- **Armas:** modelos voxel aprimorados de espada, escudo com emblema e arco com corda e flecha de carregamento; utilizados no treino e multiplayer.
+- **Controles PC:** WASD; espaço pula; E troca espada/escudo ↔ arco; Q segura o escudo; clique esquerdo ataca ou prepara/solta arco; clique direito opcional para defesa; Esc libera cursor. A interface mostra uma legenda com teclas no canto em vez de joystick/botões.
+- **Cursor:** ao concluir a partida, sair do pointer lock para possibilitar clicar em Jogar novamente/Sair. Também evitar travar novamente quando a rodada já terminou. No treino local, Jogar novamente reinicia o componente sem voltar à tela de entrada.
+- **Testes:** novos casos verificam formato PNG 64×64 e transmissão das skins pelo WebSocket. A aprovação de CI e testes manuais em desktop/mobile devem ser registrados a partir dos resultados reais da execução correspondente.
+- **Escopo:** os estilos e visuais pertencem ao Crazy Battle; o motor e o baralho do UNO Pro não foram modificados.

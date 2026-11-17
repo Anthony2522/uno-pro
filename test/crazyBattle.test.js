@@ -140,3 +140,28 @@ test("Crazy Battle: bow charges indefinitely until explicit release",async()=>{
   assert.equal(found,true);
  }finally{await app.close();}
 });
+
+test("Crazy Battle: the two warrior PNG sheets are genuine 64x64 skin textures",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ for(const name of ["red","blue"]){
+  const png=await readFile(new URL("../public/crazy/skins/warrior-"+name+".png",import.meta.url));
+  assert.equal(png.subarray(1,4).toString(),"PNG");
+  assert.equal(png.readUInt32BE(16),64);
+  assert.equal(png.readUInt32BE(20),64);
+ }
+});
+test("Crazy Battle: selected warrior skin is synchronized and cannot use arbitrary assets",async()=>{
+ const app=await setup();
+ try{
+  const host=await app.client();host.send("create",{player:"Rubro",skin:"red"});
+  const joined=await host.until("joined");await host.until("state");
+  const guest=await app.client();guest.send("join",{code:joined.code,player:"Azul",skin:"blue"});
+  await guest.until("joined");
+  const lobby=await guest.until("state");
+  assert.equal(lobby.players.find(p=>p.name==="Rubro")?.skin,"red");
+  assert.equal(lobby.players.find(p=>p.name==="Azul")?.skin,"blue");
+  guest.send("skin",{skin:"unknown-file.png"});
+  const changed=await guest.until("state");
+  assert.equal(changed.players.find(p=>p.name==="Azul")?.skin,"red");
+ }finally{await app.close();}
+});

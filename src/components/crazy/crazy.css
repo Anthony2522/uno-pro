@@ -15,3 +15,34 @@
 .crazy-impact-dealt::after{content:"✦";position:absolute;top:51%;left:50%;transform:translate(-50%,-50%);font-size:52px;color:#fff8b0;text-shadow:0 0 12px #fb6200}
 @keyframes crazy-impact{0%{opacity:1}100%{opacity:0}}
 @media(prefers-reduced-motion:reduce){.crazy-impact-taken,.crazy-impact-dealt{animation-duration:.1s}}
+
+
+/* Refined fire/medieval HUD and desktop keycaps. Mobile keeps translucent touch controls. */
+.crazy-game{font-family:Manrope,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+.crazy-game .crazy-hud{padding:calc(9px + env(safe-area-inset-top,0px)) 13px 0;align-items:flex-start}
+.crazy-game .crazy-hud>strong,.crazy-game .crazy-hud>span{background:linear-gradient(160deg,#181122e9,#5b211ddf);border:1.5px solid #fa8a57;border-radius:17px;box-shadow:0 5px 18px #1b070b88,inset 0 1px 0 #ffffff28;padding:9px 11px;font-weight:900;font-variant-numeric:tabular-nums;font-size:clamp(12px,3.5vw,18px)}
+.crazy-game .crazy-control{border:1.5px solid #fff1d5aa;border-radius:23px;background:linear-gradient(160deg,#29202ca8,#6a30277d);box-shadow:inset 0 2px 4px #ffffff22,0 6px 23px #17080eaa;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);display:grid;place-items:center;transition:transform .11s ease,border-color .11s ease}
+.crazy-game .crazy-control:active{transform:scale(.94);border-color:#ffdfaa}
+.crazy-game .crazy-switch{right:max(10px,env(safe-area-inset-right,0px));top:53%;width:clamp(65px,17vw,90px);height:clamp(65px,17vw,90px);font-size:clamp(25px,6vw,38px)}
+.crazy-game .crazy-actions{bottom:calc(4% + env(safe-area-inset-bottom,0px));right:calc(2% + env(safe-area-inset-right,0px));gap:9px}
+.crazy-game .crazy-joystick{left:calc(3% + env(safe-area-inset-left,0px))}
+.crazy-game .crazy-crosshair{font-weight:900;text-shadow:0 0 9px #ff823ccc,0 3px 6px black}
+.crazy-game .crazy-health{filter:drop-shadow(0 5px 6px #16070fa8)}
+.crazy-game .crazy-health-track{border-color:#efc083}
+.crazy-game .crazy-result{background:radial-gradient(circle at 50% 35%,#8b351dec,#100b18f2 70%);backdrop-filter:blur(9px);text-align:center;padding:22px;touch-action:auto;cursor:auto}
+.crazy-game .crazy-result h1{font-family:Unbounded,Manrope,sans-serif;font-size:clamp(29px,7vw,52px);font-weight:900;color:#ffc37d;text-shadow:0 4px 0 #752016,0 9px 22px #18050a}
+.crazy-game .crazy-result button{border:1px solid #ffcb8e;background:linear-gradient(155deg,#ff983a,#d53d23);padding:14px 25px;border-radius:15px;box-shadow:0 6px 16px #0e070a77;pointer-events:auto;cursor:pointer}
+.crazy-game .crazy-result button:focus-visible{outline:3px solid #ffe3aa;outline-offset:3px}
+.crazy-desktop-hints{display:none;position:absolute;z-index:5;bottom:24px;left:24px;pointer-events:none;flex-direction:column;gap:6px}
+.crazy-desktop-hints>div{display:flex;align-items:center;gap:5px;background:#1c1324b8;border:1px solid #ffac695c;border-radius:10px;padding:5px 10px;backdrop-filter:blur(7px);box-shadow:0 4px 12px #12050b66}
+.crazy-desktop-hints kbd{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 5px;border:1px solid #ffddab9f;border-bottom-width:3px;border-radius:6px;background:linear-gradient(#554450,#201b28);font-size:12px;color:#ffe3b3;font-family:inherit;font-weight:900}
+.crazy-desktop-hints span{color:#ffe6c9;font-weight:700;font-size:12px;margin-left:5px}
+.crazy-skin-options{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.crazy-skin-option{background:linear-gradient(160deg,#351a28ee,#140c1abf);border:2px solid #ffffff36;border-radius:16px;padding:9px;display:flex;align-items:center;gap:8px;min-width:0;color:white;transition:border-color .12s ease}
+.crazy-skin-option[aria-pressed="true"]{border-color:#ffcb7e;box-shadow:0 0 18px #ff7b3650}
+.crazy-skin-option img{width:52px;height:52px;image-rendering:pixelated;object-fit:contain}
+.crazy-skin-option span{font-weight:850;font-size:12px;text-align:left}
+.crazy-lobby-skin{width:34px;height:34px;object-fit:contain;image-rendering:pixelated;background:#281521;border:1px solid #ffca7666;border-radius:6px}
+@media(hover:hover) and (pointer:fine){.crazy-game .crazy-switch,.crazy-game .crazy-actions,.crazy-game .crazy-joystick{display:none!important}.crazy-desktop-hints{display:flex}.crazy-game .crazy-look{cursor:crosshair}.crazy-game .crazy-result button{cursor:pointer}}
+@media(max-width:380px){.crazy-game .crazy-hud{gap:4px;padding-left:5px;padding-right:5px}.crazy-game .crazy-hud>strong,.crazy-game .crazy-hud>span{font-size:12px;padding:6px 7px}}
+@media(prefers-reduced-motion:reduce){.crazy-game .crazy-control{transition:none}}

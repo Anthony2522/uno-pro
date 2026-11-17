@@ -12,14 +12,14 @@ const publicRooms = () => [...rooms.values()].filter(r => !r.private).map(r => (
  code:r.code, name:r.name, status:r.status, players:r.players.size+r.bots.size, max:RULES.maxPlayers
 }));
 const broadcast = (room, data) => { for (const p of room.players.values()) send(p.ws, data); };
-const playerState = p => ({id:p.id,name:p.name,x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch,hp:p.hp,weapon:p.weapon,shield:p.shield,alive:p.hp>0,bot:!!p.bot,connected:!!p.ws});
+const playerState = p => ({id:p.id,name:p.name,x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch,hp:p.hp,weapon:p.weapon,shield:p.shield,alive:p.hp>0,bot:!!p.bot,skin:p.skin,connected:!!p.ws});
 const snapshot = room => ({type:"state",code:room.code,status:room.status,host:room.host,seconds:room.seconds,winner:room.winner,
  players:[...room.players.values(),...room.bots.values()].map(playerState),
  arrows:room.arrows.map(a=>({id:a.id,x:a.x,y:a.y,z:a.z}))});
 const lobby = room => {broadcast(room, snapshot(room));room.announceRooms?.();};
 const randomCode = () => { let c; do {c=randomBytes(4).toString("hex").toUpperCase();}while(rooms.has(c));return c;};
 function spawn(p, index){const spots=[[-4,-4],[4,4],[-4,4],[4,-4],[0,5],[5,0],[-5,0],[0,-5]];[p.x,p.z]=spots[index%spots.length];p.y=0;p.hp=100;p.vy=0;p.shield=false;p.weapon="sword";p.cooldown=0;p.chargeAt=0;p.defendUntil=0;p.input={x:0,z:0,jump:false};}
-function participant(id,name,ws,bot=false){return {id,name,ws,bot,resumeKey:randomBytes(24).toString("hex"),disconnectedAt:0,x:0,y:0,z:0,yaw:0,pitch:0,hp:100,vy:0,shield:false,weapon:"sword",cooldown:0,chargeAt:0,input:{x:0,z:0,jump:false}};}
+function participant(id,name,ws,bot=false){return {id,name,ws,bot,resumeKey:randomBytes(24).toString("hex"),disconnectedAt:0,skin:"red",x:0,y:0,z:0,yaw:0,pitch:0,hp:100,vy:0,shield:false,weapon:"sword",cooldown:0,chargeAt:0,input:{x:0,z:0,jump:false}};}
 function finish(room){const alive=[...room.players.values(),...room.bots.values()].filter(p=>p.hp>0);if(room.status==="playing"&&alive.length<=1){room.status="finished";room.winner=alive[0]?.id??null;broadcast(room,{type:"finished",winner:room.winner});lobby(room);}}
 export function calculateCrazyDamage(damage,shield,weapon,yaw,dx,dz){
  const len=Math.hypot(dx,dz)||1;
@@ -152,20 +152,21 @@ export function attachCrazyBattle(server){
     if(room)return fail("Já está em uma sala");
     if(rooms.size>=100)return fail("Limite de salas atingido");
     const code=randomCode();room={code,name:clean(msg.name||"Arena",36),private:!!msg.private,announceRooms,host:id,status:"lobby",winner:null,seconds:0,players:new Map(),bots:new Map(),arrows:[]};
-    const p=participant(id,clean(msg.player||"Jogador"),ws);room.players.set(id,p);rooms.set(code,room);send(ws,{type:"joined",id,code,resumeKey:p.resumeKey});lobby(room);return;
+    const p=participant(id,clean(msg.player||"Jogador"),ws);p.skin=msg.skin==="blue"?"blue":"red";room.players.set(id,p);rooms.set(code,room);send(ws,{type:"joined",id,code,resumeKey:p.resumeKey});lobby(room);return;
    }
    if(msg.type==="join"){
     if(room)return fail("Já está em uma sala");
     const r=rooms.get(clean(msg.code,8).toUpperCase());if(!r)return fail("Sala não encontrada");
     if(r.players.size+r.bots.size>=RULES.maxPlayers)return fail("Sala lotada");
     if(r.status==="playing")return fail("Partida em andamento; aguarde o próximo jogo");
-    room=r;const p=participant(id,clean(msg.player||"Jogador"),ws);r.players.set(id,p);send(ws,{type:"joined",id,code:r.code,resumeKey:p.resumeKey});lobby(r);return;
+    room=r;const p=participant(id,clean(msg.player||"Jogador"),ws);p.skin=msg.skin==="blue"?"blue":"red";r.players.set(id,p);send(ws,{type:"joined",id,code:r.code,resumeKey:p.resumeKey});lobby(r);return;
    }
    if(!room)return fail("Entre em uma sala primeiro");
    const p=room.players.get(id);if(!p)return;
    if(msg.type==="addBot"&&room.host===id&&room.status!=="playing"&&room.players.size+room.bots.size<RULES.maxPlayers){
-    const bot=participant("bot-"+randomBytes(4).toString("hex"),"Bot Guerreiro "+(room.bots.size+1),null,true);room.bots.set(bot.id,bot);lobby(room);
+    const bot=participant("bot-"+randomBytes(4).toString("hex"),"Bot Guerreiro "+(room.bots.size+1),null,true);bot.skin=room.bots.size%2===0?"blue":"red";room.bots.set(bot.id,bot);lobby(room);
    }
+   if(msg.type==="skin"&&room.status!=="playing"){p.skin=msg.skin==="blue"?"blue":"red";lobby(room);return;}
    if(msg.type==="removeBot"&&room.host===id&&room.status!=="playing"){room.bots.delete(String(msg.id));lobby(room);}
    if(msg.type==="start"&&room.host===id&&room.status!=="playing"){
     const all=[...room.players.values(),...room.bots.values()];if(all.length<2)return fail("Adicione pelo menos dois participantes");
