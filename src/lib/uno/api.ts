@@ -200,6 +200,7 @@ export const api = {
   adminListRooms: (token:string)=>call<Array<{code:string;name:string;is_public:boolean;status:string;player_count:number;max_players:number;host_name:string}>>("admin_list_rooms",{p_token:token}),
   adminDeleteRoom: (token:string,code:string)=>call<{ok:boolean}>("admin_delete_room",{p_token:token,p_code:code}),
   sandboxSwitch: (code:string,targetId:string)=>call<{ok:boolean}>("sandbox_switch",{p_code:code,p_target_id:targetId}),
+  sandboxToggleBot: (code:string)=>call<{ok:boolean;enabled:boolean}>("sandbox_toggle_bot",{p_code:code}),
   sandboxGrantCard: (code:string,kind:string)=>call<{ok:boolean;card:string}>("sandbox_grant_card",{p_code:code,p_kind:kind}),
   devDeletePublicRoom: (token:string,code:string)=>call("admin_delete_room",{p_token:token,p_code:code}),
   createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8, winners = 2, cards:CardSettings=DEFAULT_CARD_SETTINGS) =>
