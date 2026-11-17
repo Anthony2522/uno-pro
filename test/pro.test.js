@@ -121,7 +121,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
   // The one Mirror is never duplicated if it is already in another hand.
-  assert.equal(g.draw_pile.length,mirrorAlreadyDealt?230:231);
+  assert.equal(g.draw_pile.length,newDeck(room.cards_enabled).length-1-(mirrorAlreadyDealt?1:0));
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
