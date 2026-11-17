@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import "./crazy.css";
+import { createCrazyWorld } from "./world";
 export type Fighter={id:string;name:string;x:number;y:number;z:number;yaw:number;pitch:number;hp:number;weapon:string;shield:boolean;alive:boolean;bot:boolean};
 export type MatchState={type:string;status:string;seconds:number;winner:string|null;host:string;players:Fighter[];arrows:{id:string;x:number;y:number;z:number}[]};
 type Props={ws:WebSocket,id:string,state:MatchState,onExit:()=>void};
@@ -15,20 +16,32 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
  useEffect(()=>{
   const node=root.current;if(!node)return;
   const scene=new THREE.Scene();scene.background=new THREE.Color("#3b1c49");
-  scene.add(new THREE.HemisphereLight("#d8b5fa","#502312",2.5));
-  const point=new THREE.PointLight("#ff741c",95,20);point.position.set(0,5,0);scene.add(point);
-  const camera=new THREE.PerspectiveCamera(75,node.clientWidth/node.clientHeight,.05,60);
-  const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(node.clientWidth,node.clientHeight);node.appendChild(renderer.domElement);
-  const cube=new THREE.BoxGeometry(1,1,1),materials=["#704b56","#543747","#875763","#49303c"].map(color=>new THREE.MeshLambertMaterial({color}));
-  const fire=new THREE.MeshBasicMaterial({color:"#ff6512"}),red=new THREE.MeshLambertMaterial({color:"#af2119"}),skin=new THREE.MeshLambertMaterial({color:"#f7b17b"});
+  const cleanupWorld = createCrazyWorld(scene);
+  const cube = new THREE.BoxGeometry(1,1,1);
+  const materials = ["#704b56","#543747","#875763","#49303c"].map(color=>new THREE.MeshLambertMaterial({color}));
+  const fire = new THREE.MeshBasicMaterial({color:"#ff6512"});
+  const red = new THREE.MeshLambertMaterial({color:"#af2119"});
+  const skin = new THREE.MeshLambertMaterial({color:"#f7b17b"});
   function block(parent:THREE.Object3D,x:number,y:number,z:number,sx:number,sy:number,sz:number,mat:THREE.Material){const mesh=new THREE.Mesh(cube,mat);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);parent.add(mesh);return mesh;}
-  for(let x=-8;x<8;x++)for(let z=-8;z<8;z++){
-   const mat=(x+z)%11===0?fire:materials[Math.abs(x*7+z*13)%materials.length]!;
-   block(scene,x,-.5,z,1,1,1,mat);
-   if(x===-8||x===7||z===-8||z===7){for(let y=0;y<9;y++)block(scene,x,y+.5,z,1,1,1,materials[Math.abs(x+y+z)%4]!);if((x+z)%3===0)block(scene,x,9.5,z,1,1,1,fire);}
-  }
-  for(const x of [-5,0,5]){block(scene,x,4,-7.4,1.5,3,.15,red);block(scene,x,4,-7.29,.4,.9,.1,fire);block(scene,x,3,-6.9,.4,.5,.4,fire);}
   const fighters=new Map<string,THREE.Group>(),arrows=new Map<string,THREE.Mesh>();
+  const nameplates=new Map<string,{sprite:THREE.Sprite,texture:THREE.CanvasTexture,label:string}>();
+  function setNameplate(p:Fighter, group:THREE.Group){
+    const label=p.name+"|"+p.hp;
+    const prior=nameplates.get(p.id);
+    if(prior?.label===label)return;
+    const canvas=document.createElement("canvas");canvas.width=320;canvas.height=82;
+    const ctx=canvas.getContext("2d");if(!ctx)return;
+    ctx.fillStyle="rgba(18,9,15,.82)";ctx.fillRect(12,2,296,75);
+    ctx.font="bold 24px sans-serif";ctx.textAlign="center";ctx.fillStyle="#fff";ctx.fillText(p.name.slice(0,18),160,28);
+    ctx.fillStyle="#1b0a13";ctx.fillRect(23,42,274,26);
+    const percent=Math.max(0,Math.min(100,p.hp));
+    ctx.fillStyle="hsl("+percent*1.2+" 95% 48%)";ctx.fillRect(23,42,274*percent/100,26);
+    ctx.font="bold 21px sans-serif";ctx.fillStyle="white";ctx.fillText(percent+"%",160,63);
+    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+    if(prior){prior.sprite.material.map=texture;prior.sprite.material.needsUpdate=true;prior.texture.dispose();prior.label=label;}
+    else {const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,depthTest:true,transparent:true}));
+      sprite.position.y=2.55;sprite.scale.set(2.35,.61,1);group.add(sprite);nameplates.set(p.id,{sprite,texture,label});}
+  }
   function makeFighter(){const group=new THREE.Group();block(group,0,1.65,0,.7,.65,.6,skin);block(group,0,1,0,.85,.85,.5,red);block(group,0,1.99,0,.8,.2,.65,materials[3]!);for(const x of [-.25,.25])block(group,x,.35,0,.3,.7,.4,materials[3]!);for(const x of [-.6,.6])block(group,x,1.05,0,.3,.8,.4,red);scene.add(group);return group;}
   const blade=block(camera,.58,-.48,-.9,.18,.85,.18,new THREE.MeshLambertMaterial({color:"#e5d9df"}));
   const shield=block(camera,-.58,-.6,-.85,.75,.95,.17,materials[2]!);
@@ -47,15 +60,15 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    frame=requestAnimationFrame(animate);const dt=Math.min(.05,(now-last)/1000);last=now;
    const s=data.current,local=s.players.find(p=>p.id===id),i=input.current;
    if(keys.current.size){i.x=(keys.current.has("KeyD")?1:0)-(keys.current.has("KeyA")?1:0);i.z=(keys.current.has("KeyS")?1:0)-(keys.current.has("KeyW")?1:0);}
-   if(local){camera.position.set(local.x,local.y+1.65,local.z);camera.rotation.order="YXZ";camera.rotation.set(i.pitch,i.yaw,0);blade.visible=local.weapon==="sword";shield.visible=local.weapon==="sword";shield.position.y=local.shield?-.25:-.6;bow.visible=local.weapon==="bow";}
-   for(const p of s.players){if(p.id===id||!p.alive){const g=fighters.get(p.id);if(g)g.visible=false;continue;}let g=fighters.get(p.id);if(!g){g=makeFighter();fighters.set(p.id,g);}g.visible=true;g.position.lerp(new THREE.Vector3(p.x,p.y,p.z),Math.min(1,dt*12));g.rotation.y=p.yaw;}
+   if(local){camera.position.lerp(new THREE.Vector3(local.x,local.y+1.65,local.z),Math.min(1,dt*18));camera.rotation.order="YXZ";camera.rotation.set(i.pitch,i.yaw,0);blade.visible=local.weapon==="sword";shield.visible=local.weapon==="sword";shield.position.y=local.shield?-.25:-.6;bow.visible=local.weapon==="bow";}
+   for(const p of s.players){if(p.id===id||!p.alive){const g=fighters.get(p.id);if(g)g.visible=false;continue;}let g=fighters.get(p.id);if(!g){g=makeFighter();fighters.set(p.id,g);}g.visible=true;g.position.lerp(new THREE.Vector3(p.x,p.y,p.z),Math.min(1,dt*12));g.rotation.y=p.yaw;setNameplate(p,g);}
    for(const a of s.arrows||[]){let m=arrows.get(a.id);if(!m){m=block(scene,0,0,0,.1,.1,.55,materials[1]!);arrows.set(a.id,m);}m.position.lerp(new THREE.Vector3(a.x,a.y,a.z),Math.min(1,dt*16));}
    for(const [aid,m] of arrows)if(!(s.arrows||[]).some(a=>a.id===aid)){scene.remove(m);arrows.delete(aid);}
    if(now-network>50){network=now;if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",...i}));i.jump=false;}
    renderer.render(scene,camera);
   }frame=requestAnimationFrame(animate);
   const observer=new ResizeObserver(()=>{camera.aspect=node.clientWidth/node.clientHeight;camera.updateProjectionMatrix();renderer.setSize(node.clientWidth,node.clientHeight);});observer.observe(node);
-  return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.dispose();cube.dispose();for(const m of materials)m.dispose();fire.dispose();red.dispose();skin.dispose();node.removeChild(renderer.domElement);};
+  return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.dispose();cleanupWorld();for(const plate of nameplates.values()){plate.texture.dispose();plate.sprite.material.dispose();}cube.dispose();for(const m of materials)m.dispose();fire.dispose();red.dispose();skin.dispose();node.removeChild(renderer.domElement);};
  },[id,ws]);
  const pointerMove=(e:React.PointerEvent<HTMLDivElement>)=>{if(!look.current||look.current.id!==e.pointerId)return;input.current.yaw-=(e.clientX-look.current.x)*.004;input.current.pitch=Math.max(-1.35,Math.min(1.35,input.current.pitch-(e.clientY-look.current.y)*.004));look.current.x=e.clientX;look.current.y=e.clientY;};
  const joystick=(e:React.PointerEvent<HTMLDivElement>)=>{if(stick.current!==null&&stick.current!==e.pointerId)return;stick.current=e.pointerId;e.currentTarget.setPointerCapture(e.pointerId);const r=e.currentTarget.getBoundingClientRect();input.current.x=Math.max(-1,Math.min(1,(e.clientX-r.left-r.width/2)/(r.width*.4)));input.current.z=Math.max(-1,Math.min(1,(e.clientY-r.top-r.height/2)/(r.height*.4)));};
