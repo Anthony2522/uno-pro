@@ -12,3 +12,8 @@ export const CRAZY_MIN_FRAME_MS = 14;
 export function crazyShouldRender(now: number, previous: number): boolean {
   return previous===0 || now-previous >= CRAZY_MIN_FRAME_MS;
 }
+
+/** The camera may own the mouse only during a live round with a living player. */
+export function crazyMustUnlockCursor(status: string, hp: number): boolean {
+  return status !== "playing" || hp <= 0;
+}
