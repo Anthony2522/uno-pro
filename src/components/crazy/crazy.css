@@ -4,3 +4,8 @@
 .crazy-hud .crazy-brand img{width:100%;height:auto;object-fit:contain;filter:drop-shadow(0 3px 6px #0009)}
 .crazy-hud .crazy-brand button{position:absolute;left:0;bottom:-12px;border:1px solid #ffffff77;border-radius:50%;padding:2px 6px;background:#1d1326aa;color:white;font-size:12px;pointer-events:auto}
 @media(max-width:360px){.crazy-hud{gap:4px;padding-left:5px;padding-right:5px}.crazy-hud>strong,.crazy-hud>span{font-size:12px;padding:6px 7px}.crazy-hud .crazy-brand{width:90px}}
+
+.crazy-defeated{position:absolute;z-index:6;left:50%;bottom:20%;transform:translateX(-50%);padding:14px 18px;border:1px solid #ef6b43;background:#1d111ee6;border-radius:16px;text-align:center;white-space:normal;width:min(90vw,360px);font-weight:750}
+.crazy-result .crazy-results-list{width:min(86vw,380px);max-height:35vh;overflow-y:auto;padding:12px;background:#1e1326b6;border:1px solid #fd9c6777;border-radius:14px;display:flex;flex-direction:column;gap:8px}
+.crazy-results-list>div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #ffffff22;padding:5px 4px}
+.crazy-results-list b{color:#ffd28b}
