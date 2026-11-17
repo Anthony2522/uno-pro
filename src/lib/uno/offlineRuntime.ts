@@ -3,14 +3,15 @@
 // @ts-ignore The existing engine is JavaScript and is also used by the Node server.
 import {proRpc,proSweep} from "../../../server/pro.js";
 // @ts-ignore Shared Node engine, aliased to browser crypto by Vite.
-import {store} from "../../../server/game.js";
+import {store,makeRoach} from "../../../server/game.js";
 
 const LOCAL_KEY="unopro.offline.solo.v2";
 const BACKUP_KEY="unopro.solo.server-backup.v1";
+const SANDBOX_KEY="unopro.offline.sandbox.v1";
 const VERSION=1;
 type GuestRecord={id:string;tokenHash:string;nickname:string;last_seen:number;bot?:boolean;difficulty?:string};
 type RoomRecord={id:string;code:string;name:string;version:number;hands:[string,unknown][];game:any;members:{guest_id:string}[];[key:string]:any};
-type Saved={version:number;code:string;token:string;saved_at:number;room:RoomRecord;guests:GuestRecord[];source:"local"|"rescued";human_id:string};
+type Saved={version:number;code:string;token:string;saved_at:number;room:RoomRecord;guests:GuestRecord[];source:"local"|"rescued"|"sandbox";human_id:string;sandbox_opponent_token?:string;sandbox_opponent_id?:string;sandbox_selected_id?:string};
 export type SoloBackup=Omit<Saved,"token"|"source">;
 let active:Saved|null=null;
 let timer:number|null=null;
@@ -34,13 +35,14 @@ function snapshot(){
   const guests=room.members.map(m=>store.guestsById.get(m.guest_id)).filter(Boolean) as GuestRecord[];
   return {version:VERSION,code:room.code,token:active.token,saved_at:Date.now(),
     source:active.source,human_id:active.human_id,
+    sandbox_opponent_token:active.sandbox_opponent_token,sandbox_opponent_id:active.sandbox_opponent_id,sandbox_selected_id:active.sandbox_selected_id,
     room:{...room,hands:[...room.hands] as [string,unknown][]},guests} as Saved;
 }
 function persist(){
   const data=snapshot();
   if(!data)return;
   try{
-    localStorage.setItem(LOCAL_KEY,JSON.stringify(data));
+    localStorage.setItem(active?.source==="sandbox"?SANDBOX_KEY:LOCAL_KEY,JSON.stringify(data));
     active=data;storageError=false;
     lastSaveVersion=data.room.version;
   }catch{storageError=true;}
@@ -110,6 +112,12 @@ function startTicker(){
     }
     try{
       proRpc("whoami",{p_token:active.token});
+      // Sandbox controls two human seats in a single local browser. Both seats
+      // stay present; they are never kicked just for not having a second tab.
+      if(active.source==="sandbox")for(const member of room.members){
+        const g=store.guestsById.get(member.guest_id);
+        if(g)g.last_seen=Date.now();
+      }
       proSweep();
       if(room.version!==lastSaveVersion)persist();
     }catch(error){console.error("[offline UNO tick]",error);}
@@ -117,12 +125,23 @@ function startTicker(){
 }
 function ensureLoaded(){
   if(active)return;
-  const saved=read(LOCAL_KEY);
+  const saved=read(LOCAL_KEY)??read(SANDBOX_KEY);
   if(saved)hydrate(saved);
 }
 export function hasLocalRoom(code:string){
-  ensureLoaded();
-  return active?.code===code.toUpperCase()&&store.roomsByCode.has(active.code);
+  const normalized=code.toUpperCase();
+  if(active?.code===normalized&&store.roomsByCode.has(normalized))return true;
+  const saved=[read(LOCAL_KEY),read(SANDBOX_KEY)].find(x=>x?.code===normalized);
+  if(!saved)return false;
+  if(active)persist(); // preserve the previous match before swapping engines
+  hydrate(saved);
+  return true;
+}
+export function getLocalSandbox(){
+  const saved=read(SANDBOX_KEY);
+  if(!saved)return null;
+  return {code:saved.code,name:saved.room.name,
+    playing:saved.room.game?.status==="playing",saved_at:saved.saved_at};
 }
 export function getLocalMatch(){
   const saved=read(LOCAL_KEY);
@@ -163,7 +182,7 @@ export type OfflineRoomConfig={
 };
 export function startLocalSolo(nickname:string,options?:OfflineRoomConfig){
   ensureLoaded();
-  if(active?.room?.game?.status==="playing")return active.code;
+  if(active?.source!=="sandbox"&&active?.room?.game?.status==="playing")return active.code;
   store.rooms.clear();store.roomsByCode.clear();
   store.guestsById.clear();store.guestsByHash.clear();
   active=null;
@@ -192,14 +211,78 @@ export function startLocalSolo(nickname:string,options?:OfflineRoomConfig){
   void navigator.storage?.persist?.().catch(()=>{});
   return room.code as string;
 }
+
+/** Private, browser-only two-seat match. Never sent to any server lobby. */
+export function startLocalSandbox(nickname:string){
+  if(active)persist();
+  store.rooms.clear();store.roomsByCode.clear();
+  store.guestsById.clear();store.guestsByHash.clear();
+  active=null;
+  const owner=proRpc("register_guest",{p_nickname:nickname.trim().slice(0,18)||"Jogador"});
+  const other=proRpc("register_guest",{p_nickname:"Jogador 2"});
+  const created=proRpc("create_room",{
+    p_token:owner.token,p_name:"Sandbox de "+owner.nickname,p_is_public:false,
+    p_max_players:2,p_starting_cards:8,p_winners:1,
+    p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+  });
+  const room=store.roomsByCode.get(created.code);
+  store.roomsByCode.delete(created.code);
+  room.code="SBX"+created.code.slice(0,5);
+  store.roomsByCode.set(room.code,room);
+  proRpc("join_room",{p_token:other.token,p_code:room.code});
+  proRpc("start_game",{p_token:owner.token,p_code:room.code});
+  active={version:VERSION,source:"sandbox",code:room.code,token:owner.token,
+    human_id:owner.guest_id,sandbox_opponent_id:other.guest_id,
+    sandbox_opponent_token:other.token,sandbox_selected_id:owner.guest_id,
+    saved_at:Date.now(),guests:[],room:{...room,hands:[...room.hands]}};
+  persist();startTicker();
+  void navigator.storage?.persist?.().catch(()=>{});
+  return room.code as string;
+}
+const SANDBOX_COLOR_CARDS=new Set(["R","S","D","T","H","E","L","V","C","A"]);
+const SANDBOX_WILDS=new Set(["W","W4","W5","X","B","N","P","M","Q"]);
+const SANDBOX_COLORS=["r","b","g","y"];
+function sandboxGrant(kind:string){
+  if(!active||active.source!=="sandbox")throw Error("SANDBOX_ONLY");
+  const room=store.roomsByCode.get(active.code);
+  if(!room||room.game?.status!=="playing")throw Error("GAME_NOT_ACTIVE");
+  const target=active.sandbox_selected_id??active.human_id;
+  const hand=room.hands.get(target);
+  if(!hand)throw Error("NOT_MEMBER");
+  const color=SANDBOX_COLORS[Math.floor(Math.random()*SANDBOX_COLORS.length)]!;
+  let card:string;
+  if(kind==="NUMBER")card=color+Math.floor(Math.random()*10);
+  else if(SANDBOX_COLOR_CARDS.has(kind))card=kind==="A"?makeRoach(color):color+kind;
+  else if(SANDBOX_WILDS.has(kind))card=kind;
+  else throw Error("INVALID_CARD");
+  hand.cards.push(card);
+  hand.uno_called=false;hand.uno_since=null;hand.bot_uno_plan=null;
+  room.version=(room.version||0)+1;
+  persist();
+  return {ok:true,card};
+}
 export function localRpc<T>(fn:string,args:Record<string,unknown>={}):T{
   ensureLoaded();
   if(!active)throw Error("ROOM_NOT_FOUND");
   if(fn==="leave_room")return {ok:true,rejoinable:true} as T;
-  const result=proRpc(fn,{...args,p_token:active.token,p_code:active.code});
+  if(fn==="sandbox_switch"){
+    if(active.source!=="sandbox")throw Error("SANDBOX_ONLY");
+    const target=String(args["p_target_id"]||"");
+    if(![active.human_id,active.sandbox_opponent_id].includes(target))throw Error("NOT_MEMBER");
+    active.sandbox_selected_id=target;persist();
+    return {ok:true} as T;
+  }
+  if(fn==="sandbox_grant_card")return sandboxGrant(String(args["p_kind"]||"")) as T;
+  const selectedToken=active.source==="sandbox"&&active.sandbox_selected_id===active.sandbox_opponent_id
+    ?active.sandbox_opponent_token!:active.token;
+  const result=proRpc(fn,{...args,p_token:selectedToken,p_code:active.code});
   if(fn==="get_room_state" && result?.room){
     result.room.local_only=true;
     result.game.local_only=true;
+    if(active.source==="sandbox"){
+      result.room.sandbox=true;
+      result.game.sandbox=true;
+    }
   }
   if(fn!=="get_room_state"||store.roomsByCode.get(active.code)?.version!==lastSaveVersion)persist();
   return result as T;
@@ -221,6 +304,6 @@ export function discardOfflineMatch(){
 }
 export function discardFinishedLocalMatch(){
   ensureLoaded();
-  if(!active?.room?.game||active.room.game.status!=="finished")return;
+  if(active?.source==="sandbox"||!active?.room?.game||active.room.game.status!=="finished")return;
   localStorage.removeItem(LOCAL_KEY);active=null;
 }
