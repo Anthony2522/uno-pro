@@ -45,6 +45,16 @@ function RoomPage() {
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
   const [effectsClock,setEffectsClock] = useState(Date.now());
   const lastEffectId = useRef<number|null>(null);
+  const queuedNoticeShown=useRef(false);
+  useEffect(()=>{
+    if(!state)return;
+    const queued=!!state.members.find(m=>m.id===state.me)?.spectator;
+    if(queued && state.game?.status==="playing" && !queuedNoticeShown.current){
+      toast.info("Partida em andamento, você está na fila de espera. Aguarde a próxima partida.",{duration:8000});
+      queuedNoticeShown.current=true;
+    }
+    if(!queued)queuedNoticeShown.current=false;
+  },[state]);
   const lastEffectRound = useRef<number|null>(null);
   useEffect(()=>{const timer=setInterval(()=>setEffectsClock(Date.now()),250);return()=>clearInterval(timer);},[]);
   const prev = useRef<{ seq: number; turn: string | null; status: string | null; members: number } | null>(null);
@@ -316,6 +326,7 @@ function RoomPage() {
           ))}
         </div>
       )}
+      {state.members.find(m=>m.id===state.me)?.spectator && <div role="status" className="mx-auto mb-3 w-full max-w-5xl rounded-xl border border-cyan/40 bg-cyan/10 px-4 py-3 text-sm font-semibold text-cyan">Partida em andamento, você está na fila de espera. Aguarde a próxima partida.</div>}
       {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))}
         onUpdateWinners={updateWinners}
         onUpdateSettings={async (startingCards:number,rules:RuleSettings,cards:CardSettings)=>{
