@@ -30,8 +30,8 @@ export type GameActions = {
   resolveDetective: (color:CardColor)=>void;
   resolveWildColor: (color:CardColor)=>void;
   acceptSkip: ()=>void;
-  sandboxSwitch?: (id:string)=>void;
-  sandboxGrant?: (kind:string)=>void;
+  sandboxSwitch?: ((id:string)=>void)|undefined;
+  sandboxGrant?: ((kind:string)=>void)|undefined;
 };
 
 export function GameTable({ state, busy, actions }: { state: RoomState; busy: boolean; actions: GameActions }) {
