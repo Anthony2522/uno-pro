@@ -1036,7 +1036,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
   }
   if(time-lastBasicSweep>=3000){lastBasicSweep=time;basicSweep();}
 }
-export const RPC_NAMES=[...new Set([...basicNames,"auth_config","google_login","end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","update_room_settings","update_winners","negate_effect","accept_skip","resolve_detective","resolve_wild_color","export_solo_snapshot"])];
+export const RPC_NAMES=[...new Set([...basicNames,"auth_config","google_login","end_turn","accept_draw","press_nine","add_bot","remove_bot","dev_auth","dev_status","dev_delete_public_room","admin_list_rooms","admin_delete_room","update_room_settings","update_winners","negate_effect","accept_skip","resolve_detective","resolve_wild_color","export_solo_snapshot"])];
 export function proRpc(fn,args={}){
   if(fn==="auth_config")return {google_client_id:googleClientId(),persistent_rooms_configured:!!(process.env.UPSTASH_REDIS_REST_URL&&process.env.UPSTASH_REDIS_REST_TOKEN)};
   if(fn==="google_login")return googleLogin(args);
@@ -1057,10 +1057,10 @@ export function proRpc(fn,args={}){
   if(fn==="list_rejoinable_rooms")return originalRpc(fn,args);
   if(fn==="dev_auth"){
     const me=authenticate(args.p_token);
-    const configured=process.env.DEV_ACCESS_KEY;
-    if(me.nickname.trim().toLocaleLowerCase("pt-BR")!=="toninho")fail("DEV_NAME_REQUIRED",403);
-    // The nickname is not authentication. The Render secret must be configured.
-    if(!configured || configured.length<16)fail("DEV_NOT_CONFIGURED",503);
+    const configured=process.env.UNO_ADMIN_PASSWORD;
+    if(me.nickname.trim()!=="Tony")fail("DEV_NAME_REQUIRED",403);
+    // Server secret only: set UNO_ADMIN_PASSWORD in Render; never put it in source.
+    if(!configured || configured.length<8)fail("DEV_NOT_CONFIGURED",503);
     const input=typeof args.p_key==="string"?args.p_key:"";
     const digestA=crypto.createHash("sha256").update(input).digest();
     const digestB=crypto.createHash("sha256").update(configured).digest();
@@ -1071,13 +1071,22 @@ export function proRpc(fn,args={}){
   }
   if(fn==="dev_status"){
     const me=authenticate(args.p_token);
-    return {is_dev:!!me.is_dev && me.nickname.trim().toLocaleLowerCase("pt-BR")==="toninho"};
+    return {is_dev:!!me.is_dev && me.nickname.trim()==="Tony"};
   }
-  if(fn==="dev_delete_public_room"){
+  if(fn==="admin_list_rooms"){
     const me=authenticate(args.p_token);
-    if(!me.is_dev || me.nickname.trim().toLocaleLowerCase("pt-BR")!=="toninho")fail("DEV_ACCESS_DENIED",403);
+    if(!me.is_dev||me.nickname.trim()!=="Tony")fail("DEV_ACCESS_DENIED",403);
+    return [...store.rooms.values()].sort((a,b)=>b.created_at-a.created_at)
+      .map(r=>({code:r.code,name:r.name,is_public:r.is_public,
+        status:r.status,player_count:r.members.filter(m=>!m.spectator).length,
+        max_players:r.max_players,host_name:name(r.host_id)}));
+  }
+  if(fn==="admin_delete_room"||fn==="dev_delete_public_room"){
+    const me=authenticate(args.p_token);
+    if(!me.is_dev||me.nickname.trim()!=="Tony")fail("DEV_ACCESS_DENIED",403);
     const r=find(args.p_code);
-    if(!r.is_public)fail("ROOM_NOT_PUBLIC");
+    // All server-owned rooms, including private rooms and running matches.
+    // Local browser-only matches cannot be seen or deleted by the server.
     store.rooms.delete(r.id);store.roomsByCode.delete(r.code);
     bump(r,true);
     return {ok:true};
@@ -1085,7 +1094,7 @@ export function proRpc(fn,args={}){
   if(fn==="join_room"){
     const me=authenticate(args.p_token);
     const r=find(args.p_code);
-    if(me.is_dev && me.nickname.trim().toLocaleLowerCase("pt-BR")==="toninho" &&
+    if(me.is_dev && me.nickname.trim()==="Tony" &&
       !member(r,me.id) && (r.status==="playing" || r.members.filter(m=>!m.spectator).length>=r.max_players)){
       // Allow the authenticated developer to host and spectate even full rooms.
       // Spectators do not receive cards and do not occupy a player seat.
@@ -1093,7 +1102,7 @@ export function proRpc(fn,args={}){
       r.host_id=me.id;bump(r,true);return {code:r.code,already:false};
     }
     const result=originalRpc(fn,args);
-    if(me.is_dev && me.nickname.trim().toLocaleLowerCase("pt-BR")==="toninho" && r.host_id!==me.id){
+    if(me.is_dev && me.nickname.trim()==="Tony" && r.host_id!==me.id){
       r.host_id=me.id;bump(r,true);
     }
     return result;
