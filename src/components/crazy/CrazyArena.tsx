@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import "./crazy.css";
+import { createCrazyWorld } from "./world";
 
 type Weapon = "sword" | "bow";
 type Bot = { mesh: THREE.Group; hp: number; alive: boolean; attackAt: number; position: THREE.Vector3 };
@@ -19,23 +20,8 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(root.clientWidth,root.clientHeight);
   renderer.outputColorSpace=THREE.SRGBColorSpace;root.appendChild(renderer.domElement);
-  scene.add(new THREE.HemisphereLight("#b8a8ff","#502008",2.3));
-  const glow=new THREE.PointLight("#ff6a12",95,18);glow.position.set(0,5,0);scene.add(glow);
+  const cleanupWorld=createCrazyWorld(scene);
   const geo=new THREE.BoxGeometry(1,1,1);
-  const mats=["#6b4651","#583b4a","#79515b","#442c3a"].map(c=>new THREE.MeshLambertMaterial({color:c}));
-  const lava=new THREE.MeshBasicMaterial({color:"#ff5c0a"});
-  const add=(x:number,y:number,z:number,mat:THREE.Material,sx=1,sy=1,sz=1)=>{
-   const mesh=new THREE.Mesh(geo,mat);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);scene.add(mesh);return mesh;
-  };
-  for(let x=-8;x<8;x++)for(let z=-8;z<8;z++){
-   const edge=x===-8||x===7||z===-8||z===7;
-   add(x,-.5,z,(x+z)%9===0?lava:mats[(Math.abs(x*13+z*7))%mats.length]!);
-   if(edge)for(let y=0;y<8;y++)add(x,y+.5,z,mats[(Math.abs(x+y*3+z))%mats.length]!);
-   if(edge&&((x+z)%4===0))add(x,8.5,z,lava);
-  }
-  const banner=new THREE.MeshLambertMaterial({color:"#a71916"}),flame=new THREE.MeshBasicMaterial({color:"#ffa300"});
-  for(const x of [-5,0,5]){add(x,4,-7.43,banner,1.8,3,.15);add(x,4,-7.31,flame,.45,.9,.08);}
-  for(const x of [-5,0,5]){add(x,3.1,-6.9,lava,.35,.45,.4);}
   const skin=new THREE.MeshLambertMaterial({color:"#f5b17f"}),armor=new THREE.MeshLambertMaterial({color:"#bc2923"}),dark=new THREE.MeshLambertMaterial({color:"#33212d"});
   const botGroup=new THREE.Group();scene.add(botGroup);
   function part(parent:THREE.Group,x:number,y:number,z:number,sx:number,sy:number,sz:number,mat:THREE.Material){
@@ -99,7 +85,7 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
    renderer.render(scene,camera);
   };frame=requestAnimationFrame(animate);
   const resize=new ResizeObserver(()=>{camera.aspect=root.clientWidth/root.clientHeight;camera.updateProjectionMatrix();renderer.setSize(root.clientWidth,root.clientHeight);});resize.observe(root);
-  return ()=>{cancelAnimationFrame(frame);resize.disconnect();window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",press);window.removeEventListener("mouseup",release);renderer.domElement.removeEventListener("contextmenu",context);renderer.dispose();scene.traverse(obj=>{if(obj instanceof THREE.Mesh){obj.geometry.dispose();}});root.removeChild(renderer.domElement);};
+  return ()=>{cancelAnimationFrame(frame);resize.disconnect();window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",press);window.removeEventListener("mouseup",release);renderer.domElement.removeEventListener("contextmenu",context);renderer.dispose();cleanupWorld();geo.dispose();for(const material of [skin,armor,dark,swordMat,shieldMat,arrowMat])material.dispose();root.removeChild(renderer.domElement);};
  },[]);
  const look=useRef<{id:number,x:number,y:number}|null>(null);
  const stick=useRef<number|null>(null);
