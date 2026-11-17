@@ -40,3 +40,21 @@ test("manual keeps the requested short rule, shared by the full guide and hand g
   assert.ok(!body.includes("Há uma Barata original por cor."));
   assert.ok(body.includes("const MINI_ORDER=")&&body.includes('"A"'));
 });
+
+test("Barata moves slower, carries no player-name label and remains visible 4s after the scare",()=>{
+  const component=fs.readFileSync("src/components/uno/RoachTransferAnimation.tsx","utf8");
+  const styles=fs.readFileSync("src/styles.css","utf8");
+  assert.match(component,/ROACH_LAUNCH_MS=350/);
+  assert.match(component,/ROACH_TRAVEL_MS=2400/);
+  assert.match(component,/ROACH_SCARE_MS=700/);
+  assert.match(component,/ROACH_HOLD_MS=4000/);
+  assert.match(component,/ROACH_FADE_MS=300/);
+  assert.match(component,/ROACH_TOTAL_MS=ROACH_ARRIVAL_MS\+ROACH_SCARE_MS\+ROACH_HOLD_MS\+ROACH_FADE_MS/);
+  assert.ok(component.includes('"--roach-travel-duration":ROACH_ARRIVAL_MS+"ms"'));
+  assert.ok(component.includes('"--roach-scare-duration":(ROACH_SCARE_MS+ROACH_HOLD_MS+ROACH_FADE_MS)+"ms"'));
+  assert.ok(!component.includes("uno-roach-destination"),"no target name under the traveling insect");
+  assert.ok(!styles.includes(".uno-roach-destination"),"obsolete label style removed");
+  assert.match(styles,/14%,94% \{opacity:1;transform:translate3d\(0,0,0\) scale\(1\)/);
+  assert.ok(styles.includes("animation:uno-roach-jumpscare var(--roach-scare-duration,5000ms)"));
+  assert.ok(styles.includes("animation:uno-roach-travel var(--roach-travel-duration,2750ms)"));
+});
