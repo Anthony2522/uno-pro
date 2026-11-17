@@ -1091,6 +1091,14 @@ export function proRpc(fn,args={}){
     bump(r,true);
     return {ok:true};
   }
+  if(fn==="update_nickname"){
+    const me=authenticate(args.p_token);
+    const result=originalRpc(fn,args);
+    // Changing away from Tony revokes administrator privileges server-side,
+    // so renaming back cannot silently bypass the password.
+    if(me.nickname!=="Tony")me.is_dev=false;
+    return result;
+  }
   if(fn==="join_room"){
     const me=authenticate(args.p_token);
     const r=find(args.p_code);
