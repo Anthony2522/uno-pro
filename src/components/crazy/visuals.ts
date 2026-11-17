@@ -171,7 +171,7 @@ export function makeCrazyVisuals() {
     bow.position.set(.06,-.53,-.24);bow.scale.setScalar(.42);rightArm.add(bow);
     return {
       group,skin,
-      setSkin(next){material.map=textures[next];material.needsUpdate=true;this.skin=next;},
+      setSkin(next){if(this.skin===next)return;group.traverse(node=>{if(node instanceof THREE.Mesh&&(node.material===skinMaterials.red||node.material===skinMaterials.blue))node.material=skinMaterials[next];});this.skin=next;},
       setEquipment(weapon,blocking){sword.visible=weapon==="sword";shield.visible=weapon==="sword";bow.visible=weapon==="bow";shield.position.z=blocking?-.55:-.30;},
       animate(time,moving){const cycle=moving?Math.sin(time*.011)*.58:Math.sin(time*.002)*.018;
         leftLeg.rotation.x=cycle;rightLeg.rotation.x=-cycle;
