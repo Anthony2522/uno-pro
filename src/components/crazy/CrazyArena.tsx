@@ -16,10 +16,10 @@ function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}
  const mount=useRef<HTMLDivElement>(null);
  const keys=useRef(new Set<string>());
  const ended=useRef(false);
- useEffect(()=>{if(!winner)return;const target=document.pointerLockElement;if(target&&mount.current?.contains(target))document.exitPointerLock?.();},[winner]);
  const actions=useRef({moveX:0,moveY:0,shield:false,attack:false,jump:false,weapon:"sword" as Weapon,yaw:0,pitch:0});
  const [weapon,setWeapon]=useState<Weapon>("sword"),[hp,setHp]=useState(100),[enemyHp,setEnemyHp]=useState(100),[seconds,setSeconds]=useState(0),[winner,setWinner]=useState("");
  const [charge,setCharge]=useState(0);
+ useEffect(()=>{if(!winner)return;const target=document.pointerLockElement;if(target&&mount.current?.contains(target))document.exitPointerLock?.();},[winner]);
  const changeWeapon=()=>{if(ended.current)return;const next=actions.current.weapon==="sword"?"bow":"sword";actions.current.weapon=next;actions.current.attack=false;actions.current.shield=false;setWeapon(next);};
  useEffect(()=>{
   const root=mount.current;if(!root)return;
