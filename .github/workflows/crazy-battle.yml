@@ -1,0 +1,23 @@
+name: Crazy Battle validation
+on:
+  push:
+    branches: [feature/crazy-battle]
+  pull_request:
+    paths:
+      - "src/components/crazy/**"
+      - "src/routes/crazy-battle.tsx"
+      - "server/crazyBattle.js"
+      - "server.js"
+      - "package.json"
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
