@@ -164,7 +164,7 @@ export function attachCrazyBattle(server){
    if(!room)return fail("Entre em uma sala primeiro");
    const p=room.players.get(id);if(!p)return;
    if(msg.type==="addBot"&&room.host===id&&room.status!=="playing"&&room.players.size+room.bots.size<RULES.maxPlayers){
-    const bot=participant("bot-"+randomBytes(4).toString("hex"),"Bot Guerreiro",null,true);room.bots.set(bot.id,bot);lobby(room);
+    const bot=participant("bot-"+randomBytes(4).toString("hex"),"Bot Guerreiro "+(room.bots.size+1),null,true);room.bots.set(bot.id,bot);lobby(room);
    }
    if(msg.type==="removeBot"&&room.host===id&&room.status!=="playing"){room.bots.delete(String(msg.id));lobby(room);}
    if(msg.type==="start"&&room.host===id&&room.status!=="playing"){
