@@ -3,12 +3,13 @@ import { WebSocketServer, WebSocket } from "ws";
 
 const rooms = new Map();
 const clients = new WeakMap();
+const RULES = Object.freeze({swordDamage:20,arrowDamage:12,moveSpeed:4,shieldReduction:.9,maxPlayers:8});
 const TICK_MS = 50;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const clean = (v, n = 24) => String(v ?? "").replace(/[<>\\x00-\\x1f]/g, "").trim().slice(0, n);
 const send = (ws, data) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
 const publicRooms = () => [...rooms.values()].filter(r => !r.private).map(r => ({
- code:r.code, name:r.name, status:r.status, players:r.players.size+r.bots.size, max:8
+ code:r.code, name:r.name, status:r.status, players:r.players.size+r.bots.size, max:RULES.maxPlayers
 }));
 const broadcast = (room, data) => { for (const p of room.players.values()) send(p.ws, data); };
 const playerState = p => ({id:p.id,name:p.name,x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch,hp:p.hp,weapon:p.weapon,shield:p.shield,alive:p.hp>0,bot:!!p.bot});
@@ -19,13 +20,13 @@ const lobby = room => broadcast(room, snapshot(room));
 const randomCode = () => { let c; do {c=randomBytes(4).toString("hex").toUpperCase();}while(rooms.has(c));return c;};
 function spawn(p, index){const spots=[[-4,-4],[4,4],[-4,4],[4,-4],[0,5],[5,0],[-5,0],[0,-5]];[p.x,p.z]=spots[index%spots.length];p.y=0;p.hp=100;p.vy=0;p.shield=false;p.weapon="sword";p.cooldown=0;p.chargeAt=0;p.input={x:0,z:0,jump:false};}
 function participant(id,name,ws,bot=false){return {id,name,ws,bot,x:0,y:0,z:0,yaw:0,pitch:0,hp:100,vy:0,shield:false,weapon:"sword",cooldown:0,chargeAt:0,input:{x:0,z:0,jump:false}};}
-function finish(room){const alive=[...room.players.values(),...room.bots.values()].filter(p=>p.hp>0);if(room.status==="playing"&&alive.length<=1){room.status="finished";room.winner=alive[0]?.id??null;broadcast(room,{type:"finished",winner:room.winner});}}
+function finish(room){const alive=[...room.players.values(),...room.bots.values()].filter(p=>p.hp>0);if(room.status==="playing"&&alive.length<=1){room.status="finished";room.winner=alive[0]?.id??null;broadcast(room,{type:"finished",winner:room.winner});lobby(room);}}
 function hit(room,attacker,target,damage,fromX,fromZ){
  if(target.hp<=0||room.status!=="playing")return;
  const dx=fromX-target.x,dz=fromZ-target.z,len=Math.hypot(dx,dz)||1;
  const forwardX=-Math.sin(target.yaw),forwardZ=-Math.cos(target.yaw);
  const blocked=target.shield&&target.weapon==="sword"&&(forwardX*dx+forwardZ*dz)/len>0.25;
- target.hp=Math.max(0,target.hp-Math.max(1,Math.round(damage*(blocked?.1:1))));
+ target.hp=Math.max(0,target.hp-Math.max(1,Math.round(damage*(blocked?1-RULES.shieldReduction:1))));
  broadcast(room,{type:"hit",target:target.id,attacker:attacker.id,hp:target.hp,blocked});
  finish(room);
 }
@@ -38,7 +39,7 @@ function attack(room,p,now){
   const dx=t.x-p.x,dz=t.z-p.z,d=Math.hypot(dx,dz);
   if(d>2.4||Math.abs(t.y-p.y)>1.6||d<.01)continue;
   if((forwardX*dx+forwardZ*dz)/d<.45)continue;
-  hit(room,p,t,20,p.x,p.z);
+  hit(room,p,t,RULES.swordDamage,p.x,p.z);
  }
  broadcast(room,{type:"swing",id:p.id});
 }
@@ -67,7 +68,7 @@ function tick(room){
   const mx=clamp(Number(p.input.x)||0,-1,1),mz=clamp(Number(p.input.z)||0,-1,1),norm=Math.max(1,Math.hypot(mx,mz));
   const dx=(mx*Math.cos(p.yaw)+mz*Math.sin(p.yaw))/norm;
   const dz=(-mx*Math.sin(p.yaw)+mz*Math.cos(p.yaw))/norm;
-  p.x=clamp(p.x+dx*4*dt,-6.9,6.9);p.z=clamp(p.z+dz*4*dt,-6.9,6.9);
+  p.x=clamp(p.x+dx*RULES.moveSpeed*dt,-6.9,6.9);p.z=clamp(p.z+dz*RULES.moveSpeed*dt,-6.9,6.9);
   if(p.input.jump&&p.y===0){p.vy=5.3;}p.input.jump=false;
   p.vy-=15*dt;p.y=Math.max(0,p.y+p.vy*dt);if(p.y===0)p.vy=0;
  }
@@ -80,7 +81,7 @@ function tick(room){
    const steps=4;let collision=false;
    for(let i=1;i<=steps;i++){const f=i/steps,x=px+(a.x-px)*f,y=py+(a.y-py)*f,z=pz+(a.z-pz)*f;
     if(Math.abs(x-t.x)<.5&&Math.abs(z-t.z)<.5&&y>t.y&&y<t.y+2){collision=true;break;}}
-   if(collision){hit(room,owner,t,12,px,pz);a.ttl=0;break;}
+   if(collision){hit(room,owner,t,RULES.arrowDamage,px,pz);a.ttl=0;break;}
   }
   if(a.ttl<=0||a.y<0||a.y>16||Math.abs(a.x)>7.5||Math.abs(a.z)>7.5)room.arrows.splice(room.arrows.indexOf(a),1);
  }
@@ -104,13 +105,13 @@ export function attachCrazyBattle(server){
    if(msg.type==="join"){
     if(room)return fail("Já está em uma sala");
     const r=rooms.get(clean(msg.code,8).toUpperCase());if(!r)return fail("Sala não encontrada");
-    if(r.players.size+r.bots.size>=8)return fail("Sala lotada");
+    if(r.players.size+r.bots.size>=RULES.maxPlayers)return fail("Sala lotada");
     if(r.status==="playing")return fail("Partida em andamento; aguarde o próximo jogo");
     room=r;const p=participant(id,clean(msg.player||"Jogador"),ws);r.players.set(id,p);clients.set(ws,r);send(ws,{type:"joined",id,code:r.code});lobby(r);return;
    }
    if(!room)return fail("Entre em uma sala primeiro");
    const p=room.players.get(id);if(!p)return;
-   if(msg.type==="addBot"&&room.host===id&&room.status!=="playing"&&room.players.size+room.bots.size<8){
+   if(msg.type==="addBot"&&room.host===id&&room.status!=="playing"&&room.players.size+room.bots.size<RULES.maxPlayers){
     const bot=participant("bot-"+randomBytes(4).toString("hex"),"Bot Guerreiro",null,true);room.bots.set(bot.id,bot);lobby(room);
    }
    if(msg.type==="removeBot"&&room.host===id&&room.status!=="playing"){room.bots.delete(String(msg.id));lobby(room);}
@@ -118,6 +119,7 @@ export function attachCrazyBattle(server){
     const all=[...room.players.values(),...room.bots.values()];if(all.length<2)return fail("Adicione pelo menos dois participantes");
     all.forEach((p,i)=>spawn(p,i));room.seconds=0;room.winner=null;room.arrows=[];room.status="playing";lobby(room);
    }
+   if(msg.type==="leave"){ws.close();return;}
    if(room.status!=="playing"||p.hp<=0)return;
    if(msg.type==="input"){
     p.input.x=clamp(Number(msg.x)||0,-1,1);p.input.z=clamp(Number(msg.z)||0,-1,1);
