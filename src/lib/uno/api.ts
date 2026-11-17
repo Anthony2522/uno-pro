@@ -192,7 +192,9 @@ export const api = {
   },
   devStatus: (token:string)=>call<{is_dev:boolean}>("dev_status",{p_token:token}),
   devAuth: (token:string,key:string)=>call<{is_dev:boolean}>("dev_auth",{p_token:token,p_key:key}),
-  devDeletePublicRoom: (token:string,code:string)=>call("dev_delete_public_room",{p_token:token,p_code:code}),
+  adminListRooms: (token:string)=>call<Array<{code:string;name:string;is_public:boolean;status:string;player_count:number;max_players:number;host_name:string}>>("admin_list_rooms",{p_token:token}),
+  adminDeleteRoom: (token:string,code:string)=>call<{ok:boolean}>("admin_delete_room",{p_token:token,p_code:code}),
+  devDeletePublicRoom: (token:string,code:string)=>call("admin_delete_room",{p_token:token,p_code:code}),
   createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8, winners = 2, cards:CardSettings=DEFAULT_CARD_SETTINGS) =>
     call<{ code: string }>("create_room", {
       p_token: token,
