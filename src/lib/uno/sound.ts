@@ -31,7 +31,7 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = "
   o.stop(ctx.currentTime + start + dur + 0.02);
 }
 
-export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch" | "bomb" | "negation" | "machinegun" | "powerless" | "shield_armed" | "shield_defense" | "sword_strike";
+export type Sfx = "play" | "draw" | "turn" | "uno" | "win" | "error" | "join" | "reverse" | "skip" | "draw2" | "draw4" | "draw5" | "wild" | "cut" | "penalty" | "catch" | "bomb" | "negation" | "machinegun" | "powerless" | "shield_armed" | "shield_defense" | "sword_strike" | "roach_scuttle" | "roach_scare";
 
 export function sfx(kind: Sfx) {
   if (typeof window === "undefined" || isMuted()) return;
@@ -42,6 +42,21 @@ export function sfx(kind: Sfx) {
     return;
   }
   switch (kind) {
+    case "roach_scuttle":
+      // Short scratchy crawl: audible on every screen without overpowering play.
+      tone(230,0,.10,"sawtooth",.025);
+      tone(340,.12,.07,"triangle",.026);
+      tone(190,.23,.10,"sawtooth",.027);
+      tone(470,.34,.08,"square",.016);
+      break;
+    case "roach_scare":
+      // Original, non-musical impact stinger; only the receiving player hears it.
+      tone(120,0,.34,"sawtooth",.095);
+      tone(790,0,.13,"square",.068);
+      tone(1330,.045,.18,"sawtooth",.058);
+      tone(90,.21,.38,"triangle",.085);
+      tone(680,.3,.16,"square",.045);
+      break;
 
     case "reverse":
       tone(310,0,.16,"sawtooth",.042);

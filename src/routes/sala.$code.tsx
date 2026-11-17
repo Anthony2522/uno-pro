@@ -6,6 +6,7 @@ import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
 import { UnoCard } from "@/components/uno/UnoCard";
 import {CockroachIcon} from "@/components/uno/CockroachIcon";
+import {RoachTransferAnimation,ROACH_TOTAL_MS} from "@/components/uno/RoachTransferAnimation";
 import {COLOR_NAMES,type CardColor} from "@/lib/uno/cards";
 import { cardLabel } from "@/lib/uno/cards";
 import { useLanguage } from "@/lib/uno/i18n";
@@ -76,7 +77,10 @@ function RoomPage() {
     }
     const next=events.filter(e=>e.id>(lastEffectId.current??0));
     if(events.length)lastEffectId.current=events.at(-1)?.id??0;
-    for(const event of next)sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
+    for(const event of next){
+      if(event.type==="roach")continue; // The illustrated flight owns the arrival/sound cues.
+      sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
+    }
   },[state?.game?.effects,state?.game?.round]);
 
   // Sounds on state transitions.
@@ -145,7 +149,10 @@ function RoomPage() {
 
   const g = state.game;
   const playing = state.room.status === "playing" && g?.status === "playing";
-  const visibleEffects=playing?(g?.effects||[]).filter(e=>e.type!=="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
+  const visibleEffects=playing?(g?.effects||[]).filter(e=>e.type!=="shield_defense"&&e.type!=="roach"&&effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
+  // Always play the server event on every client, including the recipient and
+  // the final play of a round. Use its event ID and timestamp for synchronization.
+  const roachTransfers=(g?.effects||[]).filter(e=>e.type==="roach"&&effectsClock>=e.show_at&&effectsClock<e.show_at+ROACH_TOTAL_MS);
   const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+3300):[];
   const isHost = state.room.host_id === state.me;
   const finished = g?.status === "finished";
@@ -308,6 +315,10 @@ function RoomPage() {
           await api.updateRoomSettings(token,code,startingCards,rules,cards);
           void refresh();
         }} />}
+      {roachTransfers.map(event=>(
+        <RoachTransferAnimation key={`${g?.round??0}-${event.id}`}
+          event={event} me={state.me} language={language}/>
+      ))}
       <WinnerOverlay
         open={showWinner}
         winnerName={winnerName}
