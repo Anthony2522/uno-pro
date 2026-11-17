@@ -128,14 +128,14 @@ export function attachCrazyBattle(server){
     if(room)return fail("Já está em uma sala");
     if(rooms.size>=100)return fail("Limite de salas atingido");
     const code=randomCode();room={code,name:clean(msg.name||"Arena",36),private:!!msg.private,host:id,status:"lobby",winner:null,seconds:0,players:new Map(),bots:new Map(),arrows:[]};
-    const p=participant(id,clean(msg.player||"Jogador"),ws);room.players.set(id,p);rooms.set(code,room);clients.set(ws,room);send(ws,{type:"joined",id,code,resumeKey:p.resumeKey});lobby(room);return;
+    const p=participant(id,clean(msg.player||"Jogador"),ws);room.players.set(id,p);rooms.set(code,room);send(ws,{type:"joined",id,code,resumeKey:p.resumeKey});lobby(room);return;
    }
    if(msg.type==="join"){
     if(room)return fail("Já está em uma sala");
     const r=rooms.get(clean(msg.code,8).toUpperCase());if(!r)return fail("Sala não encontrada");
     if(r.players.size+r.bots.size>=RULES.maxPlayers)return fail("Sala lotada");
     if(r.status==="playing")return fail("Partida em andamento; aguarde o próximo jogo");
-    room=r;const p=participant(id,clean(msg.player||"Jogador"),ws);r.players.set(id,p);clients.set(ws,r);send(ws,{type:"joined",id,code:r.code,resumeKey:p.resumeKey});lobby(r);return;
+    room=r;const p=participant(id,clean(msg.player||"Jogador"),ws);r.players.set(id,p);send(ws,{type:"joined",id,code:r.code,resumeKey:p.resumeKey});lobby(r);return;
    }
    if(!room)return fail("Entre em uma sala primeiro");
    const p=room.players.get(id);if(!p)return;
