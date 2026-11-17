@@ -178,6 +178,12 @@ function RoomPage() {
     resolveDetective: (color) => act(() => api.resolveDetective(token,code,color)),
     resolveWildColor: (color) => act(() => api.resolveWildColor(token,code,color)),
     acceptSkip: () => act(() => api.acceptSkip(token,code)),
+    sandboxSwitch: state.room.sandbox ? (id)=>act(()=>api.sandboxSwitch(code,id)) : undefined,
+    sandboxGrant: state.room.sandbox ? (kind)=>act(async()=>{
+      const result=await api.sandboxGrantCard(code,kind);
+      toast.success("Carta adicionada à sua mão!");
+      return result;
+    }) : undefined,
   };
   const updateWinners=(n:number)=>act(()=>api.updateWinners(token,code,n));
   const start = () =>
