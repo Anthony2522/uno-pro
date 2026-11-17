@@ -48,6 +48,7 @@ function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}
   const bot:Bot={mesh:botGroup,hp:100,alive:true,attackAt:0,jumpAt:performance.now()+2600,vy:0,position:new THREE.Vector3(0,0,-4.8)};
   botGroup.position.copy(bot.position);
   const player=new THREE.Vector3(0,0,4.5);
+  let currentHp=100;
   let vy=0,moveVX=0,moveVZ=0,ground=true,last=performance.now(),lastRendered=0,elapsed=0,lastSecond=-1,finished=false,swordAt=-10000,bowStart=0,lastCharge=-1,arrowObjects:{mesh:THREE.Mesh,velocity:THREE.Vector3,ttl:number}[]=[];
   const view=visuals.createViewWeapons(camera,"red");scene.add(camera);
    const arrowMat=new THREE.MeshLambertMaterial({color:"#e3c6a0"});
@@ -69,6 +70,8 @@ function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}
    const press=(e:MouseEvent)=>{if(finished||document.pointerLockElement!==renderer.domElement)return;if(e.button===0)actions.current.attack=true;if(e.button===2&&actions.current.weapon==="sword")actions.current.shield=true;};
    const release=(e:MouseEvent)=>{if(e.button===0)actions.current.attack=false;if(e.button===2)actions.current.shield=false;};
    const context=(e:Event)=>e.preventDefault();
+   const unlockAfterFinish=()=>{const locked=document.pointerLockElement;if(finished&&locked&&root.contains(locked))document.exitPointerLock?.();};
+   document.addEventListener("pointerlockchange",unlockAfterFinish);
    const lockOnPlay=()=>{if(!finished&&matchMedia("(hover:hover) and (pointer:fine)").matches)renderer.domElement.requestPointerLock?.();};
    renderer.domElement.addEventListener("click",lockOnPlay);
    window.addEventListener("keydown",down);window.addEventListener("keyup",up);window.addEventListener("blur",clearKeys);window.addEventListener("mousemove",mouse);
@@ -78,7 +81,7 @@ function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}
    frame=requestAnimationFrame(animate);
    if(!crazyShouldRender(now,lastRendered)||document.hidden)return;
    lastRendered=now;const dt=Math.min(.04,(now-last)/1000);last=now;
-   if(finished){const locked=document.pointerLockElement;if(locked&&root.contains(locked))document.exitPointerLock?.();}
+   if(finished){unlockAfterFinish();return;}
    if(!finished){elapsed+=dt;if(Math.floor(elapsed)!==lastSecond){lastSecond=Math.floor(elapsed);setSeconds(lastSecond);}}
    const a=actions.current,k=keys.current;
    if(!finished){
@@ -113,7 +116,7 @@ function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}
      const botWeapon=dist>3.4?"bow":"sword";
      botRig.setEquipment(botWeapon,false);
      botRig.animate(now,dist>1.55,now-bot.attackAt,false,botWeapon);
-          if(dist<1.8&&now-bot.attackAt>1100){bot.attackAt=now;const toBot=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const facing=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));const blocked=a.shield&&a.weapon==="sword"&&facing.dot(toBot)>.2;setHp(h=>{const next=Math.max(0,h-(blocked?2:15));if(next===0)finish("Derrota");return next;});}
+          if(dist<1.8&&now-bot.attackAt>1100){bot.attackAt=now;const toBot=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const facing=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));const blocked=a.shield&&a.weapon==="sword"&&facing.dot(toBot)>.2;currentHp=Math.max(0,currentHp-(blocked?2:15));setHp(currentHp);if(currentHp===0)finish("Derrota");}
     }
     if(a.weapon==="sword"&&a.attack&&!a.shield&&now-swordAt>620){swordAt=now;if(bot.alive&&dist<2.5){const dir=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const forward=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));if(forward.dot(dir)>.35)hurt(20);}a.attack=false;}
     if(a.weapon==="bow"){if(a.attack){if(!bowStart)bowStart=now;const nextCharge=Math.min(100,Math.floor((now-bowStart)/60)*5);if(nextCharge!==lastCharge){lastCharge=nextCharge;setCharge(nextCharge);}}else if(bowStart){launch(clamp((now-bowStart)/1200,0,1));bowStart=0;lastCharge=-1;setCharge(0);}}else bowStart=0;
@@ -127,7 +130,7 @@ function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}
    renderer.render(scene,camera);
   };frame=requestAnimationFrame(animate);
   const resize=new ResizeObserver(()=>{camera.aspect=root.clientWidth/root.clientHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(crazyPixelRatio(root.clientWidth,root.clientHeight,devicePixelRatio));renderer.setSize(root.clientWidth,root.clientHeight);});resize.observe(root);
-  return ()=>{cancelAnimationFrame(frame);resize.disconnect();window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("blur",clearKeys);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",press);window.removeEventListener("mouseup",release);renderer.domElement.removeEventListener("contextmenu",context);renderer.domElement.removeEventListener("click",lockOnPlay);if(document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();renderer.dispose();cleanupWorld();visuals.dispose();labelTexture.dispose();labelSprite.material.dispose();geo.dispose();arrowMat.dispose();root.removeChild(renderer.domElement);};
+  return ()=>{cancelAnimationFrame(frame);resize.disconnect();document.removeEventListener("pointerlockchange",unlockAfterFinish);window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("blur",clearKeys);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",press);window.removeEventListener("mouseup",release);renderer.domElement.removeEventListener("contextmenu",context);renderer.domElement.removeEventListener("click",lockOnPlay);if(document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();renderer.dispose();cleanupWorld();visuals.dispose();labelTexture.dispose();labelSprite.material.dispose();geo.dispose();arrowMat.dispose();root.removeChild(renderer.domElement);};
  },[]);
  const look=useRef<{id:number,x:number,y:number}|null>(null);
  const stick=useRef<number|null>(null);
