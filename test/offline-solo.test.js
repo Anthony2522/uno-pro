@@ -114,7 +114,7 @@ test("sala offline aceita configurações antes de iniciar: número de bots, ven
   try{
     const runtime=await import((await bundledRuntime())+"#configured");
     const options={
-      name:"Partida personalizada",maxPlayers:5,startingCards:6,winners:1,
+      name:"Partida personalizada",maxPlayers:5,easyBots:1,hardBots:3,startingCards:6,winners:1,
       rules:{repeat:false,sequence:false,nine:false,cut:false,stack:true},
       cards:{T:false,H:false,E:true,L:true,V:false,C:false,A:false,W5:false,X:false,B:true,N:true,P:true,M:false,Q:true}
     };
@@ -122,6 +122,8 @@ test("sala offline aceita configurações antes de iniciar: número de bots, ven
     const state=runtime.localRpc("get_room_state",{p_code:code});
     assert.equal(state.members.length,5,"um humano mais quatro bots");
     assert.equal(state.members.filter(member=>member.bot).length,4);
+    assert.equal(state.members.filter(member=>member.bot&&member.difficulty==="easy").length,1);
+    assert.equal(state.members.filter(member=>member.bot&&member.difficulty==="hard").length,3);
     assert.equal(state.room.name,options.name);
     assert.equal(state.room.initial_cards,6);
     assert.equal(state.room.winners_target,1);
@@ -152,7 +154,7 @@ test("sala offline permite escolher 19 bots (20 jogadores no total)",async()=>{
   Object.defineProperty(globalThis,"navigator",{configurable:true,value:{storage:{persist:async()=>true}}});
   try{
     const runtime=await import((await bundledRuntime())+"#twenty-players");
-    const code=runtime.startLocalSolo("Anfitrião",{name:"19 bots",maxPlayers:20,
+    const code=runtime.startLocalSolo("Anfitrião",{name:"19 bots",maxPlayers:20,easyBots:0,hardBots:19,
       startingCards:8,winners:2,
       rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
       cards:{T:true,H:true,E:true,L:true,V:true,C:true,A:true,W5:true,X:true,B:true,N:true,P:true,M:true,Q:true}
@@ -161,6 +163,8 @@ test("sala offline permite escolher 19 bots (20 jogadores no total)",async()=>{
     assert.equal(state.room.max_players,20);
     assert.equal(state.members.length,20);
     assert.equal(state.members.filter(m=>m.bot).length,19);
+    assert.equal(state.members.filter(m=>m.bot&&m.difficulty==="hard").length,19);
+    assert.equal(state.members.filter(m=>m.bot&&m.difficulty==="easy").length,0);
     assert.equal(new Set(state.members.map(m=>m.nickname)).size,20);
     assert.equal(state.game.my_hand.length,8);
   }finally{
