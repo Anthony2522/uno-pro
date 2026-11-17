@@ -75,7 +75,7 @@ function hydrate(save:Saved){
   const guests=save.guests.map(guest=>({...guest,last_seen:now}));
   for(const guest of guests){
     store.guestsById.set(guest.id,guest);
-    if(!guest.bot)store.guestsByHash.set(guest.tokenHash,guest);
+    if(!guest.bot || save.source==="sandbox")store.guestsByHash.set(guest.tokenHash,guest);
   }
   const room={...save.room,hands:new Map(save.room.hands)};
   const delta=Math.max(0,now-save.saved_at);
@@ -269,8 +269,22 @@ export function localRpc<T>(fn:string,args:Record<string,unknown>={}):T{
     if(active.source!=="sandbox")throw Error("SANDBOX_ONLY");
     const target=String(args["p_target_id"]||"");
     if(![active.human_id,active.sandbox_opponent_id].includes(target))throw Error("NOT_MEMBER");
+    if(store.guestsById.get(target)?.bot)throw Error("BOT_CONTROLLED");
     active.sandbox_selected_id=target;persist();
     return {ok:true} as T;
+  }
+  if(fn==="sandbox_toggle_bot"){
+    if(active.source!=="sandbox")throw Error("SANDBOX_ONLY");
+    const target=active.sandbox_selected_id===active.human_id?active.sandbox_opponent_id!:active.human_id;
+    const guest=store.guestsById.get(target);
+    const room=store.roomsByCode.get(active.code);
+    if(!guest||!room)throw Error("NOT_MEMBER");
+    guest.bot=!guest.bot;
+    guest.difficulty=guest.bot?"hard":undefined;
+    if(room.game)room.game.bot_move=null;
+    room.version=(room.version||0)+1;
+    persist();
+    return {ok:true,enabled:!!guest.bot} as T;
   }
   if(fn==="sandbox_grant_card")return sandboxGrant(String(args["p_kind"]||"")) as T;
   const selectedToken=active.source==="sandbox"&&active.sandbox_selected_id===active.sandbox_opponent_id
@@ -281,6 +295,7 @@ export function localRpc<T>(fn:string,args:Record<string,unknown>={}):T{
     result.game.local_only=true;
     if(active.source==="sandbox"){
       result.room.sandbox=true;
+      result.room.sandbox_bot_id=store.guestsById.get(active.sandbox_selected_id===active.human_id?active.sandbox_opponent_id!:active.human_id)?.bot?(active.sandbox_selected_id===active.human_id?active.sandbox_opponent_id:active.human_id):null;
       result.game.sandbox=true;
     }
   }
@@ -299,6 +314,16 @@ export function discardOfflineMatch(){
     store.rooms.clear();store.roomsByCode.clear();
     store.guestsById.clear();store.guestsByHash.clear();
     lastSaveVersion=-1;
+  }
+  return true;
+}
+/** Remove only the private Sandbox save on this device. */
+export function discardSandboxMatch(){
+  const saved=read(SANDBOX_KEY);
+  try{localStorage.removeItem(SANDBOX_KEY);}catch{storageError=true;return false;}
+  if(active?.source==="sandbox"&&(!saved||active.code===saved.code)){
+    active=null;store.rooms.clear();store.roomsByCode.clear();
+    store.guestsById.clear();store.guestsByHash.clear();lastSaveVersion=-1;
   }
   return true;
 }
