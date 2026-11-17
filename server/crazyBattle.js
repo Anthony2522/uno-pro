@@ -6,7 +6,7 @@ const clients = new WeakMap();
 const RULES = Object.freeze({swordDamage:20,arrowDamage:12,moveSpeed:4,shieldReduction:.9,maxPlayers:8});
 const TICK_MS = 50;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const clean = (v, n = 24) => String(v ?? "").replace(/[<>\\x00-\\x1f]/g, "").trim().slice(0, n);
+const clean = (v, n = 24) => String(v ?? "").replace(/[<>\x00-\x1f]/g, "").trim().slice(0, n);
 const send = (ws, data) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
 const publicRooms = () => [...rooms.values()].filter(r => !r.private).map(r => ({
  code:r.code, name:r.name, status:r.status, players:r.players.size+r.bots.size, max:RULES.maxPlayers
