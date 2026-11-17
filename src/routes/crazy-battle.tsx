@@ -68,7 +68,7 @@ function CrazyBattle(){
   </main>;
  }
  return <main className="min-h-dvh bg-gradient-to-b from-[#25080b] via-[#7d1c0a] to-[#160c15] text-white px-5 py-12 flex flex-col items-center gap-7">
- <h1 className="text-5xl font-black text-orange-300 drop-shadow-lg">🔥 CRAZY BATTLE</h1>
+ <img src="/crazy-battle-logo.webp" alt="Crazy Battle" className="w-full max-w-[340px] object-contain drop-shadow-2xl"/><h1 className="sr-only">Crazy Battle</h1>
  <p className="text-center max-w-md text-orange-100">Combate voxel 3D em primeira pessoa. Crie uma arena, convide amigos ou desafie bots.</p>
  <label className="w-full max-w-md">Seu nome<input maxLength={24} className="mt-2 w-full rounded-xl bg-black/40 p-3" value={name} onChange={e=>setName(e.target.value)}/></label>
  <div className="w-full max-w-md rounded-2xl bg-black/35 p-5 space-y-4"><h2 className="text-xl font-bold">Criar sala online</h2>
