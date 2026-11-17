@@ -7,7 +7,8 @@ export type MatchState={type:string;status:string;seconds:number;winner:string|n
 type Props={ws:WebSocket,id:string,state:MatchState,onExit:()=>void};
 export function CrazyOnlineArena({ws,id,state,onExit}:Props){
  const root=useRef<HTMLDivElement>(null),data=useRef(state),input=useRef({x:0,z:0,yaw:0,pitch:0,jump:false});
- const [charge,setCharge]=useState(false);
+ const [charge,setCharge]=useState(false),[chargePower,setChargePower]=useState(0);
+ const chargeStarted=useRef(0);
  const swingAt=useRef(-10000);
  const keys=useRef(new Set<string>()),look=useRef<{id:number,x:number,y:number}|null>(null),stick=useRef<number|null>(null);
  const send=(type:string,other:Record<string,unknown>={})=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type,...other}));};
@@ -101,7 +102,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
     gear.equippedBow.visible=p.weapon==="bow";}
    for(const a of s.arrows||[]){let m=arrows.get(a.id);if(!m){m=block(scene,0,0,0,.1,.1,.55,materials[1]!);arrows.set(a.id,m);}m.position.lerp(new THREE.Vector3(a.x,a.y,a.z),Math.min(1,dt*16));}
    for(const [aid,m] of arrows)if(!(s.arrows||[]).some(a=>a.id===aid)){scene.remove(m);arrows.delete(aid);}
-   if(now-network>50){network=now;if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",...i}));i.jump=false;}
+   if(now-network>50){network=now;if(chargeStarted.current)setChargePower(Math.min(100,Math.round((now-chargeStarted.current)/12)));if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",...i}));i.jump=false;}
    renderer.render(scene,camera);
   }frame=requestAnimationFrame(animate);
   const observer=new ResizeObserver(()=>{camera.aspect=node.clientWidth/node.clientHeight;camera.updateProjectionMatrix();renderer.setSize(node.clientWidth,node.clientHeight);});observer.observe(node);
@@ -114,8 +115,9 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
  <header className="crazy-hud"><div className="crazy-brand"><img src="/crazy-battle-logo.webp" alt="Crazy Battle"/><button aria-label="Sair da partida" onClick={onExit}>✕</button></div><strong>⏱ {Math.floor(state.seconds/60).toString().padStart(2,"0")}:{Math.floor(state.seconds%60).toString().padStart(2,"0")}</strong><span>👥 {state.players.filter(p=>p.alive).length}/{state.players.length}</span></header>
  <div className="crazy-crosshair">＋</div><div className="crazy-health"><b>♥</b><strong>{me?.hp??0}%</strong><div className="crazy-health-track"><div style={{height:(me?.hp??0)+"%",background:`hsl(${(me?.hp??0)*1.2} 95% 48%)`}}/></div></div>
  <button className="crazy-switch crazy-control" onClick={()=>{send("weapon");}}> {weapon==="sword"?"🏹":"⚔️"} ⇄</button>
- <div className="crazy-joystick crazy-control" onPointerDown={joystick} onPointerMove={joystick} onPointerUp={()=>{stick.current=null;input.current.x=0;input.current.z=0;}} onPointerCancel={()=>{stick.current=null;input.current.x=0;input.current.z=0;}}><div/></div>
- <div className="crazy-actions">{weapon==="sword"?<><button className="crazy-control" {...hold("shield")}>🛡️</button><button className="crazy-control" onPointerDown={e=>{e.preventDefault();swingAt.current=performance.now();send("attack");}}>⚔️</button></>:<button className="crazy-control crazy-bow" {...hold("bowStart","bowRelease")} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);setCharge(true);send("bowStart");}} onPointerUp={()=>{setCharge(false);send("bowRelease");}} onPointerCancel={()=>{setCharge(false);send("bowRelease");}}>🏹 {charge?"●":""}</button>}<button className="crazy-control crazy-jump" onPointerDown={e=>{e.preventDefault();input.current.jump=true;}}>⬆</button></div>
- {state.status==="finished"&&<div className="crazy-result"><h1>{state.winner===id?"Vitória!":"Fim da partida"}</h1><p>{state.players.find(p=>p.id===state.winner)?.name||"Ninguém"} venceu!</p>{state.host===id&&<button onClick={()=>send("start")}>Jogar novamente</button>}<button onClick={onExit}>Sair da sala</button></div>}
+ {(me?.hp??0)>0&&<div className="crazy-joystick crazy-control" onPointerDown={joystick} onPointerMove={joystick} onPointerUp={()=>{stick.current=null;input.current.x=0;input.current.z=0;}} onPointerCancel={()=>{stick.current=null;input.current.x=0;input.current.z=0;}}><div/></div>}
+ {(me?.hp??0)>0&&<div className="crazy-actions">{weapon==="sword"?<><button className="crazy-control" {...hold("shield")}>🛡️</button><button className="crazy-control" onPointerDown={e=>{e.preventDefault();swingAt.current=performance.now();send("attack");}}>⚔️</button></>:<button className="crazy-control crazy-bow" {...hold("bowStart","bowRelease")} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);chargeStarted.current=performance.now();setCharge(true);send("bowStart");}} onPointerUp={()=>{chargeStarted.current=0;setCharge(false);setChargePower(0);send("bowRelease");}} onPointerCancel={()=>{chargeStarted.current=0;setCharge(false);setChargePower(0);send("bowRelease");}}>🏹 {charge?`${chargePower}%`:""}</button>}<button className="crazy-control crazy-jump" onPointerDown={e=>{e.preventDefault();input.current.jump=true;}}>⬆</button></div>}
+ {state.status==="playing"&&(me?.hp??0)===0&&<div className="crazy-defeated">Você foi derrotado. Acompanhe a batalha!</div>}
+ {state.status==="finished"&&<div className="crazy-result"><h1>{state.winner===id?"Vitória!":"Fim da partida"}</h1><p>{state.players.find(p=>p.id===state.winner)?.name||"Ninguém"} venceu!</p><div className="crazy-results-list">{[...state.players].sort((a,b)=>(b.hp-a.hp)).map(p=><div key={p.id}><span>{p.id===state.winner?"🏆":p.hp===0?"💀":"⚔️"} {p.name}</span><b>{p.hp}%</b></div>)}</div>{state.host===id&&<button onClick={()=>send("start")}>Jogar novamente</button>}<button onClick={onExit}>Sair da sala</button></div>}
  </div>;
 }
