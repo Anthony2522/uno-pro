@@ -179,6 +179,7 @@ function RoomPage() {
     resolveWildColor: (color) => act(() => api.resolveWildColor(token,code,color)),
     acceptSkip: () => act(() => api.acceptSkip(token,code)),
     sandboxSwitch: state.room.sandbox ? (id)=>act(()=>api.sandboxSwitch(code,id)) : undefined,
+    sandboxToggleBot: state.room.sandbox ? ()=>act(()=>api.sandboxToggleBot(code)) : undefined,
     sandboxGrant: state.room.sandbox ? (kind)=>act(async()=>{
       const result=await api.sandboxGrantCard(code,kind);
       toast.success("Carta adicionada à sua mão!");
