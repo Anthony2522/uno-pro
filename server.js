@@ -2,6 +2,7 @@
 // Serves the built React app from dist/, the game API at /api/rpc and live updates at /api/events.
 // No database, no external services: rooms live in this process' memory.
 import http from "node:http";
+import { attachCrazyBattle, crazyPublicRooms } from "./server/crazyBattle.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -222,7 +223,7 @@ function handleStatic(req, res, url) {
 
 // ---------- server ----------
 export function createServer() {
-  return http.createServer((req, res) => {
+  const server = http.createServer((req, res) => {
     const url = new URL(req.url || "/", "http://localhost");
     if (url.pathname === "/api/rpc" || url.pathname.startsWith("/api/rpc/")) {
       handleRpc(req, res, url).catch((e) => {
@@ -232,10 +233,13 @@ export function createServer() {
       return;
     }
     if (url.pathname === "/api/events") return handleEvents(req, res, url);
+    if (url.pathname === "/api/crazy/rooms") return json(res, 200, { rooms: crazyPublicRooms() });
     if (url.pathname === "/api/health") return json(res, 200, { ok: true, uptime: Math.round(process.uptime()) });
     if (url.pathname.startsWith("/api/")) return json(res, 404, { error: { code: "NOT_FOUND", message: "NOT_FOUND" } });
     return handleStatic(req, res, url);
   });
+  attachCrazyBattle(server);
+  return server;
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
