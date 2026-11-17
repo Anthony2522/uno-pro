@@ -5,10 +5,12 @@ import type {GameState} from "@/lib/uno/api";
 import {sfx} from "@/lib/uno/sound";
 
 export const ROACH_LAUNCH_MS=350;
-export const ROACH_TRAVEL_MS=1800;
-export const ROACH_SCARE_MS=1150;
+export const ROACH_TRAVEL_MS=2400; // More time to see the insect move between players.
+export const ROACH_SCARE_MS=700;  // Initial jumpscare animation.
+export const ROACH_HOLD_MS=4000;  // Keep the front-view Barata on screen after the scare.
+export const ROACH_FADE_MS=300;
 export const ROACH_ARRIVAL_MS=ROACH_LAUNCH_MS+ROACH_TRAVEL_MS;
-export const ROACH_TOTAL_MS=ROACH_ARRIVAL_MS+ROACH_SCARE_MS;
+export const ROACH_TOTAL_MS=ROACH_ARRIVAL_MS+ROACH_SCARE_MS+ROACH_HOLD_MS+ROACH_FADE_MS;
 const WIDTH=148;
 const HEIGHT=99;
 
@@ -74,6 +76,7 @@ export function RoachTransferAnimation({
       "--roach-second-x":path.secondX+"px","--roach-second-y":path.secondY+"px",
       "--roach-end-x":path.endX+"px","--roach-end-y":path.endY+"px",
       "--roach-delay":(-Math.max(0,Date.now()-event.show_at))+"ms",
+      "--roach-travel-duration":ROACH_ARRIVAL_MS+"ms",
     } as CSSProperties;
     setFlight(vars);
   },[event.id,event.show_at,event.target,recipient]);
@@ -102,10 +105,10 @@ export function RoachTransferAnimation({
     {inFlight&&flight&&<div className="uno-roach-flight pointer-events-none fixed inset-0 z-[81]" aria-hidden="true">
       <div className="uno-roach-traveler" style={flight}>
         <img src="/roach-top.webp" width="148" height="99" draggable={false} alt=""/>
-        <span className="uno-roach-destination">{event.target_name||"Jogador"}</span>
       </div>
     </div>}
     {recipient&&scare&&<div key={event.id} className="uno-roach-scare pointer-events-none fixed inset-0 z-[110] flex flex-col items-center justify-center overflow-hidden"
+      style={{"--roach-scare-duration":(ROACH_SCARE_MS+ROACH_HOLD_MS+ROACH_FADE_MS)+"ms"} as CSSProperties}
       role="alert" aria-live="assertive" aria-label={language==="en"?"A cockroach invaded your hand!":"Uma barata invadiu sua mão!"}>
       <div className="uno-roach-scare-backdrop absolute inset-0"/>
       <img src="/roach-front.webp" alt="" draggable={false}
