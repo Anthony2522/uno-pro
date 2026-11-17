@@ -1,4 +1,4 @@
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {BookOpen} from "lucide-react";
 const KEY="unopro.manual.introduction.v1";
 const TEXT="Esse UNO tem regras adicionais, você pode verificá-las no manual.\n\nCaso não goste de alguma, a retire da sua partida em Configurações Avançadas.";
@@ -6,9 +6,16 @@ type Anchor={left:number;top:number;arrowLeft:number};
 
 export function FirstVisitManualHint(){
   const [visible,setVisible]=useState(false);
+  const initialized=useRef(false);
   const [anchor,setAnchor]=useState<Anchor>({left:8,top:80,arrowLeft:120});
   useEffect(()=>{
-    try{if(localStorage.getItem(KEY))return;}catch{/* allow ephemeral display */}
+    // React StrictMode may run effects twice during development. Keep the
+    // countdown active on the second mount rather than leaving a stuck popup.
+    if(!initialized.current){
+      try{if(localStorage.getItem(KEY))return;}catch{/* ephemeral display */}
+      initialized.current=true;
+      try{localStorage.setItem(KEY,"shown");}catch{/* storage unavailable */}
+    }
     const measure=()=>{
       const trigger=document.querySelector<HTMLElement>("[data-manual-trigger]");
       if(!trigger)return;
@@ -18,7 +25,6 @@ export function FirstVisitManualHint(){
       setAnchor({left,top:rect.bottom+14,arrowLeft:Math.max(16,Math.min(width-24,rect.left+rect.width/2-left))});
     };
     measure();setVisible(true);
-    try{localStorage.setItem(KEY,"shown");}catch{/* first-visit storage unavailable */}
     const hide=()=>setVisible(false);
     const timer=window.setTimeout(hide,8000);
     const clicked=()=>hide();
