@@ -73,7 +73,7 @@ function tick(room){
   const mx=clamp(Number(p.input.x)||0,-1,1),mz=clamp(Number(p.input.z)||0,-1,1),norm=Math.max(1,Math.hypot(mx,mz));
   const dx=(mx*Math.cos(p.yaw)+mz*Math.sin(p.yaw))/norm;
   const dz=(-mx*Math.sin(p.yaw)+mz*Math.cos(p.yaw))/norm;
-  p.x=clamp(p.x+dx*RULES.moveSpeed*dt,-6.9,6.9);p.z=clamp(p.z+dz*RULES.moveSpeed*dt,-6.9,6.9);
+  p.x=clamp(p.x+dx*RULES.moveSpeed*dt,-6.1,6.1);p.z=clamp(p.z+dz*RULES.moveSpeed*dt,-6.1,6.1);
   if(p.input.jump&&p.y===0){p.vy=5.3;}p.input.jump=false;
   p.vy-=15*dt;p.y=Math.max(0,p.y+p.vy*dt);if(p.y===0)p.vy=0;
  }
@@ -85,8 +85,8 @@ function tick(room){
   if(d>=.72)continue;
   if(d<.001){dx=.01;dz=0;d=.01;}
   const offset=(.72-d)/2;
-  a.x=clamp(a.x-dx/d*offset,-6.9,6.9);a.z=clamp(a.z-dz/d*offset,-6.9,6.9);
-  b.x=clamp(b.x+dx/d*offset,-6.9,6.9);b.z=clamp(b.z+dz/d*offset,-6.9,6.9);
+  a.x=clamp(a.x-dx/d*offset,-6.1,6.1);a.z=clamp(a.z-dz/d*offset,-6.1,6.1);
+  b.x=clamp(b.x+dx/d*offset,-6.1,6.1);b.z=clamp(b.z+dz/d*offset,-6.1,6.1);
  }
  for(const a of [...room.arrows]){
   const px=a.x,py=a.y,pz=a.z;
@@ -99,7 +99,7 @@ function tick(room){
     if(Math.abs(x-t.x)<.5&&Math.abs(z-t.z)<.5&&y>t.y&&y<t.y+2){collision=true;break;}}
    if(collision){hit(room,owner,t,RULES.arrowDamage,px,pz);a.ttl=0;break;}
   }
-  if(a.ttl<=0||a.y<0||a.y>16||Math.abs(a.x)>7.5||Math.abs(a.z)>7.5)room.arrows.splice(room.arrows.indexOf(a),1);
+  if(a.ttl<=0||a.y<0||a.y>16||Math.abs(a.x)>6.5||Math.abs(a.z)>6.5)room.arrows.splice(room.arrows.indexOf(a),1);
  }
  broadcast(room,snapshot(room));finish(room);
 }
