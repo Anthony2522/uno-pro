@@ -65,3 +65,13 @@ Novos mapas, armas, partículas, habilidades e IA de bots devem ser adicionados 
 - **Cursor:** ao concluir a partida, sair do pointer lock para possibilitar clicar em Jogar novamente/Sair. Também evitar travar novamente quando a rodada já terminou. No treino local, Jogar novamente reinicia o componente sem voltar à tela de entrada.
 - **Testes:** novos casos verificam formato PNG 64×64 e transmissão das skins pelo WebSocket. A aprovação de CI e testes manuais em desktop/mobile devem ser registrados a partir dos resultados reais da execução correspondente.
 - **Escopo:** os estilos e visuais pertencem ao Crazy Battle; o motor e o baralho do UNO Pro não foram modificados.
+
+## 9. 17/11/2026 — estabilidade do cursor, FPS e animação inspirada no Minecraft (PR #19)
+
+- **Backup anterior:** `backup/uno-before-crazy-performance-2026-11-17` (snapshot do commit `96b26750f9b8716865a59d37f695c989ce286a42`).
+- **Cursor:** o modo treino solta imediatamente `Pointer Lock` em vitória/derrota. No multiplayer, a liberação também ocorre ao receber estados de derrota ou partida encerrada; guardas contra bloqueio tardio através de `pointerlockchange`, efeito React e quadro de animação. A tela final para de solicitar mouse/câmera e permite escolher ações de resultado.
+- **Renderização:** DPR limitado por orçamento total de aproximadamente 2 milhões de pixels renderizados; redução automática em displays 4K/HiDPI; loop 3D limitado a cerca de 60 FPS, sem desenhar quando a aba não está visível e sem atualizar o fundo do resultado encerrado. O arco atualiza a porcentagem em passos de 5 pontos, evitando `setState` a cada quadro.
+- **Movimento:** aceleração/frenagem com atrito nos dois modos (no multiplayer calculados no servidor), preservando WASD e velocidade de caminhada. No treino, há colisão com o bot e menos alocações temporárias por quadro.
+- **Animação:** modelo articulado com braços e pernas sincronizados aos passos, salto e aterrissagem, postura ao levantar escudo, ataque de espada em arco com impacto de aproximadamente 320–350 ms, braço de arco e deslocamento sutil do corpo. O bot no treino também consegue saltar e atacar com animação.
+- **Testes:** `test/crazyPerformance.test.js` verifica os limites de DPR/FPS e quando o cursor obrigatoriamente deve ser liberado. Os testes de rede e do UNO Pro continuam no fluxo CI.
+- **Verificação manual ainda necessária:** testar a liberação efetiva de `Pointer Lock` nos navegadores em que o problema foi observado e medir FPS/frame time com e sem bot em computadores e celulares reais. Os testes automatizados não garantem desempenho em hardware específico.
