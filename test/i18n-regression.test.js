@@ -33,7 +33,7 @@ test("new English UI is explicitly localized and dictionary entries are present"
     "Partida em andamento, você está na fila de espera. Aguarde a próxima partida.",
     "Você está assistindo à partida. Sua vez de jogar será na próxima rodada, quando houver vaga.",
     "Regras da partida","Com três ou mais participantes, o último a apertar 9 compra cartas.",
-    "Todas as regras e cartas opcionais vêm ativadas. As cartas comuns (números, Volta, Bloqueio, +2, Coringa e +4) permanecem no baralho.",
+    "Por padrão, Cerveja, Barata, Espada e Coringa Metralhadora começam desativados. Você pode ativá-los abaixo; as demais regras e cartas seguem seus padrões atuais.",
     "Compra duas e inverte o sentido.","Copia o último coringa real jogado.",
     "Criar sala offline com bots","Continuar sala Sandbox",
     "Excluir sua partida offline salva neste aparelho? Esta ação não pode ser desfeita.",
