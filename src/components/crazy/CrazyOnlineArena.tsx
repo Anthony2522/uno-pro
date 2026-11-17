@@ -112,7 +112,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    frame=requestAnimationFrame(animate);
    if(document.hidden||!crazyShouldRender(now,lastRendered))return;
    lastRendered=now;const dt=Math.min(.05,(now-last)/1000);last=now;
-   if(!isPlaying()){const locked=document.pointerLockElement;if(locked&&node.contains(locked))document.exitPointerLock?.();}
+   if(!isPlaying()){const locked=document.pointerLockElement;if(locked&&root.current?.contains(locked))document.exitPointerLock?.();}
    const s=data.current,local=s.players.find(p=>p.id===id),i=input.current;
    if(keys.current.size){i.x=(keys.current.has("KeyD")?1:0)-(keys.current.has("KeyA")?1:0);i.z=(keys.current.has("KeyS")?1:0)-(keys.current.has("KeyW")?1:0);}else if(stick.current===null){i.x=0;i.z=0;}
    const elapsedSwing=now-swingAt.current;
