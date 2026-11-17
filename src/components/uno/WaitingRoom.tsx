@@ -6,6 +6,7 @@ import { EditRoomSettingsDialog } from "./EditRoomSettingsDialog";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { CopyInviteButton } from "./RoomTopBar";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/lib/uno/i18n";
 
 export function WaitingRoom({
   state,
@@ -24,6 +25,8 @@ export function WaitingRoom({
   onUpdateSettings: (startingCards:number,rules:RuleSettings,cards:CardSettings)=>Promise<void>;
   onUpdateWinners: (number:number)=>Promise<void>;
 }) {
+  const {language}=useLanguage();
+  const en=language==="en";
   const { room, members, me, game } = state;
   const isHost = room.host_id === me;
   const host = members.find((m) => m.is_host);
@@ -39,7 +42,9 @@ export function WaitingRoom({
         <div className="mb-4 flex items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm animate-pop">
           <Trophy className="size-5 shrink-0 text-warning" aria-hidden />
           <span>
-            {(game?.placements?.length?game.placements.map(p=>`${p.rank}º ${p.name}`).join(" · "):`${lastWinner} venceu!`)} na rodada {game!.round}! {isHost ? "Inicie a revanche quando quiser." : "Aguardando o anfitrião iniciar a revanche."}
+            {en
+              ? `${game?.placements?.length ? game.placements.map(p=>`#${p.rank} ${p.name}`).join(" · ") : `${lastWinner} won!`} in round ${game!.round}! ${isHost ? "Start a rematch whenever you like." : "Waiting for the host to start a rematch."}`
+              : `${game?.placements?.length ? game.placements.map(p=>`${p.rank}º ${p.name}`).join(" · ") : `${lastWinner} venceu!`} na rodada ${game!.round}! ${isHost ? "Inicie a revanche quando quiser." : "Aguardando o anfitrião iniciar a revanche."}`}
           </span>
         </div>
       )}
@@ -69,12 +74,12 @@ export function WaitingRoom({
             </label>
             <EditRoomSettingsDialog room={room} onSave={onUpdateSettings}/>
           </div>}
-          <p className="mt-2 text-xs text-muted-foreground">{room.initial_cards} cartas iniciais · {Math.min(room.winners_target,Math.max(1,playerCount-1))} vencedor(es) nesta partida · {Object.values(room.rules).filter(Boolean).length} regras opcionais ativadas</p>
+          <p className="mt-2 text-xs text-muted-foreground">{room.initial_cards} {en?"starting cards":"cartas iniciais"} · {Math.min(room.winners_target,Math.max(1,playerCount-1))} {en?"winners in this match":"vencedor(es) nesta partida"} · {Object.values(room.rules).filter(Boolean).length} {en?"optional rules enabled":"regras opcionais ativadas"}</p>
 
           <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-glass-border bg-navy/50 p-4 sm:flex-row sm:items-center">
             <div className="flex-1">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Código da sala</p>
-              <p className="mt-1 font-display text-3xl font-black tracking-[0.3em] text-cyan sm:text-4xl" aria-label={`Código ${room.code.split("").join(" ")}`}>
+              <p className="mt-1 font-display text-3xl font-black tracking-[0.3em] text-cyan sm:text-4xl" aria-label={`${en?"Code":"Código"} ${room.code.split("").join(" ")}`}>
                 {room.code}
               </p>
             </div>
@@ -99,7 +104,7 @@ export function WaitingRoom({
                 <p className="truncate font-semibold">
                   {m.nickname} {m.id === me && <span className="text-sm font-normal text-cyan">(você)</span>}
                 </p>
-                <p className={cn("text-xs", m.online ? "text-success" : "text-muted-foreground")}>{m.spectator ? "Observador (dev)" : m.bot ? (m.difficulty==="hard" ? "Bot difícil" : "Bot fácil") : m.online ? "Online" : "Desconectado"}</p>
+                <p className={cn("text-xs", m.online ? "text-success" : "text-muted-foreground")}>{m.spectator ? (room.is_public ? (en?"In waiting queue":"Na fila de espera") : (en?"Spectator":"Espectador")) : m.bot ? (m.difficulty==="hard" ? "Bot difícil" : "Bot fácil") : m.online ? "Online" : "Desconectado"}</p>
               </div>
               {m.bot && isHost && (
                 <button type="button" title="Remover bot" aria-label={`Remover ${m.nickname}`} onClick={()=>onRemoveBot(m.id)} disabled={busy} className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><X className="size-4" /></button>
@@ -138,7 +143,7 @@ export function WaitingRoom({
           {isHost ? (
             <>
               <p className="flex-1 text-center text-sm text-muted-foreground sm:text-left">
-                {canStart ? `${playerCount} jogadores prontos. Bora?` : "Aguardando mais jogadores (mínimo 2). Mande o link!"}
+                {canStart ? (en ? `${playerCount} players ready. Shall we play?` : `${playerCount} jogadores prontos. Bora?`) : (en ? "Waiting for at least 2 players. Share the link!" : "Aguardando mais jogadores (mínimo 2). Mande o link!")}
               </p>
               <Button variant="hero" size="xl" className="w-full sm:w-auto" disabled={!canStart || busy} onClick={onStart}>
                 {busy ? <Loader2 className="animate-spin" /> : <Play />} {game ? "Jogar novamente" : "Iniciar partida"}
@@ -146,7 +151,7 @@ export function WaitingRoom({
             </>
           ) : (
             <p className="flex w-full items-center justify-center gap-2 py-3 text-center font-semibold" role="status">
-              <Loader2 className="size-4 animate-spin text-cyan" /> Aguardando {host?.nickname ?? "o anfitrião"} iniciar a partida…
+              <Loader2 className="size-4 animate-spin text-cyan" /> {en ? `Waiting for ${host?.nickname ?? "the host"} to start the match…` : `Aguardando ${host?.nickname ?? "o anfitrião"} iniciar a partida…`}
             </p>
           )}
         </div>
