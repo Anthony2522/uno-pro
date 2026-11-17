@@ -11,13 +11,21 @@ npm start
 
 Para desenvolvimento local, use `npm run dev`. As verificações usam `npm test` e `npm run typecheck`.
 
-## Acesso de desenvolvedor
+## Administrador Tony
 
-**Segurança:** ninguém recebe privilégios só por usar o apelido **Toninho**. Isso permitiria que qualquer pessoa removesse salas.
+O apelido **Tony** exibe um campo de senha. O nome, sozinho, não concede acesso especial: a senha é verificada no servidor, com comparação segura e limite de tentativas por IP.
 
-Para habilitar o painel de desenvolvedor, no painel do seu Web Service no Render, abra **Environment**, adicione a variável de ambiente `DEV_ACCESS_KEY` com uma senha aleatória de no mínimo 16 caracteres e salve. Nunca insira essa senha em arquivos do GitHub ou no front-end.
+Para ativar o administrador no Render, abra **Web Service → Environment**, crie `UNO_ADMIN_PASSWORD` e informe a senha de administrador escolhida (mínimo de 8 caracteres). Salve e aguarde o deploy. **Nunca coloque a senha no GitHub, em um arquivo do front-end ou nesta documentação.**
 
-Entre no jogo com o apelido `Toninho`, abra o perfil e selecione **Acesso desenvolvedor** para digitar a senha. Após autenticar, você poderá apagar salas públicas e assumir o cargo de anfitrião nas salas que entrar. O acesso é vinculado à sessão no servidor e pode precisar ser renovado após reinícios do Render.
+Depois de autenticar, Tony pode visualizar e encerrar todas as salas armazenadas no servidor, públicas ou privadas, inclusive partidas em andamento. Antes da exclusão o painel pede confirmação. As partidas offline não ficam no servidor e só podem ser excluídas no próprio dispositivo. Ao mudar o apelido, o acesso administrativo é revogado e requer nova autenticação.
+
+## Sandbox e configurações
+
+Na tela inicial, **Criar sala Sandbox** inicia uma partida privada, somente neste navegador, com dois humanos controlados pela mesma pessoa. Toque no painel do adversário para controlar a outra mão. Use **Pegar qualquer carta** para acrescentar um número comum aleatório ou escolher cartas coloridas e coringas específicos; cartas coloridas recebem cor aleatória. Esta sala não aparece na lista pública e é salva separadamente da partida offline com bots.
+
+Na opção de partida offline com bots, um **X** ao lado de **Voltar para a sala offline** permite apagar a partida e seu backup no aparelho.
+
+Nas configurações avançadas, a **quantidade de cartas iniciais** é a primeira opção. As prévias do manual e das configurações usam ilustrações vetoriais de tamanho fixo, independentes do sistema de medidas responsivas das cartas.
 
 ## Regras recentes
 
