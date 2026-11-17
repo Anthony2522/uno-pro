@@ -31,16 +31,29 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   for(const x of [-.25,.25])part(botGroup,x,.35,0,.3,.7,.38,dark);
   for(const x of [-.6,.6])part(botGroup,x,1.05,0,.3,.8,.4,armor);
   part(botGroup,0,1.99,0,.8,.22,.65,dark);
+  const labelCanvas=document.createElement("canvas");labelCanvas.width=320;labelCanvas.height=82;
+  const labelTexture=new THREE.CanvasTexture(labelCanvas);labelTexture.colorSpace=THREE.SRGBColorSpace;
+  const labelSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture,depthTest:true}));
+  labelSprite.position.set(0,2.55,0);labelSprite.scale.set(2.3,.6,1);botGroup.add(labelSprite);
+  const drawBotLife=(health:number)=>{
+    const ctx=labelCanvas.getContext("2d");if(!ctx)return;
+    ctx.clearRect(0,0,320,82);ctx.fillStyle="#1d0d1cd8";ctx.fillRect(10,2,300,75);
+    ctx.fillStyle="#fff";ctx.font="bold 23px sans-serif";ctx.textAlign="center";ctx.fillText("Bot Guerreiro",160,27);
+    ctx.fillStyle="#240b0f";ctx.fillRect(24,42,272,26);
+    ctx.fillStyle="hsl("+health*1.2+" 95% 48%)";ctx.fillRect(24,42,272*health/100,26);
+    ctx.fillStyle="#fff";ctx.font="bold 21px sans-serif";ctx.fillText(health+"%",160,63);
+    labelTexture.needsUpdate=true;
+  };drawBotLife(100);
   const bot:Bot={mesh:botGroup,hp:100,alive:true,attackAt:0,position:new THREE.Vector3(0,0,-4.8)};
   botGroup.position.copy(bot.position);
   const player=new THREE.Vector3(0,0,4.5);
-  let vy=0,ground=true,last=performance.now(),elapsed=0,lastSecond=-1,finished=false,swordAt=0,bowStart=0,arrowObjects:{mesh:THREE.Mesh,velocity:THREE.Vector3,ttl:number}[]=[];
+  let vy=0,ground=true,last=performance.now(),elapsed=0,lastSecond=-1,finished=false,swordAt=-10000,bowStart=0,arrowObjects:{mesh:THREE.Mesh,velocity:THREE.Vector3,ttl:number}[]=[];
   const swordMat=new THREE.MeshLambertMaterial({color:"#c6c2d0"}),shieldMat=new THREE.MeshLambertMaterial({color:"#71361c"});
   const handSword=new THREE.Mesh(geo,swordMat);handSword.scale.set(.18,.85,.19);scene.add(handSword);
   const handShield=new THREE.Mesh(geo,shieldMat);handShield.scale.set(.75,.95,.18);scene.add(handShield);
   const bow=new THREE.Mesh(geo,shieldMat);bow.scale.set(.12,1.25,.18);scene.add(bow);
   const arrowMat=new THREE.MeshLambertMaterial({color:"#e3c6a0"});
-  const hurt=(amount:number)=>{bot.hp=Math.max(0,bot.hp-amount);setEnemyHp(Math.ceil(bot.hp));if(bot.hp===0){bot.alive=false;bot.mesh.visible=false;finished=true;setWinner("Vitória!");}};
+  const hurt=(amount:number)=>{bot.hp=Math.max(0,bot.hp-amount);setEnemyHp(Math.ceil(bot.hp));drawBotLife(Math.ceil(bot.hp));if(bot.hp===0){bot.alive=false;bot.mesh.visible=false;finished=true;setWinner("Vitória!");}};
   const launch=(power:number)=>{const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(actions.current.pitch,actions.current.yaw,0,"YXZ"));const mesh=new THREE.Mesh(geo,arrowMat);mesh.scale.set(.09,.09,.55);mesh.position.copy(camera.position).addScaledVector(direction,.65);scene.add(mesh);arrowObjects.push({mesh,velocity:direction.multiplyScalar(7+power*11),ttl:3});};
   const down=(e:KeyboardEvent)=>{keys.current.add(e.code);if(e.code==="Space")actions.current.jump=true;if(e.code==="KeyQ")changeWeapon();if(e.code==="Escape")document.exitPointerLock?.();};
   const up=(e:KeyboardEvent)=>{keys.current.delete(e.code);};
@@ -60,8 +73,8 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
     let mx=a.moveX+(k.has("KeyD")?1:0)-(k.has("KeyA")?1:0),mz=-a.moveY+(k.has("KeyS")?1:0)-(k.has("KeyW")?1:0);
     const length=Math.hypot(mx,mz)||1;mx/=length;mz/=length;
     const sin=Math.sin(a.yaw),cos=Math.cos(a.yaw);
-    player.x=clamp(player.x+(mx*cos+mz*sin)*4*dt,-6.9,6.9);
-    player.z=clamp(player.z+(-mx*sin+mz*cos)*4*dt,-6.9,6.9);
+    player.x=clamp(player.x+(mx*cos+mz*sin)*4*dt,-6.1,6.1);
+    player.z=clamp(player.z+(-mx*sin+mz*cos)*4*dt,-6.1,6.1);
     if(a.jump&&ground){vy=5.3;ground=false;}a.jump=false;
     vy-=15*dt;player.y+=vy*dt;if(player.y<=0){player.y=0;vy=0;ground=true;}
     const dist=bot.position.distanceTo(new THREE.Vector3(player.x,0,player.z));
@@ -80,12 +93,12 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
    camera.position.set(player.x,player.y+1.65,player.z);camera.rotation.order="YXZ";camera.rotation.y=a.yaw;camera.rotation.x=a.pitch;
    const positionHand=(mesh:THREE.Mesh,x:number,y:number,z:number)=>{mesh.position.copy(camera.localToWorld(new THREE.Vector3(x,y,z)));mesh.quaternion.copy(camera.quaternion);};
    handSword.visible=a.weapon==="sword";handShield.visible=a.weapon==="sword";bow.visible=a.weapon==="bow";
-   positionHand(handSword,.58,-.5,-.95);handSword.rotation.z-=now-swordAt<210?Math.sin((now-swordAt)/210*Math.PI)*.8:0;
+   positionHand(handSword,.58,-.5,-.95);handSword.rotation.z=now-swordAt<210?-Math.sin((now-swordAt)/210*Math.PI)*.8:0;
    positionHand(handShield,-.65,a.shield?-.28:-.8,-.85);positionHand(bow,.65,-.4,-1);
    renderer.render(scene,camera);
   };frame=requestAnimationFrame(animate);
   const resize=new ResizeObserver(()=>{camera.aspect=root.clientWidth/root.clientHeight;camera.updateProjectionMatrix();renderer.setSize(root.clientWidth,root.clientHeight);});resize.observe(root);
-  return ()=>{cancelAnimationFrame(frame);resize.disconnect();window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",press);window.removeEventListener("mouseup",release);renderer.domElement.removeEventListener("contextmenu",context);renderer.dispose();cleanupWorld();geo.dispose();for(const material of [skin,armor,dark,swordMat,shieldMat,arrowMat])material.dispose();root.removeChild(renderer.domElement);};
+  return ()=>{cancelAnimationFrame(frame);resize.disconnect();window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",press);window.removeEventListener("mouseup",release);renderer.domElement.removeEventListener("contextmenu",context);renderer.dispose();cleanupWorld();labelTexture.dispose();labelSprite.material.dispose();geo.dispose();for(const material of [skin,armor,dark,swordMat,shieldMat,arrowMat])material.dispose();root.removeChild(renderer.domElement);};
  },[]);
  const look=useRef<{id:number,x:number,y:number}|null>(null);
  const stick=useRef<number|null>(null);
@@ -97,7 +110,7 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   <div className="crazy-canvas" ref={mount}/>
   <div className="crazy-look" onPointerDown={e=>{look.current={id:e.pointerId,x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);}} onPointerMove={lookMove} onPointerUp={()=>look.current=null} onPointerCancel={()=>look.current=null}/>
   <header className="crazy-hud"><div className="crazy-brand"><img src="/crazy-battle-logo.webp" alt="Crazy Battle"/><button aria-label="Sair do treino" onClick={onExit}>✕</button></div><strong>⏱ {String(Math.floor(seconds/60)).padStart(2,"0")}:{String(seconds%60).padStart(2,"0")}</strong><span>👥 {hp>0?1:0}/{enemyHp>0?2:1}</span></header>
-  {enemyHp>0&&<div className="crazy-enemy-hp">Bot Guerreiro <span>{enemyHp}%</span><div style={{width:enemyHp+"%"}}/></div>}
+  <span className="sr-only">Vida do bot: {enemyHp}%</span>
   <div className="crazy-crosshair">＋</div>
   <div className="crazy-health"><b>♥</b><strong>{hp}%</strong><div className="crazy-health-track"><div style={{height:hp+"%",background:`hsl(${hp*1.2} 95% 48%)`}}/></div></div>
   <button className="crazy-switch crazy-control" onClick={changeWeapon}>{weapon==="sword"?"🏹":"⚔️"} ⇄</button>
