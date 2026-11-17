@@ -140,14 +140,14 @@ export function makeCrazyVisuals() {
     const stringMaterial=new THREE.LineBasicMaterial({color:"#fff7e2"});
     const points=[new THREE.Vector3(.30,.98,0),new THREE.Vector3(0,0,-.10),new THREE.Vector3(-.30,-.98,0)];
     group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),stringMaterial));
-    group.userData.stringMaterial=stringMaterial;
+    group.userData["stringMaterial"]=stringMaterial;
     const loadedArrow=new THREE.Group();
     part(loadedArrow,0,0,0,.065,.065,1.13,woodDark);
     part(loadedArrow,0,0,-.59,.13,.13,.18,steel);
     part(loadedArrow,.10,0,.48,.20,.055,.18,ember);
     part(loadedArrow,-.10,0,.48,.20,.055,.18,ember);
     loadedArrow.position.set(.12,-.02,-.19);loadedArrow.visible=false;
-    group.add(loadedArrow);group.userData.loadedArrow=loadedArrow;
+    group.add(loadedArrow);group.userData["loadedArrow"]=loadedArrow;
     return group;
   }
 
@@ -195,7 +195,7 @@ export function makeCrazyVisuals() {
         sword.position.y=-.67+bob;sword.rotation.z=-.13+(attackElapsed<250?Math.sin(attackElapsed/250*Math.PI)*-.95:0);
         shield.rotation.x=Math.sin(time*.002)*.02;
         bow.position.y=-.45+bob;bow.position.z=-1.14+bowCharge*.18;
-        (bow.userData.loadedArrow as THREE.Group).visible=bowCharge>0;
+        (bow.userData["loadedArrow"] as THREE.Group).visible=bowCharge>0;
       }
     };
   }
