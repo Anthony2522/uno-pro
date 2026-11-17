@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, DoorOpen, Plus, WifiOff } from "lucide-react";
+import { ArrowRight, DoorOpen, Plus, WifiOff, X, FlaskConical } from "lucide-react";
 import { AppHeader } from "@/components/uno/AppHeader";
+import {AdminRoomsPanel} from "@/components/uno/AdminRoomsPanel";
 import { CreateRoomDialog } from "@/components/uno/CreateRoomDialog";
 import { JoinByCode } from "@/components/uno/JoinByCode";
 import { PublicRooms } from "@/components/uno/PublicRooms";
@@ -9,7 +10,7 @@ import { UnoCard } from "@/components/uno/UnoCard";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/uno/api";
 import { useReadyGuest } from "@/lib/uno/guest";
-import {getLocalMatch} from "@/lib/uno/offlineRuntime";
+import {getLocalMatch,getLocalSandbox,discardOfflineMatch,startLocalSandbox} from "@/lib/uno/offlineRuntime";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,7 +29,9 @@ export const Route = createFileRoute("/")({
 function Home() {
   const { guest } = useReadyGuest();
   const navigate=useNavigate();
+  const [,refreshOffline]=useState(0);
   const localMatch=getLocalMatch();
+  const sandbox=getLocalSandbox();
   const [createOpen, setCreateOpen] = useState(false);
   const [offlineCreateOpen,setOfflineCreateOpen]=useState(false);
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
@@ -71,14 +74,30 @@ function Home() {
               <DoorOpen /> Entrar em uma sala
             </Button>
           </div>
-          <div className="mt-4 max-w-xl">
-            <Button variant="glass" size="xl" className="w-full rounded-2xl border border-cyan/40 bg-cyan/10 text-cyan" onClick={()=>{
-              if(localMatch?.playing)void navigate({to:"/sala/$code",params:{code:localMatch.code}});
-              else setOfflineCreateOpen(true);
-            }}>
-              <WifiOff className="size-5"/> {localMatch?.playing?"Continuar partida offline com bots":"Criar sala offline com bots"}
+          <div className="mt-4 max-w-xl space-y-2">
+            <div className="flex gap-2">
+              <Button variant="glass" size="xl" className="min-w-0 flex-1 rounded-2xl border border-cyan/40 bg-cyan/10 text-cyan" onClick={()=>{
+                if(localMatch?.playing)void navigate({to:"/sala/$code",params:{code:localMatch.code}});
+                else setOfflineCreateOpen(true);
+              }}>
+                <WifiOff className="size-5 shrink-0"/> {localMatch?.playing?"Voltar para a sala offline":"Criar sala offline com bots"}
+              </Button>
+              {localMatch?.playing&&<Button variant="glass" size="iconLg"
+                className="h-14 w-12 shrink-0 rounded-2xl border border-destructive/35 text-destructive"
+                title="Excluir sala offline salva" aria-label="Excluir sala offline"
+                onClick={()=>{
+                  if(!window.confirm("Excluir sua partida offline salva neste aparelho? Esta ação não pode ser desfeita."))return;
+                  if(discardOfflineMatch())refreshOffline(n=>n+1);
+                }}><X className="size-5"/></Button>}
+            </div>
+            <Button variant="glass" size="lg" className="w-full rounded-2xl border border-violet-400/40 bg-violet-500/10 text-violet-200"
+              onClick={()=>{
+                const code=sandbox?.playing?sandbox.code:startLocalSandbox(guest.nickname);
+                void navigate({to:"/sala/$code",params:{code}});
+              }}>
+              <FlaskConical className="size-5"/> {sandbox?.playing?"Continuar sala Sandbox":"Criar sala Sandbox (teste de cartas)"}
             </Button>
-            <p className="mt-2 text-xs text-muted-foreground">Funciona sem Wi-Fi após a primeira visita. Salva as cartas neste aparelho e não depende do servidor.</p>
+            <p className="text-xs text-muted-foreground">Partidas offline e Sandbox ficam apenas neste aparelho. No Sandbox você controla os dois jogadores.</p>
           </div>
           {activeRoom && (
             <Link
@@ -91,6 +110,7 @@ function Home() {
           )}
         </section>
 
+        <AdminRoomsPanel />
         <div ref={roomsRef} className="mt-8 grid scroll-mt-24 gap-6 lg:grid-cols-[1fr_22rem]">
           <PublicRooms onCreate={() => setCreateOpen(true)} />
           <div className="lg:sticky lg:top-24 lg:self-start">
