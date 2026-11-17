@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Logo } from "./Logo";
 import { HowToPlayDialog } from "./HowToPlayDialog";
+import {FirstVisitManualHint} from "./FirstVisitManualHint";
 import { NicknameForm } from "./NicknameForm";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { useReadyGuest } from "@/lib/uno/guest";
@@ -34,7 +35,7 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
           title={language==="pt"?"English":"Português"}>
           <span className="text-2xl" aria-hidden>{language==="pt"?"🇺🇸":"🇧🇷"}</span>
         </Button>
-        <HowToPlayDialog />
+        <span data-manual-trigger className="inline-flex shrink-0"><HowToPlayDialog /></span>
         <Button variant="glass" size="iconLg" onClick={toggleMuted} aria-label={muted ? "Ativar sons" : "Desativar sons"} aria-pressed={!muted}>
           {muted ? <VolumeX /> : <Volume2 />}
         </Button>
@@ -45,6 +46,7 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
           <Pencil className="hidden size-4 text-muted-foreground sm:inline" />
         </Button>
       </div>
+      <FirstVisitManualHint />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="glass-strong rounded-3xl border-glass-border sm:max-w-md">
           <DialogHeader>
@@ -52,15 +54,17 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
             <DialogDescription>Todos nas suas salas verão o novo nome na hora.</DialogDescription>
           </DialogHeader>
           <NicknameForm
+            adminOnTony
             initial={guest.nickname}
             submitLabel="Salvar"
-            onSubmit={async (n) => {
+            onSubmit={async (n,adminPassword) => {
               await rename(n);
+              if(n==="Tony"&&!isDev)await activateDev(adminPassword||"");
               setOpen(false);
               toast.success("Apelido atualizado!");
             }}
           />
-          {guest.nickname.toLocaleLowerCase("pt-BR")==="toninho" && (
+          {guest.nickname==="Tony" && (
             <div className="mt-4 space-y-2 rounded-xl border border-cyan/30 p-3">
               <p className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="size-4"/> Acesso desenvolvedor {isDev?"✓":""}</p>
               {!isDev && <form onSubmit={async e=>{

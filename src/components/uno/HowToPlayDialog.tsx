@@ -3,7 +3,7 @@ import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle,DialogTr
 import {Button} from "@/components/ui/button";
 import {BookOpen,Trophy,Hand,MousePointer2,Hash,Layers3,Repeat2,ArrowDownUp,ShieldAlert} from "lucide-react";
 import type {LucideIcon} from "lucide-react";
-import {UnoCard} from "./UnoCard";
+import {StableCardPreview} from "./StableCardPreview";
 import {cardValue} from "@/lib/uno/cards";
 import {useLanguage} from "@/lib/uno/i18n";
 
@@ -104,7 +104,7 @@ export function RuleRows({entries,numbered=false}:{entries:ManualEntry[];numbere
     {entries.map((r,i)=>{const Icon=r.icon;
       return <li key={r.key} className="flex min-h-[85px] items-center gap-3 rounded-2xl border border-glass-border/50 bg-navy/50 p-3">
         <div className="flex h-[80px] w-[60px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan/20 bg-gradient-to-br from-brand/30 to-cyan/15">
-          {r.card?<UnoCard card={r.card} size="sm" className="!w-[53px] !rounded-lg"/>:
+          {r.card?<StableCardPreview card={r.card} width={53}/>:
           Icon?<Icon className="size-9 text-cyan"/>:<Hand className="size-9 text-cyan"/>}
         </div>
         <div className="min-w-0 flex-1">

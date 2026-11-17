@@ -1,7 +1,7 @@
 import { GameError, toGameError } from "./errors";
 import type { CardColor } from "./cards";
 import {DEFAULT_CARD_SETTINGS,type CardSettings} from "./cardSettings";
-import {getLocalMatch,getSoloServerBackup,hasLocalRoom,localRpc,
+import {getLocalMatch,getLocalSandbox,getSoloServerBackup,hasLocalRoom,localRpc,
   getRecoverableSoloRoom,rescueSoloMatch,saveSoloServerBackup,type SoloBackup} from "./offlineRuntime";
 
 export type RuleSettings = { repeat: boolean; sequence: boolean; nine: boolean; cut: boolean; stack: boolean };
@@ -61,6 +61,7 @@ export type GameState = {
   lock_target?: CardColor|null;
   solo_paused?: boolean;
   local_only?:boolean;
+  sandbox?:boolean;
   solo_recovery_until?: string|null;
   last_wild?: string|null;
   mirror_played_as?: string|null;
@@ -107,6 +108,7 @@ export type RoomState = {
     initial_cards: number;
     winners_target: number;
     local_only?:boolean;
+    sandbox?:boolean;
   };
   members: Member[];
   game: GameState | null;
@@ -181,10 +183,13 @@ export const api = {
     let online:RejoinableRoom[]=[];
     try{online=await call<RejoinableRoom[]>("list_rejoinable_rooms",{p_token:token})}catch{/* offline matches remain visible without a backend */}
     const local=getLocalMatch();
+    const sandbox=getLocalSandbox();
     const backup=getSoloServerBackup();
     const localRows:RejoinableRoom[]=[];
     if(local&&local.playing)localRows.push({code:local.code,name:local.name,solo:true,
       recovery_until:null,player_count:3,local_only:true});
+    if(sandbox?.playing)localRows.push({code:sandbox.code,name:sandbox.name,solo:true,
+      recovery_until:null,player_count:2,local_only:true});
     if(backup&&!localRows.some(r=>r.code===backup.code)&&!online.some(r=>r.code===backup.code))
       localRows.push({code:backup.code,name:backup.name,solo:true,recovery_until:null,
         player_count:3,local_only:true});
@@ -192,7 +197,11 @@ export const api = {
   },
   devStatus: (token:string)=>call<{is_dev:boolean}>("dev_status",{p_token:token}),
   devAuth: (token:string,key:string)=>call<{is_dev:boolean}>("dev_auth",{p_token:token,p_key:key}),
-  devDeletePublicRoom: (token:string,code:string)=>call("dev_delete_public_room",{p_token:token,p_code:code}),
+  adminListRooms: (token:string)=>call<Array<{code:string;name:string;is_public:boolean;status:string;player_count:number;max_players:number;host_name:string}>>("admin_list_rooms",{p_token:token}),
+  adminDeleteRoom: (token:string,code:string)=>call<{ok:boolean}>("admin_delete_room",{p_token:token,p_code:code}),
+  sandboxSwitch: (code:string,targetId:string)=>call<{ok:boolean}>("sandbox_switch",{p_code:code,p_target_id:targetId}),
+  sandboxGrantCard: (code:string,kind:string)=>call<{ok:boolean;card:string}>("sandbox_grant_card",{p_code:code,p_kind:kind}),
+  devDeletePublicRoom: (token:string,code:string)=>call("admin_delete_room",{p_token:token,p_code:code}),
   createRoom: (token: string, name: string, isPublic: boolean, maxPlayers: number, rules: RuleSettings, startingCards = 8, winners = 2, cards:CardSettings=DEFAULT_CARD_SETTINGS) =>
     call<{ code: string }>("create_room", {
       p_token: token,

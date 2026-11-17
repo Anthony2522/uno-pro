@@ -13,6 +13,7 @@ import { ColorPicker } from "./ColorPicker";
 import {HandCardsGuide} from "./HowToPlayDialog";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { CardBack, UnoCard } from "./UnoCard";
+import {SandboxCardPicker} from "./SandboxCardPicker";
 
 const RING: Record<string, string> = { r: "ring-uno-r", y: "ring-uno-y", g: "ring-uno-g", b: "ring-uno-b" };
 const DOT: Record<string, string> = { r: "bg-uno-r", y: "bg-uno-y", g: "bg-uno-g", b: "bg-uno-b" };
@@ -29,6 +30,8 @@ export type GameActions = {
   resolveDetective: (color:CardColor)=>void;
   resolveWildColor: (color:CardColor)=>void;
   acceptSkip: ()=>void;
+  sandboxSwitch?: ((id:string)=>void)|undefined;
+  sandboxGrant?: ((kind:string)=>void)|undefined;
 };
 
 export function GameTable({ state, busy, actions }: { state: RoomState; busy: boolean; actions: GameActions }) {
@@ -197,6 +200,12 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
   return (
     <main className="uno-game mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col overflow-hidden px-2 sm:px-6">
+      {state.room.sandbox&&<div className="relative z-30 mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-400/45 bg-violet-500/15 px-3 py-2 text-xs">
+        <p className="font-bold text-violet-100">SANDBOX · Você controla {byId.get(me)?.nickname??"Jogador"}.
+          <span className="ml-1 font-normal">Toque no status do outro jogador para trocar de mão.</span>
+        </p>
+        {actions.sandboxGrant&&<SandboxCardPicker disabled={busy} onGrant={actions.sandboxGrant}/>}
+      </div>}
       {/* Opponents */}
       <section aria-label="Adversários" className="uno-opponents no-scrollbar -mx-2 flex shrink-0 gap-2 overflow-x-auto px-2 pb-1 pt-1 sm:justify-center">
         {opponents.map((p) => {
@@ -206,8 +215,14 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <div
               key={p.id}
               data-player-seat={p.id}
+              role={state.room.sandbox?"button":undefined}
+              tabIndex={state.room.sandbox?0:undefined}
+              aria-label={state.room.sandbox?`Controlar ${p.nickname} no Sandbox`:undefined}
+              onClick={()=>{if(state.room.sandbox)actions.sandboxSwitch?.(p.id)}}
+              onKeyDown={e=>{if(state.room.sandbox&&(e.key==="Enter"||e.key===" ")){e.preventDefault();actions.sandboxSwitch?.(p.id)}}}
               className={cn(
                 "glass relative flex min-w-[8.5rem] shrink-0 flex-col gap-2 rounded-2xl p-2.5 transition-all",
+                state.room.sandbox&&"cursor-pointer outline-none hover:border-cyan focus-visible:ring-2 focus-visible:ring-cyan",
                 turn && "shadow-glow-cyan",
                 !p.online && "opacity-70",
               )}

@@ -14,17 +14,21 @@ export function NicknameForm({
   submitLabel = "Continuar",
   onSubmit,
   autoFocus = true,
+  adminOnTony = false,
 }: {
   initial?: string;
   submitLabel?: string;
-  onSubmit: (nickname: string) => Promise<void>;
+  onSubmit: (nickname: string,adminPassword?:string) => Promise<void>;
   autoFocus?: boolean;
+  adminOnTony?:boolean;
 }) {
   const [value, setValue] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [adminPassword,setAdminPassword]=useState("");
   const clean = cleanNickname(value);
-  const valid = clean.length >= 2 && clean.length <= 18;
+  const isTony=adminOnTony&&clean==="Tony";
+  const valid = clean.length >= 2 && clean.length <= 18 && (!isTony||adminPassword.length>0);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -35,7 +39,7 @@ export function NicknameForm({
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(clean);
+      await onSubmit(clean,isTony?adminPassword:undefined);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -68,6 +72,13 @@ export function NicknameForm({
           {clean.length}/18
         </span>
       </div>
+      {isTony&&<div className="space-y-1.5">
+        <label htmlFor="tony-admin-password" className="text-sm font-bold text-cyan">Senha de administrador</label>
+        <Input id="tony-admin-password" type="password" autoComplete="off" value={adminPassword}
+          onChange={e=>{setAdminPassword(e.target.value);setError(null)}}
+          placeholder="Digite a senha para entrar como Tony"
+          className="h-12 rounded-xl border-cyan/40 bg-navy/60" required/>
+      </div>}
       <p id="nickname-hint" role={error ? "alert" : undefined} className={cn("min-h-5 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
         {error ?? "De 2 a 18 caracteres. Seus amigos vão ver esse nome."}
       </p>

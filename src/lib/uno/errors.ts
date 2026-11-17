@@ -1,4 +1,8 @@
 const MESSAGES: Record<string, string> = {
+  DEV_NOT_CONFIGURED: "Configure UNO_ADMIN_PASSWORD nas variáveis de ambiente do servidor para ativar o administrador.",
+  DEV_INVALID_KEY: "Senha de administrador incorreta.",
+  DEV_NAME_REQUIRED: "Para entrar como administrador, use o apelido Tony.",
+  DEV_ACCESS_DENIED: "Apenas o administrador autenticado pode fazer isso.",
   INVALID_SESSION: "Sua sessão expirou. Informe seu apelido novamente.",
   INVALID_NAME: "O apelido precisa ter de 2 a 18 caracteres.",
   INVALID_ROOM_NAME: "O nome da sala precisa ter de 2 a 32 caracteres.",

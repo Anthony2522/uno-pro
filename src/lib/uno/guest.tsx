@@ -12,7 +12,7 @@ type GuestCtx = {
   guest: Guest | null;
   isDev: boolean;
   activateDev: (key:string)=>Promise<void>;
-  register: (nickname: string) => Promise<void>;
+  register: (nickname: string,adminPassword?:string) => Promise<void>;
   authenticateGoogle: (credential:string) => Promise<void>;
   rename: (nickname: string) => Promise<void>;
   /** Call when the server says the session is invalid. */
@@ -87,13 +87,15 @@ export function GuestProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  const register = useCallback(async (nickname: string) => {
+  const register = useCallback(async (nickname: string,adminPassword?:string) => {
     const g = await api.registerGuest(nickname);
+    if(nickname==="Tony"){
+      // Never enter as the privileged Tony identity until the server checks
+      // the password. The secret is not cached in localStorage.
+      await api.devAuth(g.token,adminPassword||"");
+    }
     activeToken.current=g.token;
-    store(g);
-    setGuest(g);
-    setIsDev(false);
-    setStatus("ready");
+    store(g);setGuest(g);setIsDev(nickname==="Tony");setStatus("ready");
   }, []);
 
   const authenticateGoogle = useCallback(async (credential:string) => {
@@ -112,7 +114,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
       const next = { ...guest, nickname: r.nickname };
       store(next);
       setGuest(next);
-      if(next.nickname.toLocaleLowerCase("pt-BR")!=="toninho")setIsDev(false);
+      if(next.nickname!=="Tony")setIsDev(false);
     },
     [guest],
   );

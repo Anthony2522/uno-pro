@@ -215,3 +215,67 @@ test("backup de partida solo offline mantém a cadeia da Barata após perda do s
     if(saved.navigator)Object.defineProperty(globalThis,"navigator",saved.navigator);else delete globalThis.navigator;
   }
 });
+
+test("Sandbox offline tem dois humanos controláveis, cartas à vontade e não substitui partida offline",async()=>{
+  const data=new Map(),saved={storage:globalThis.localStorage,window:globalThis.window,document:globalThis.document,
+    navigator:Object.getOwnPropertyDescriptor(globalThis,"navigator")};
+  globalThis.localStorage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,String(v)),removeItem:k=>data.delete(k)};
+  globalThis.window={setInterval:()=>1};
+  globalThis.document={visibilityState:"visible",addEventListener:()=>{}};
+  Object.defineProperty(globalThis,"navigator",{configurable:true,value:{storage:{persist:async()=>true}}});
+  try{
+    const url=await bundledRuntime(),runtime=await import(url+"#sandbox-first");
+    const offlineCode=runtime.startLocalSolo("Jogador");
+    assert.match(offlineCode,/^OFF/);
+    const offlineCopy=data.get("unopro.offline.solo.v2");
+    const sandboxCode=runtime.startLocalSandbox("Tester");
+    assert.match(sandboxCode,/^SBX[A-Z0-9]{5}$/);
+    const first=runtime.localRpc("get_room_state",{p_code:sandboxCode});
+    assert.equal(first.room.is_public,false);
+    assert.equal(first.room.sandbox,true);
+    assert.equal(first.game.sandbox,true);
+    assert.equal(first.members.filter(p=>p.bot).length,0);
+    assert.equal(first.members.length,2);
+    const original=first.me;
+    const next=first.members.find(p=>p.id!==original).id;
+    const handA=[...first.game.my_hand];
+    assert.deepEqual(runtime.localRpc("sandbox_switch",{p_target_id:next}),{ok:true});
+    const other=runtime.localRpc("get_room_state",{p_code:sandboxCode});
+    assert.equal(other.me,next);
+    assert.notEqual(original,other.me);
+    const before=other.game.my_hand.length;
+    const num=runtime.localRpc("sandbox_grant_card",{p_kind:"NUMBER"});
+    assert.match(num.card,/^[rygb][0-9]$/);
+    const special=runtime.localRpc("sandbox_grant_card",{p_kind:"E"});
+    assert.match(special.card,/^[rygb]E$/);
+    const wild=runtime.localRpc("sandbox_grant_card",{p_kind:"W5"});
+    assert.equal(wild.card,"W5");
+    const roach=runtime.localRpc("sandbox_grant_card",{p_kind:"A"});
+    assert.match(roach.card,/^[rygb]A@/);
+    assert.throws(()=>runtime.localRpc("sandbox_grant_card",{p_kind:"arbitrary script"}),/INVALID_CARD/);
+    assert.equal(runtime.localRpc("get_room_state",{p_code:sandboxCode}).game.my_hand.length,before+4);
+    runtime.localRpc("sandbox_switch",{p_target_id:original});
+    assert.deepEqual(runtime.localRpc("get_room_state",{p_code:sandboxCode}).game.my_hand,handA,
+      "a mão de um jogador não revela nem herda cartas do outro");
+    const originalSolo=JSON.parse(offlineCopy),preservedSolo=JSON.parse(data.get("unopro.offline.solo.v2"));
+    assert.equal(preservedSolo.code,originalSolo.code);
+    assert.deepEqual(preservedSolo.room.hands,originalSolo.room.hands,
+      "Sandbox não altera a mão da partida offline salva");
+    assert.equal(preservedSolo.source,"local");
+    assert.ok(data.has("unopro.offline.sandbox.v1"));
+    assert.ok(!runtime.localRpc("list_public_rooms").some(r=>r.code===sandboxCode),"Sandbox não é público");
+    const reload=await import(url+"#sandbox-second");
+    assert.equal(reload.hasLocalRoom(sandboxCode),true);
+    assert.equal(reload.localRpc("get_room_state").me,original);
+    assert.equal(reload.hasLocalRoom(offlineCode),true);
+    assert.equal(reload.localRpc("get_room_state").room.code,offlineCode);
+    assert.equal(reload.discardOfflineMatch(),true);
+    assert.equal(data.has("unopro.offline.solo.v2"),false);
+    assert.equal(reload.hasLocalRoom(sandboxCode),true,"Excluir offline não apaga sandbox");
+  }finally{
+    if(saved.storage===undefined)delete globalThis.localStorage;else globalThis.localStorage=saved.storage;
+    if(saved.window===undefined)delete globalThis.window;else globalThis.window=saved.window;
+    if(saved.document===undefined)delete globalThis.document;else globalThis.document=saved.document;
+    if(saved.navigator)Object.defineProperty(globalThis,"navigator",saved.navigator);else delete globalThis.navigator;
+  }
+});

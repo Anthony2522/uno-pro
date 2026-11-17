@@ -1,6 +1,6 @@
 import type { RuleSettings } from "@/lib/uno/api";
 import {CUSTOM_COLOR_CARDS,CUSTOM_WILD_CARDS,type CardSettings,type CustomCardKey} from "@/lib/uno/cardSettings";
-import {UnoCard} from "./UnoCard";
+import {StableCardPreview} from "./StableCardPreview";
 
 const RULE_ITEMS=[
   ["nine","Regra do 9","Com três ou mais participantes, o último a apertar 9 compra cartas."],
@@ -19,8 +19,7 @@ function CardGroup({title,items,cards,onChange}:{title:string;
       <label key={item.key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-glass-border/60 bg-navy/40 p-2.5 hover:border-cyan/40">
         <input type="checkbox" checked={cards[item.key]} onChange={e=>onChange({...cards,[item.key]:e.target.checked})}
           className="size-4 shrink-0 accent-cyan" aria-label={item.name}/>
-        <UnoCard card={item.key==="A"?"bA@00000000-0000-4000-8000-000000000001":item.key.length>1||["X","B","N","P","M","Q"].includes(item.key)?item.key:"b"+item.key}
-          size="sm" className="!w-12 shrink-0"/>
+        <StableCardPreview card={item.key==="A"?"bA@00000000-0000-4000-8000-000000000001":item.key.length>1||["X","B","N","P","M","Q"].includes(item.key)?item.key:"b"+item.key} width={48}/>
         <span className="min-w-0">
           <span className="block text-sm font-semibold">{item.name} <span className="font-normal text-muted-foreground">· {item.count} no baralho</span></span>
           <span className="mt-0.5 block text-xs text-muted-foreground">{item.description}</span>
@@ -38,6 +37,15 @@ export function AdvancedRoomSettingsFields({
   onCardsChange:(cards:CardSettings)=>void;
 }){
   return <div className="space-y-3">
+    <label className="block rounded-xl border border-glass-border/60 bg-navy/40 p-3">
+      <span className="block text-sm font-semibold">Cartas iniciais por jogador</span>
+      <span className="mb-2 block text-xs text-muted-foreground">De 2 a 20 cartas; padrão de 8.</span>
+      <select value={startingCards} onChange={e=>onStartingCardsChange(Number(e.target.value))}
+        aria-label="Cartas iniciais por jogador"
+        className="h-11 w-full rounded-xl border border-glass-border bg-navy px-3 text-sm text-foreground">
+        {Array.from({length:19},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} cartas</option>)}
+      </select>
+    </label>
     <p className="text-xs text-muted-foreground">Todas as regras e cartas opcionais vêm ativadas. As cartas comuns (números, Volta, Bloqueio, +2, Coringa e +4) permanecem no baralho.</p>
     <section aria-label="Regras opcionais" className="space-y-2">
       <h3 className="px-1 font-display text-sm font-bold text-cyan">Regras da partida</h3>
@@ -52,14 +60,6 @@ export function AdvancedRoomSettingsFields({
     </section>
     <CardGroup title="Cartas especiais coloridas" items={CUSTOM_COLOR_CARDS} cards={cards} onChange={onCardsChange}/>
     <CardGroup title="Coringas especiais" items={CUSTOM_WILD_CARDS} cards={cards} onChange={onCardsChange}/>
-    <label className="block rounded-xl border border-glass-border/60 bg-navy/40 p-3">
-      <span className="block text-sm font-semibold">Cartas iniciais por jogador</span>
-      <span className="mb-2 block text-xs text-muted-foreground">De 2 a 20 cartas; padrão de 8.</span>
-      <select value={startingCards} onChange={e=>onStartingCardsChange(Number(e.target.value))}
-        aria-label="Cartas iniciais por jogador"
-        className="h-11 w-full rounded-xl border border-glass-border bg-navy px-3 text-sm text-foreground">
-        {Array.from({length:19},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} cartas</option>)}
-      </select>
-    </label>
+
   </div>;
 }
