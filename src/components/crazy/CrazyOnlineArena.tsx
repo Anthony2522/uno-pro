@@ -103,6 +103,8 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    };
    const mouseUp=(e:MouseEvent)=>{if(e.button===0&&chargeStarted.current){chargeStarted.current=0;setCharge(false);setChargePower(0);send("bowRelease");}if(e.button===2)send("shield",{active:false});};
    const prevent=(e:Event)=>e.preventDefault();
+   const unlockAfterFinish=()=>{const locked=document.pointerLockElement;if(!isPlaying()&&locked&&root.current?.contains(locked))document.exitPointerLock?.();};
+   document.addEventListener("pointerlockchange",unlockAfterFinish);
    const lockOnPlay=()=>{if(isPlaying()&&matchMedia("(hover:hover) and (pointer:fine)").matches&&document.pointerLockElement!==renderer.domElement)renderer.domElement.requestPointerLock?.();};
    renderer.domElement.addEventListener("click",lockOnPlay);renderer.domElement.addEventListener("contextmenu",prevent);
    window.addEventListener("keydown",keyDown);window.addEventListener("keyup",keyUp);window.addEventListener("blur",clearKeys);
@@ -112,7 +114,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    frame=requestAnimationFrame(animate);
    if(document.hidden||!crazyShouldRender(now,lastRendered))return;
    lastRendered=now;const dt=Math.min(.05,(now-last)/1000);last=now;
-   if(!isPlaying()){const locked=document.pointerLockElement;if(locked&&root.current?.contains(locked))document.exitPointerLock?.();}
+   if(!isPlaying()){unlockAfterFinish();if(data.current.status==="finished")return;}
    const s=data.current,local=s.players.find(p=>p.id===id),i=input.current;
    if(keys.current.size){i.x=(keys.current.has("KeyD")?1:0)-(keys.current.has("KeyA")?1:0);i.z=(keys.current.has("KeyS")?1:0)-(keys.current.has("KeyW")?1:0);}else if(stick.current===null){i.x=0;i.z=0;}
    const elapsedSwing=now-swingAt.current;
@@ -139,7 +141,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    renderer.render(scene,camera);
   }frame=requestAnimationFrame(animate);
   const observer=new ResizeObserver(()=>{camera.aspect=node.clientWidth/node.clientHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(crazyPixelRatio(node.clientWidth,node.clientHeight,devicePixelRatio));renderer.setSize(node.clientWidth,node.clientHeight);});observer.observe(node);
-  return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("blur",clearKeys);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.domElement.removeEventListener("click",lockOnPlay);
+  return()=>{cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener("pointerlockchange",unlockAfterFinish);window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("blur",clearKeys);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.domElement.removeEventListener("click",lockOnPlay);
    if(document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();
    renderer.dispose();cleanupWorld();visuals.dispose();for(const plate of nameplates.values()){plate.texture.dispose();plate.sprite.material.dispose();}cube.dispose();for(const m of materials)m.dispose();fire.dispose();red.dispose();skin.dispose();node.removeChild(renderer.domElement);};
  },[id,ws]);
