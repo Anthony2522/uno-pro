@@ -49,7 +49,19 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
     else {const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,depthTest:true,transparent:true}));
       sprite.position.y=2.55;sprite.scale.set(2.35,.61,1);group.add(sprite);nameplates.set(p.id,{sprite,texture,label});}
   }
-  function makeFighter(){const group=new THREE.Group();block(group,0,1.65,0,.7,.65,.6,skin);block(group,0,1,0,.85,.85,.5,red);block(group,0,1.99,0,.8,.2,.65,materials[3]!);for(const x of [-.25,.25])block(group,x,.35,0,.3,.7,.4,materials[3]!);for(const x of [-.6,.6])block(group,x,1.05,0,.3,.8,.4,red);scene.add(group);return group;}
+  function makeFighter(){
+    const group=new THREE.Group();
+    block(group,0,1.65,0,.7,.65,.6,skin);
+    block(group,0,1,0,.85,.85,.5,red);
+    block(group,0,1.99,0,.8,.2,.65,materials[3]!);
+    const legs=[block(group,-.25,.35,0,.3,.7,.4,materials[3]!),block(group,.25,.35,0,.3,.7,.4,materials[3]!)];
+    const arms=[block(group,-.6,1.05,0,.3,.8,.4,red),block(group,.6,1.05,0,.3,.8,.4,red)];
+    const equippedSword=block(group,.8,1.0,-.35,.13,.65,.14,new THREE.MeshLambertMaterial({color:"#e5d9df"}));
+    const equippedShield=block(group,-.9,1.08,-.32,.52,.68,.18,materials[2]!);
+    const equippedBow=block(group,.82,1,-.32,.13,.85,.16,materials[2]!);
+    group.userData={legs,arms,equippedSword,equippedShield,equippedBow,lastX:0,lastZ:0};
+    scene.add(group);return group;
+  }
   const swordHolder=new THREE.Group();camera.add(swordHolder);
   const silver=new THREE.MeshLambertMaterial({color:"#e5d9df"});
   const gold=new THREE.MeshLambertMaterial({color:"#e1a144"});
@@ -75,14 +87,25 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    const elapsedSwing=now-swingAt.current;
    swordHolder.rotation.z=elapsedSwing<250?-Math.sin(elapsedSwing/250*Math.PI)*.9:0;
    if(local){camera.position.lerp(new THREE.Vector3(local.x,local.y+1.65,local.z),Math.min(1,dt*18));camera.rotation.order="YXZ";camera.rotation.set(i.pitch,i.yaw,0);swordHolder.visible=local.weapon==="sword";shield.visible=local.weapon==="sword";shield.position.y=local.shield?-.25:-.6;bow.visible=local.weapon==="bow";}
-   for(const p of s.players){if(p.id===id||!p.alive){const g=fighters.get(p.id);if(g)g.visible=false;continue;}let g=fighters.get(p.id);if(!g){g=makeFighter();fighters.set(p.id,g);}g.visible=true;g.position.lerp(new THREE.Vector3(p.x,p.y,p.z),Math.min(1,dt*12));g.rotation.y=p.yaw;setNameplate(p,g);}
+   for(const p of s.players){if(p.id===id||!p.alive){const g=fighters.get(p.id);if(g)g.visible=false;continue;}let g=fighters.get(p.id);if(!g){g=makeFighter();fighters.set(p.id,g);}g.visible=true;
+    const moved=Math.hypot(p.x-g.position.x,p.z-g.position.z)>.03;
+    g.position.lerp(new THREE.Vector3(p.x,p.y,p.z),Math.min(1,dt*12));
+    g.rotation.y=p.yaw;setNameplate(p,g);
+    const gear=g.userData;
+    const swing=moved?Math.sin(now*.012)*.45:0;
+    gear.legs[0].rotation.x=swing;gear.legs[1].rotation.x=-swing;
+    gear.arms[0].rotation.x=-swing*.65;gear.arms[1].rotation.x=swing*.65;
+    gear.equippedSword.visible=p.weapon==="sword";
+    gear.equippedShield.visible=p.weapon==="sword";
+    gear.equippedShield.position.z=p.shield?-.65:-.32;
+    gear.equippedBow.visible=p.weapon==="bow";}
    for(const a of s.arrows||[]){let m=arrows.get(a.id);if(!m){m=block(scene,0,0,0,.1,.1,.55,materials[1]!);arrows.set(a.id,m);}m.position.lerp(new THREE.Vector3(a.x,a.y,a.z),Math.min(1,dt*16));}
    for(const [aid,m] of arrows)if(!(s.arrows||[]).some(a=>a.id===aid)){scene.remove(m);arrows.delete(aid);}
    if(now-network>50){network=now;if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",...i}));i.jump=false;}
    renderer.render(scene,camera);
   }frame=requestAnimationFrame(animate);
   const observer=new ResizeObserver(()=>{camera.aspect=node.clientWidth/node.clientHeight;camera.updateProjectionMatrix();renderer.setSize(node.clientWidth,node.clientHeight);});observer.observe(node);
-  return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.dispose();cleanupWorld();for(const plate of nameplates.values()){plate.texture.dispose();plate.sprite.material.dispose();}cube.dispose();for(const m of materials)m.dispose();fire.dispose();red.dispose();skin.dispose();silver.dispose();gold.dispose();node.removeChild(renderer.domElement);};
+  return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.dispose();cleanupWorld();for(const group of fighters.values()){const weapon=group.userData.equippedSword as THREE.Mesh|undefined;if(weapon&&weapon.material instanceof THREE.Material)weapon.material.dispose();}for(const plate of nameplates.values()){plate.texture.dispose();plate.sprite.material.dispose();}cube.dispose();for(const m of materials)m.dispose();fire.dispose();red.dispose();skin.dispose();silver.dispose();gold.dispose();node.removeChild(renderer.domElement);};
  },[id,ws]);
  const pointerMove=(e:React.PointerEvent<HTMLDivElement>)=>{if(!look.current||look.current.id!==e.pointerId)return;input.current.yaw-=(e.clientX-look.current.x)*.004;input.current.pitch=Math.max(-1.35,Math.min(1.35,input.current.pitch-(e.clientY-look.current.y)*.004));look.current.x=e.clientX;look.current.y=e.clientY;};
  const joystick=(e:React.PointerEvent<HTMLDivElement>)=>{if(stick.current!==null&&stick.current!==e.pointerId)return;stick.current=e.pointerId;e.currentTarget.setPointerCapture(e.pointerId);const r=e.currentTarget.getBoundingClientRect();input.current.x=Math.max(-1,Math.min(1,(e.clientX-r.left-r.width/2)/(r.width*.4)));input.current.z=Math.max(-1,Math.min(1,(e.clientY-r.top-r.height/2)/(r.height*.4)));};
