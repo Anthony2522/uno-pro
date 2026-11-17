@@ -2,6 +2,8 @@ import {createContext,useContext,useEffect,useMemo,useRef,useState,type ReactNod
 import {localizeBotNames} from "./botNames";
 export type Language="pt"|"en";
 const dictionary:Record<string,string>={
+  "Carta adicionada à sua mão!": "Card added to your hand!",
+  "Manual de regras": "Rulebook",
   "Espectador": "Spectator",
   "Na fila de espera": "In waiting queue",
   "Partida ainda não começou": "Match not started",

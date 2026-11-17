@@ -37,7 +37,7 @@ export type GameActions = {
 
 export function GameTable({ state, busy, actions }: { state: RoomState; busy: boolean; actions: GameActions }) {
   const game = state.game!;
-  const {language}=useLanguage();
+  const {language,tr}=useLanguage();
   const me = state.me;
   const isSpectator=!!state.members.find(p=>p.id===me)?.spectator;
   const [pendingDetective,setPendingDetective]=useState<string|null>(null);
@@ -85,7 +85,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     if(!notice||lastPrivateNotice.current===notice.nonce)return;
     lastPrivateNotice.current=notice.nonce;
     if(Date.now()-new Date(notice.at).getTime()<9000)
-      toast.info(notice.message,{duration:4600});
+      toast.info(tr(notice.message),{duration:4600});
   },[game.private_notice?.nonce]);
   const [recentDraw,setRecentDraw] = useState<{card:string;nonce:number;at:number}|null>(null);
   const [drawFlight,setDrawFlight] = useState<number|null>(null);
@@ -194,7 +194,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     }
   },[game.card_moves,me]);
   function onCard(c: string) {
-    if (!canPlay(c)) {sfx("error");toast.error(lockedColor?(language==="en"?`Lock: only ${({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[lockedColor]} cards, no wilds.`:`Cadeado: só cartas ${COLOR_NAMES[lockedColor]}, sem coringas.`):"Essa carta não pode ser jogada agora.",{duration:3000});return;}
+    if (!canPlay(c)) {sfx("error");toast.error(lockedColor?(language==="en"?`Lock: only ${({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[lockedColor]} cards, no wilds.`:`Cadeado: só cartas ${COLOR_NAMES[lockedColor]}, sem coringas.`):tr("Essa carta não pode ser jogada agora."),{duration:3000});return;}
     if(effectiveCard(c)==="X"){setDetectiveDismissed(false);setPendingDetective(c);return;}
     // A wild, even a jump-in, is placed on the discard pile before choosing its color.
     actions.play(c);

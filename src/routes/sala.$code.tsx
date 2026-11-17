@@ -39,7 +39,7 @@ function RoomPage() {
   const { code: rawCode } = Route.useParams();
   const code = rawCode.toUpperCase();
   const navigate = useNavigate();
-  const {language}=useLanguage();
+  const {language,tr}=useLanguage();
   const { state, fatal, connection, refresh, leave, token } = useRoom(code);
   const [busy, setBusy] = useState(false);
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
@@ -66,13 +66,13 @@ function RoomPage() {
         await fn();
       } catch (e) {
         sfx("error");
-        toast.error(errorMessage(e));
+        toast.error(tr(errorMessage(e)));
       } finally {
         setBusy(false);
         void refresh();
       }
     },
-    [refresh],
+    [refresh,tr],
   );
 
   // One shared five-second window. More than two notifications appear
@@ -192,7 +192,7 @@ function RoomPage() {
     sandboxToggleBot: state.room.sandbox ? ()=>act(()=>api.sandboxToggleBot(code)) : undefined,
     sandboxGrant: state.room.sandbox ? (kind)=>act(async()=>{
       const result=await api.sandboxGrantCard(code,kind);
-      toast.success("Carta adicionada à sua mão!");
+      toast.success(tr("Carta adicionada à sua mão!"));
       return result;
     }) : undefined,
   };
