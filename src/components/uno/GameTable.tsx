@@ -235,13 +235,13 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold">{p.nickname}</p>
                   <p className={cn("text-[0.7rem]", turn ? "font-semibold text-cyan" : "text-muted-foreground")}>
-                    {turn ? "Jogando…" : p.online ? `${p.card_count} carta${p.card_count === 1 ? "" : "s"}` : (
+                    {turn ? (language==="en"?"Playing…":"Jogando…") : p.online ? (language==="en"?`${p.card_count} ${p.card_count===1?"card":"cards"}`:`${p.card_count} carta${p.card_count === 1 ? "" : "s"}`) : (
                       <span className="inline-flex items-center gap-1"><WifiOff className="size-3" /> offline</span>
                     )}
                   </p>
                 </div>
               </div>
-              <div data-seat-cards className="flex h-9 items-center" aria-label={`${p.card_count} cartas`}>
+              <div data-seat-cards className="flex h-9 items-center" aria-label={`${p.card_count} ${language==="en"?"cards":"cartas"}`}>
                 {Array.from({ length: Math.min(p.card_count, 8) }).map((_, i) => (
                   <CardBack key={i} size="xs" className={cn(i > 0 && "-ml-4")} />
                 ))}
@@ -380,7 +380,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </div>
       )}
       {/* Spectators watch the table without a hand or playable controls. */}
-      {isSpectator ? <div className="mx-auto w-full rounded-xl border border-glass-border bg-navy/80 px-4 py-4 text-center text-sm text-muted-foreground">Você está assistindo à partida. Sua vez de jogar será na próxima rodada, quando houver vaga.</div> : <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
+      {isSpectator ? <div className="mx-auto w-full rounded-xl border border-glass-border bg-navy/80 px-4 py-4 text-center text-sm text-muted-foreground">{language==="en"?"You are watching this match. You can join the next round if a seat opens up.":"Você está assistindo à partida. Sua vez de jogar será na próxima rodada, quando houver vaga."}</div> : <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
         <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
           <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<Shield aria-label="Escudo ativo" className="ml-1 inline-block size-3.5 align-[-2px] text-cyan" strokeWidth={2.7}/>}{(game.swords?.[me]||0)>0&&<Sword aria-label="Espada ativa" className="ml-1 inline-block size-3.5 align-[-2px] text-amber-300" strokeWidth={2.7}/>} </span>
           <HandCardsGuide cards={hand} trigger={
@@ -390,12 +390,12 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             </button>
           }/>
           <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3"
-            onClick={()=>{if(busy)return;if(!game.can_catch_uno){toast.info("DESUNO: só é possível denunciar quem está há pelo menos 4 segundos com uma carta sem gritar UNO.");return;}actions.catchUno();}}
+            onClick={()=>{if(busy)return;if(!game.can_catch_uno){toast.info(language==="en"?"DESUNO: you can only catch players who have held one card for at least 4 seconds without calling UNO.":"DESUNO: só é possível denunciar quem está há pelo menos 4 segundos com uma carta sem gritar UNO.");return;}actions.catchUno();}}
             title="Desuno: denuncie quem está há 4 segundos com uma carta sem gritar UNO."
             aria-label="Desuno">
             <ShieldAlert className="size-4 shrink-0"/><span>Desuno</span>
           </Button>
-          <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3" onClick={()=>{if(busy)return;if(!canUno){toast.info("UNO: aperte quando estiver com uma carta (ou duas antes de jogar a penúltima).");return;}actions.uno();}} aria-label="Gritar UNO">
+          <Button variant="glass" className="h-9 shrink-0 rounded-xl px-2 text-xs sm:px-3" onClick={()=>{if(busy)return;if(!canUno){toast.info(language==="en"?"UNO: press when you have one card (or two before playing your second-to-last).":"UNO: aperte quando estiver com uma carta (ou duas antes de jogar a penúltima).");return;}actions.uno();}} aria-label="Gritar UNO">
             <Megaphone className="size-4 shrink-0"/><span>UNO</span>
           </Button>
         </div>
@@ -441,7 +441,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         <DialogContent className="glass-strong rounded-3xl border-glass-border sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Eye className="size-5 text-cyan"/> Coringa Detetive</DialogTitle>
-            <DialogDescription>Primeiro escolha o adversário. Depois de inspecionar a mão dele por até 10 segundos, você poderá escolher a cor que mais o prejudica.</DialogDescription>
+            <DialogDescription>{language==="en"?"First pick an opponent. After viewing their hand for up to 10 seconds, choose the color that puts them at a disadvantage.":"Primeiro escolha o adversário. Depois de inspecionar a mão dele por até 10 segundos, você poderá escolher a cor que mais o prejudica."}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
             {game.turn_order.filter(id=>id!==me).map(id=>{
@@ -455,7 +455,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         </DialogContent>
       </Dialog>
       {detectiveActive&&game.detective&&(
-        <div role="button" tabIndex={0} aria-label="Finalizar inspeção e escolher cor"
+        <div role="button" tabIndex={0} aria-label={language==="en"?"Finish inspection and choose a color":"Finalizar inspeção e escolher cor"}
           onClick={()=>setDetectiveDismissed(true)}
           onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setDetectiveDismissed(true);}}}
           className="pointer-events-auto fixed inset-0 z-[65] flex justify-center bg-navy/70 px-3 pt-[4.5rem]">
@@ -474,7 +474,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-center text-xs font-bold text-cyan">Clique em qualquer lugar para encerrar a visualização e escolher a cor.</p>
+            <p className="mt-3 text-center text-xs font-bold text-cyan">{language==="en"?"Click anywhere to close the inspection and choose a color.":"Clique em qualquer lugar para encerrar a visualização e escolher a cor."}</p>
           </div>
         </div>
       )}

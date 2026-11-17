@@ -10,6 +10,7 @@ import { UnoCard } from "@/components/uno/UnoCard";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/uno/api";
 import { useReadyGuest } from "@/lib/uno/guest";
+import { useLanguage } from "@/lib/uno/i18n";
 import {getLocalMatch,getLocalSandbox,discardOfflineMatch,discardSandboxMatch,startLocalSandbox} from "@/lib/uno/offlineRuntime";
 
 export const Route = createFileRoute("/")({
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const { guest } = useReadyGuest();
+  const {tr}=useLanguage();
   const navigate=useNavigate();
   const [,refreshOffline]=useState(0);
   const localMatch=getLocalMatch();
@@ -86,7 +88,7 @@ function Home() {
                 className="h-14 w-12 shrink-0 rounded-2xl border border-destructive/35 text-destructive"
                 title="Excluir sala offline salva" aria-label="Excluir sala offline"
                 onClick={()=>{
-                  if(!window.confirm("Excluir sua partida offline salva neste aparelho? Esta ação não pode ser desfeita."))return;
+                  if(!window.confirm(tr("Excluir sua partida offline salva neste aparelho? Esta ação não pode ser desfeita.")))return;
                   if(discardOfflineMatch())refreshOffline(n=>n+1);
                 }}><X className="size-5"/></Button>}
             </div>
@@ -97,7 +99,7 @@ function Home() {
               }}>
               <FlaskConical className="size-5"/> {sandbox?.playing?"Continuar sala Sandbox":"Criar sala Sandbox (teste de cartas)"}
             </Button>
-              {sandbox&&<Button variant="glass" size="iconLg" className="h-11 w-12 shrink-0 rounded-2xl border border-destructive/35 text-destructive" title="Excluir sala Sandbox" aria-label="Excluir sala Sandbox" onClick={()=>{if(!window.confirm("Excluir sua sala Sandbox salva neste aparelho? Esta ação não pode ser desfeita."))return;if(discardSandboxMatch())refreshOffline(n=>n+1);}}><X className="size-5"/></Button>}</div>
+              {sandbox&&<Button variant="glass" size="iconLg" className="h-11 w-12 shrink-0 rounded-2xl border border-destructive/35 text-destructive" title="Excluir sala Sandbox" aria-label="Excluir sala Sandbox" onClick={()=>{if(!window.confirm(tr("Excluir sua sala Sandbox salva neste aparelho? Esta ação não pode ser desfeita.")))return;if(discardSandboxMatch())refreshOffline(n=>n+1);}}><X className="size-5"/></Button>}</div>
             <p className="text-xs text-muted-foreground">Partidas offline e Sandbox ficam apenas neste aparelho. No Sandbox você controla os dois jogadores.</p>
           </div>
           {activeRoom && (

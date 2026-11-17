@@ -4,12 +4,14 @@ import {toast} from "sonner";
 import {api} from "@/lib/uno/api";
 import {useReadyGuest} from "@/lib/uno/guest";
 import {Button} from "@/components/ui/button";
+import {useLanguage} from "@/lib/uno/i18n";
 
 type AdminRoom=Awaited<ReturnType<typeof api.adminListRooms>>[number];
 
 /** Tony-only dashboard; list and removal are separately authorized server-side. */
 export function AdminRoomsPanel(){
   const {guest,isDev}=useReadyGuest();
+  const {language}=useLanguage();
   const [rooms,setRooms]=useState<AdminRoom[]>([]);
   const [busy,setBusy]=useState<string|null>(null);
   const [error,setError]=useState("");
@@ -25,9 +27,9 @@ export function AdminRoomsPanel(){
   },[isDev,refresh]);
   if(!isDev)return null;
   const remove=async(room:AdminRoom)=>{
-    if(!window.confirm(`Encerrar e excluir definitivamente a sala "${room.name}" (${room.code})? Todos os jogadores serão removidos.`))return;
+    if(!window.confirm(language==="en"?`Permanently delete room "${room.name}" (${room.code})? All players will be removed.`:`Encerrar e excluir definitivamente a sala "${room.name}" (${room.code})? Todos os jogadores serão removidos.`))return;
     setBusy(room.code);
-    try{await api.adminDeleteRoom(guest.token,room.code);toast.success(`Sala ${room.code} excluída`);await refresh();}
+    try{await api.adminDeleteRoom(guest.token,room.code);toast.success(language==="en"?`Room ${room.code} deleted`:`Sala ${room.code} excluída`);await refresh();}
     catch(e){toast.error((e as Error).message)}
     finally{setBusy(null)}
   };

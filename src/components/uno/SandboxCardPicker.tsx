@@ -3,6 +3,7 @@ import {FlaskConical,Plus} from "lucide-react";
 import {Button} from "@/components/ui/button";
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from "@/components/ui/dialog";
 import {StableCardPreview} from "./StableCardPreview";
+import {useLanguage} from "@/lib/uno/i18n";
 
 const COLORED=[
   ["R","Volta"],["S","Bloqueio"],["D","+2"],
@@ -16,12 +17,13 @@ const WILDS=[
 
 export function SandboxCardPicker({disabled,onGrant}:{disabled:boolean;onGrant:(kind:string)=>void}){
   const [open,setOpen]=useState(false);
+  const {tr}=useLanguage();
   const choose=(kind:string)=><Button key={kind} type="button" variant="glass"
     className="h-auto min-h-14 justify-start gap-2 rounded-xl px-2 py-2 text-left"
     disabled={disabled} onClick={()=>onGrant(kind)}>
     <StableCardPreview card={kind==="A"?"bA@00000000-0000-4000-8000-000000000001":
       ["W","W4","W5","X","B","N","P","M","Q"].includes(kind)?kind:"b"+kind} width={32}/>
-    <span className="min-w-0 flex-1 text-xs font-bold">{[...COLORED,...WILDS].find(([k])=>k===kind)?.[1]??kind}</span>
+    <span className="min-w-0 flex-1 text-xs font-bold">{tr([...COLORED,...WILDS].find(([k])=>k===kind)?.[1]??kind)}</span>
     <Plus className="size-3.5 shrink-0"/>
   </Button>;
   return <>
