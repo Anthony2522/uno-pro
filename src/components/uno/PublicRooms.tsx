@@ -92,7 +92,7 @@ export function PublicRooms({ onCreate }: { onCreate: () => void }) {
           {rooms.map((r) => {
             const full = r.player_count >= r.max_players;
             const playing = r.status === "playing";
-            const state = playing ? "Em jogo" : full ? "Cheia" : "Aguardando";
+            const state = playing ? "Partida em andamento" : "Partida ainda não começou";
             return (
               <li key={r.code} className="flex items-center gap-3 rounded-2xl border border-glass-border bg-navy/40 p-3 transition-colors hover:border-cyan/30 sm:p-4">
                 <div className="min-w-0 flex-1">
@@ -118,11 +118,11 @@ export function PublicRooms({ onCreate }: { onCreate: () => void }) {
                 {isDev&&<Button variant="glass" size="icon" aria-label={`Excluir sala ${r.name}`}
                   title="Excluir sala" onClick={()=>void deletePublic(r.code,r.name)}
                   className="shrink-0 text-destructive hover:bg-destructive/15"><Trash2 className="size-4"/></Button>}
-                {playing || full ? (
-                  <Button variant="soft" disabled className="h-11 rounded-xl">{playing ? "Em jogo" : "Cheia"}</Button>
+                {!playing && full ? (
+                  <Button variant="soft" disabled className="h-11 rounded-xl">Cheia</Button>
                 ) : (
                   <Button asChild variant="cyan" className="h-11 rounded-xl px-5">
-                    <Link to="/sala/$code" params={{ code: r.code }} aria-label={`Entrar na sala ${r.name}`}>Entrar</Link>
+                    <Link to="/sala/$code" params={{ code: r.code }} aria-label={`Entrar na sala ${r.name}`}>{playing?"Assistir / Fila de espera":"Entrar"}</Link>
                   </Button>
                 )}
               </li>
