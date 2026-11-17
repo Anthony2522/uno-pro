@@ -1839,6 +1839,10 @@ test("Multijogador pode voltar ao sair, mas não depois de expulso por inativida
   assert.ok(call("list_rejoinable_rooms",{p_token:a.token}).some(r=>r.code===s.code&&!r.solo));
   call("join_room",{p_token:a.token,p_code:s.code});
   assert.ok(room.members.some(m=>m.guest_id===a.guest_id));
+  // Auto-draw is a legitimate game action and cancels inactivity. Ensure a
+  // matching card is available so this test measures ONLY consecutive timeouts.
+  g.current_color="r";g.discard_pile=["r6"];
+  room.hands.get(a.guest_id).cards=["r1","b4"];
   g.turn_started_at=Date.now()-60000;
   proSweep();
   s.setTurn(a.guest_id);g.turn_started_at=Date.now()-60000;
