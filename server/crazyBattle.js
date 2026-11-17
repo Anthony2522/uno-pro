@@ -18,15 +18,19 @@ const snapshot = room => ({type:"state",code:room.code,status:room.status,host:r
  arrows:room.arrows.map(a=>({id:a.id,x:a.x,y:a.y,z:a.z}))});
 const lobby = room => broadcast(room, snapshot(room));
 const randomCode = () => { let c; do {c=randomBytes(4).toString("hex").toUpperCase();}while(rooms.has(c));return c;};
-function spawn(p, index){const spots=[[-4,-4],[4,4],[-4,4],[4,-4],[0,5],[5,0],[-5,0],[0,-5]];[p.x,p.z]=spots[index%spots.length];p.y=0;p.hp=100;p.vy=0;p.shield=false;p.weapon="sword";p.cooldown=0;p.chargeAt=0;p.input={x:0,z:0,jump:false};}
+function spawn(p, index){const spots=[[-4,-4],[4,4],[-4,4],[4,-4],[0,5],[5,0],[-5,0],[0,-5]];[p.x,p.z]=spots[index%spots.length];p.y=0;p.hp=100;p.vy=0;p.shield=false;p.weapon="sword";p.cooldown=0;p.chargeAt=0;p.defendUntil=0;p.input={x:0,z:0,jump:false};}
 function participant(id,name,ws,bot=false){return {id,name,ws,bot,resumeKey:randomBytes(24).toString("hex"),disconnectedAt:0,x:0,y:0,z:0,yaw:0,pitch:0,hp:100,vy:0,shield:false,weapon:"sword",cooldown:0,chargeAt:0,input:{x:0,z:0,jump:false}};}
 function finish(room){const alive=[...room.players.values(),...room.bots.values()].filter(p=>p.hp>0);if(room.status==="playing"&&alive.length<=1){room.status="finished";room.winner=alive[0]?.id??null;broadcast(room,{type:"finished",winner:room.winner});lobby(room);}}
+export function calculateCrazyDamage(damage,shield,weapon,yaw,dx,dz){
+ const len=Math.hypot(dx,dz)||1;
+ const dot=(-Math.sin(yaw)*dx-Math.cos(yaw)*dz)/len;
+ const blocked=!!shield&&weapon==="sword"&&dot>0.25;
+ return {damage:Math.max(1,Math.round(damage*(blocked?1-RULES.shieldReduction:1))),blocked};
+}
 function hit(room,attacker,target,damage,fromX,fromZ){
  if(target.hp<=0||room.status!=="playing")return;
- const dx=fromX-target.x,dz=fromZ-target.z,len=Math.hypot(dx,dz)||1;
- const forwardX=-Math.sin(target.yaw),forwardZ=-Math.cos(target.yaw);
- const blocked=target.shield&&target.weapon==="sword"&&(forwardX*dx+forwardZ*dz)/len>0.25;
- target.hp=Math.max(0,target.hp-Math.max(1,Math.round(damage*(blocked?1-RULES.shieldReduction:1))));
+ const {damage:effective,blocked}=calculateCrazyDamage(damage,target.shield,target.weapon,target.yaw,fromX-target.x,fromZ-target.z);
+ target.hp=Math.max(0,target.hp-effective);
  broadcast(room,{type:"hit",target:target.id,attacker:attacker.id,hp:target.hp,blocked});
  finish(room);
 }
@@ -59,8 +63,9 @@ function tick(room){
    enemies.sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z));
    const t=enemies[0];if(!t)continue;
    const dx=t.x-p.x,dz=t.z-p.z,d=Math.hypot(dx,dz)||1;
-   p.yaw=Math.atan2(-dx,-dz);p.pitch=0;
-   p.weapon=d>3.4?"bow":"sword";p.shield=p.weapon==="sword"&&Math.random()<.015;
+   p.yaw=Math.atan2(-dx,-dz);p.pitch=Math.min(.25,Math.atan2(d*.13,d));
+   p.weapon=d>3.4?"bow":"sword";if(p.weapon==="sword"&&d<2.6&&now>(p.defendUntil||0)&&Math.random()<.018)p.defendUntil=now+380;
+   p.shield=p.weapon==="sword"&&now<(p.defendUntil||0);
    p.input={x:0,z:d>1.6?-1:0,jump:Math.random()<.002};
    if(p.weapon==="sword"&&d<2.35)attack(room,p,now);
    if(p.weapon==="bow"){if(!p.chargeAt)p.chargeAt=now;else if(now-p.chargeAt>900)shoot(room,p,now);}
@@ -71,6 +76,17 @@ function tick(room){
   p.x=clamp(p.x+dx*RULES.moveSpeed*dt,-6.9,6.9);p.z=clamp(p.z+dz*RULES.moveSpeed*dt,-6.9,6.9);
   if(p.input.jump&&p.y===0){p.vy=5.3;}p.input.jump=false;
   p.vy-=15*dt;p.y=Math.max(0,p.y+p.vy*dt);if(p.y===0)p.vy=0;
+ }
+ // Player bodies cannot pass through one another.
+ const live=[...room.players.values(),...room.bots.values()].filter(p=>p.hp>0);
+ for(let i=0;i<live.length;i++)for(let j=i+1;j<live.length;j++){
+  const a=live[i],b=live[j];if(Math.abs(a.y-b.y)>1.5)continue;
+  let dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz);
+  if(d>=.72)continue;
+  if(d<.001){dx=.01;dz=0;d=.01;}
+  const offset=(.72-d)/2;
+  a.x=clamp(a.x-dx/d*offset,-6.9,6.9);a.z=clamp(a.z-dz/d*offset,-6.9,6.9);
+  b.x=clamp(b.x+dx/d*offset,-6.9,6.9);b.z=clamp(b.z+dz/d*offset,-6.9,6.9);
  }
  for(const a of [...room.arrows]){
   const px=a.x,py=a.y,pz=a.z;
