@@ -9,6 +9,8 @@
   },
   "scripts": {
     "postinstall": "npm run build",
+    "prebuild": "node scripts/prepare-roach-images.mjs",
+    "predev": "node scripts/prepare-roach-images.mjs",
     "build": "vite build",
     "start": "node server.js",
     "dev": "vite",
