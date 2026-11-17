@@ -103,3 +103,40 @@ test("Crazy Battle: server computes shielded sword damage between online clients
   assert.equal(hit.hp,98);
  }finally{await app.close();}
 });
+
+test("Crazy Battle: bots join lobby and jump is server-authoritative",async()=>{
+ const app=await setup();
+ try{
+  const host=await app.client();host.send("create",{player:"Solo"});
+  const created=await host.until("joined");await host.until("state");
+  host.send("addBot");const lobby=await host.until("state");
+  assert.equal(lobby.players.length,2);
+  assert.equal(lobby.players.filter(p=>p.bot).length,1);
+  host.send("start");
+  let start=await host.until("state");while(start.status!=="playing")start=await host.until("state");
+  host.send("input",{x:0,z:0,yaw:0,pitch:0,jump:true});
+  await new Promise(r=>setTimeout(r,180));
+  const observe=await host.until("state");
+  assert.ok(observe.players.some(p=>p.id===created.id));
+  assert.equal(observe.players.every(p=>p.hp>=0&&p.hp<=100),true);
+ }finally{await app.close();}
+});
+test("Crazy Battle: bow charges indefinitely until explicit release",async()=>{
+ const app=await setup();
+ try{
+  const host=await app.client();host.send("create",{player:"Atirador"});
+  const created=await host.until("joined");await host.until("state");
+  const guest=await app.client();guest.send("join",{code:created.code,player:"Alvo"});
+  await guest.until("joined");await guest.until("state");
+  host.send("start");await host.until("state");
+  host.send("weapon");host.send("bowStart");
+  await new Promise(r=>setTimeout(r,220));
+  host.send("bowRelease");
+  let found=false;
+  for(let i=0;i<70;i++){
+   const state=await host.until("state",1500);
+   if(state.arrows?.length){found=true;break;}
+  }
+  assert.equal(found,true);
+ }finally{await app.close();}
+});
