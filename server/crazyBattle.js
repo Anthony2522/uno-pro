@@ -18,8 +18,8 @@ const snapshot = room => ({type:"state",code:room.code,status:room.status,host:r
  arrows:room.arrows.map(a=>({id:a.id,x:a.x,y:a.y,z:a.z}))});
 const lobby = room => {broadcast(room, snapshot(room));room.announceRooms?.();};
 const randomCode = () => { let c; do {c=randomBytes(4).toString("hex").toUpperCase();}while(rooms.has(c));return c;};
-function spawn(p, index){const spots=[[-4,-4],[4,4],[-4,4],[4,-4],[0,5],[5,0],[-5,0],[0,-5]];[p.x,p.z]=spots[index%spots.length];p.y=0;p.hp=100;p.vy=0;p.shield=false;p.weapon="sword";p.cooldown=0;p.chargeAt=0;p.defendUntil=0;p.input={x:0,z:0,jump:false};}
-function participant(id,name,ws,bot=false){return {id,name,ws,bot,resumeKey:randomBytes(24).toString("hex"),disconnectedAt:0,skin:"red",x:0,y:0,z:0,yaw:0,pitch:0,hp:100,vy:0,shield:false,weapon:"sword",cooldown:0,chargeAt:0,input:{x:0,z:0,jump:false}};}
+function spawn(p, index){const spots=[[-4,-4],[4,4],[-4,4],[4,-4],[0,5],[5,0],[-5,0],[0,-5]];[p.x,p.z]=spots[index%spots.length];p.y=0;p.hp=100;p.vy=0;p.vx=0;p.vz=0;p.shield=false;p.weapon="sword";p.cooldown=0;p.chargeAt=0;p.defendUntil=0;p.input={x:0,z:0,jump:false};}
+function participant(id,name,ws,bot=false){return {id,name,ws,bot,resumeKey:randomBytes(24).toString("hex"),disconnectedAt:0,skin:"red",x:0,y:0,z:0,yaw:0,pitch:0,hp:100,vy:0,vx:0,vz:0,shield:false,weapon:"sword",cooldown:0,chargeAt:0,input:{x:0,z:0,jump:false}};}
 function finish(room){const alive=[...room.players.values(),...room.bots.values()].filter(p=>p.hp>0);if(room.status==="playing"&&alive.length<=1){room.status="finished";room.winner=alive[0]?.id??null;broadcast(room,{type:"finished",winner:room.winner});lobby(room);}}
 export function calculateCrazyDamage(damage,shield,weapon,yaw,dx,dz){
  const len=Math.hypot(dx,dz)||1;
@@ -73,7 +73,11 @@ function tick(room){
   const mx=clamp(Number(p.input.x)||0,-1,1),mz=clamp(Number(p.input.z)||0,-1,1),norm=Math.max(1,Math.hypot(mx,mz));
   const dx=(mx*Math.cos(p.yaw)+mz*Math.sin(p.yaw))/norm;
   const dz=(-mx*Math.sin(p.yaw)+mz*Math.cos(p.yaw))/norm;
-  p.x=clamp(p.x+dx*RULES.moveSpeed*dt,-6.1,6.1);p.z=clamp(p.z+dz*RULES.moveSpeed*dt,-6.1,6.1);
+  // Smooth block-game traction and friction, authoritative on the server.
+  const traction=Math.min(1,dt*(p.y>.03?9:(Math.abs(mx)+Math.abs(mz)>0?17:25)));
+  p.vx+=(dx*RULES.moveSpeed-p.vx)*traction;
+  p.vz+=(dz*RULES.moveSpeed-p.vz)*traction;
+  p.x=clamp(p.x+p.vx*dt,-6.1,6.1);p.z=clamp(p.z+p.vz*dt,-6.1,6.1);
   if(p.input.jump&&p.y===0){p.vy=5.3;}p.input.jump=false;
   p.vy-=15*dt;p.y=Math.max(0,p.y+p.vy*dt);if(p.y===0)p.vy=0;
  }
@@ -191,7 +195,7 @@ export function attachCrazyBattle(server){
    const p=room.players.get(id);
    if(!p||p.ws!==ws)return;
    if(deliberateLeave){room.players.delete(id);if(room.host===id)room.host=room.players.keys().next().value??null;}
-   else {p.ws=null;p.disconnectedAt=Date.now();p.input={x:0,z:0,jump:false};p.shield=false;p.chargeAt=0;}
+   else {p.ws=null;p.disconnectedAt=Date.now();p.input={x:0,z:0,jump:false};p.vx=0;p.vz=0;p.shield=false;p.chargeAt=0;}
    if(!room.players.size){rooms.delete(room.code);announceRooms();return;}
    finish(room);lobby(room);
   });
