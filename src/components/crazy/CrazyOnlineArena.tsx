@@ -16,6 +16,12 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
  useEffect(()=>{
   const node=root.current;if(!node)return;
   const scene=new THREE.Scene();scene.background=new THREE.Color("#3b1c49");
+  const camera=new THREE.PerspectiveCamera(75,node.clientWidth/node.clientHeight,.05,60);
+  const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+  renderer.setSize(node.clientWidth,node.clientHeight);
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  node.appendChild(renderer.domElement);
   const cleanupWorld = createCrazyWorld(scene);
   const cube = new THREE.BoxGeometry(1,1,1);
   const materials = ["#704b56","#543747","#875763","#49303c"].map(color=>new THREE.MeshLambertMaterial({color}));
