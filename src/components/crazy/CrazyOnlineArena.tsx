@@ -3,7 +3,7 @@ import * as THREE from "three";
 import "./crazy.css";
 import { createCrazyWorld } from "./world";
 import { makeCrazyVisuals, normalizeWarriorSkin, type WarriorRig } from "./visuals";
-import { crazyPixelRatio, crazyShouldRender } from "./performance";
+import { crazyPixelRatio, crazyShouldRender, crazyMustUnlockCursor } from "./performance";
 export type Fighter={id:string;name:string;x:number;y:number;z:number;yaw:number;pitch:number;hp:number;weapon:string;shield:boolean;alive:boolean;bot:boolean;skin?:"red"|"blue"};
 export type MatchState={type:string;status:string;seconds:number;winner:string|null;host:string;players:Fighter[];arrows:{id:string;x:number;y:number;z:number}[]};
 type Props={ws:WebSocket,id:string,state:MatchState,onExit:()=>void};
@@ -24,7 +24,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    try{
     const msg=JSON.parse(event.data);
     if(msg.type==="swing"&&typeof msg.id==="string"){otherSwings.current.set(msg.id,performance.now());return;}
-    if(msg.type==="state"&&(msg.status==="finished"||msg.players?.find((p:Fighter)=>p.id===id)?.hp===0)){
+    if(msg.type==="state"&&crazyMustUnlockCursor(msg.status, msg.players?.find((p:Fighter)=>p.id===id)?.hp??0)){
       const locked=document.pointerLockElement;
       if(locked&&root.current?.contains(locked))document.exitPointerLock?.();
       return;
@@ -38,7 +38,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
   return()=>ws.removeEventListener("message",onHit);
  },[ws,id]);
  useEffect(()=>{
-   if(state.status!=="playing"||(me?.hp??0)<=0){
+   if(crazyMustUnlockCursor(state.status,me?.hp??0)){
      const locked=document.pointerLockElement;
      if(locked&&root.current?.contains(locked))document.exitPointerLock?.();
      keys.current.clear();
@@ -84,7 +84,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
      const rig=visuals.createWarrior(skin);scene.add(rig.group);return rig;
    }
    const weapons=visuals.createViewWeapons(camera,"red");scene.add(camera);
-   const isPlaying=()=>data.current.status==="playing"&&(data.current.players.find(p=>p.id===id)?.hp??0)>0;
+   const isPlaying=()=>!crazyMustUnlockCursor(data.current.status,data.current.players.find(p=>p.id===id)?.hp??0);
    const keyDown=(e:KeyboardEvent)=>{
      if(!isPlaying())return;
      if(["Space","KeyE","KeyQ"].includes(e.code))e.preventDefault();
