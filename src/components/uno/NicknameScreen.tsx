@@ -36,7 +36,7 @@ export function NicknameScreen() {
           </div>
         )}
         <div className="mt-6">
-          <NicknameForm initial={lastName} onSubmit={register} />
+          <NicknameForm initial={lastName} onSubmit={register} adminOnTony />
         </div>
       </section>
     </main>
