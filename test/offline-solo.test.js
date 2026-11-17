@@ -257,8 +257,11 @@ test("Sandbox offline tem dois humanos controláveis, cartas à vontade e não s
     runtime.localRpc("sandbox_switch",{p_target_id:original});
     assert.deepEqual(runtime.localRpc("get_room_state",{p_code:sandboxCode}).game.my_hand,handA,
       "a mão de um jogador não revela nem herda cartas do outro");
-    assert.equal(data.get("unopro.offline.solo.v2"),offlineCopy,
-      "Sandbox guarda em chave própria e não substitui a sala offline");
+    const originalSolo=JSON.parse(offlineCopy),preservedSolo=JSON.parse(data.get("unopro.offline.solo.v2"));
+    assert.equal(preservedSolo.code,originalSolo.code);
+    assert.deepEqual(preservedSolo.room.hands,originalSolo.room.hands,
+      "Sandbox não altera a mão da partida offline salva");
+    assert.equal(preservedSolo.source,"local");
     assert.ok(data.has("unopro.offline.sandbox.v1"));
     assert.ok(!runtime.localRpc("list_public_rooms").some(r=>r.code===sandboxCode),"Sandbox não é público");
     const reload=await import(url+"#sandbox-second");
