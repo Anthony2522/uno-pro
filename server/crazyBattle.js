@@ -106,6 +106,12 @@ function tick(room){
 export function attachCrazyBattle(server){
  const wss=new WebSocketServer({server,path:"/api/crazy/ws",maxPayload:2048});
  const announceRooms=()=>{const info={type:"rooms",rooms:publicRooms()};for(const client of wss.clients)send(client,info);};
+ const heartbeat=setInterval(()=>{
+  for(const client of wss.clients){
+   if(client.isAlive===false){client.terminate();continue;}
+   client.isAlive=false;client.ping();
+  }
+ },20000);
  const timer=setInterval(()=>{
   const now=Date.now();
   for(const r of rooms.values()){
@@ -121,6 +127,7 @@ export function attachCrazyBattle(server){
   }
  },TICK_MS);
  wss.on("connection",ws=>{
+  ws.isAlive=true;ws.on("pong",()=>{ws.isAlive=true;});
   let id=randomBytes(8).toString("hex");let room=null;let deliberateLeave=false;
   let messages=0,lastWindow=Date.now();
   const fail=message=>send(ws,{type:"error",message});
@@ -188,7 +195,7 @@ export function attachCrazyBattle(server){
    finish(room);lobby(room);
   });
  });
- server.on("close",()=>{clearInterval(timer);wss.close();});
+ server.on("close",()=>{clearInterval(timer);clearInterval(heartbeat);wss.close();});
  return wss;
 }
 export function crazyPublicRooms(){return publicRooms();}
