@@ -1,0 +1,44 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import http from "node:http";
+import { WebSocket } from "ws";
+import { attachCrazyBattle } from "../server/crazyBattle.js";
+
+async function setup(){
+ const server=http.createServer((_req,res)=>res.end("ok"));attachCrazyBattle(server);
+ await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+ const url="ws://127.0.0.1:"+server.address().port+"/api/crazy/ws";
+ const sockets=[];
+ async function client(){
+  const ws=new WebSocket(url);sockets.push(ws);
+  await new Promise((resolve,reject)=>{ws.once("open",resolve);ws.once("error",reject);});
+  const messages=[];ws.on("message",raw=>messages.push(JSON.parse(raw.toString())));
+  const send=(type,extra={})=>ws.send(JSON.stringify({type,...extra}));
+  const until=async(type,timeout=2000)=>{
+   const started=Date.now();
+   while(Date.now()-started<timeout){const idx=messages.findIndex(m=>m.type===type);if(idx>=0)return messages.splice(idx,1)[0];await new Promise(r=>setTimeout(r,10));}
+   throw new Error("Timed out waiting for "+type);
+  };
+  return {send,until,ws};
+ }
+ return {client,close:async()=>{for(const ws of sockets)ws.close();await new Promise(resolve=>server.close(resolve));}};
+}
+test("Crazy Battle: private rooms, joining, bots and match start",async()=>{
+ const app=await setup();
+ try{
+  const host=await app.client();host.send("create",{name:"Teste",private:true,player:"Host"});
+  const joined=await host.until("joined");assert.match(joined.code,/^[A-F0-9]{8}$/);
+  await host.until("state");
+  const guest=await app.client();guest.send("list");const list=await guest.until("rooms");
+  assert.equal(list.rooms.some(r=>r.code===joined.code),false);
+  guest.send("join",{code:joined.code,player:"Convidado"});
+  await guest.until("joined");const state=await guest.until("state");assert.equal(state.players.length,2);
+  host.send("start");const playing=await host.until("state");assert.ok(["lobby","playing"].includes(playing.status));
+  const later=await host.until("state");assert.equal(later.status,"playing");
+ }finally{await app.close();}
+});
+test("Crazy Battle: cannot start a one-player room",async()=>{
+ const app=await setup();
+ try{const host=await app.client();host.send("create",{player:"Solo"});await host.until("joined");await host.until("state");host.send("start");const err=await host.until("error");assert.match(err.message,/dois participantes/);}
+ finally{await app.close();}
+});
