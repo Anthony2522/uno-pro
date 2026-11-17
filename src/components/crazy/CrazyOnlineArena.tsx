@@ -10,11 +10,24 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
  const [charge,setCharge]=useState(false),[chargePower,setChargePower]=useState(0);
  const chargeStarted=useRef(0);
  const swingAt=useRef(-10000);
+ const [impact,setImpact]=useState<{key:number,type:"taken"|"dealt"}|null>(null);
  const keys=useRef(new Set<string>()),look=useRef<{id:number,x:number,y:number}|null>(null),stick=useRef<number|null>(null);
  const send=(type:string,other:Record<string,unknown>={})=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type,...other}));};
  data.current=state;
  const me=state.players.find(p=>p.id===id);
  const weapon=me?.weapon||"sword";
+ useEffect(()=>{
+  const onHit=(event:MessageEvent)=>{
+   try{
+    const msg=JSON.parse(event.data);
+    if(msg.type!=="hit")return;
+    if(msg.target===id)setImpact({key:Date.now(),type:"taken"});
+    else if(msg.attacker===id)setImpact({key:Date.now(),type:"dealt"});
+   }catch{}
+  };
+  ws.addEventListener("message",onHit);
+  return()=>ws.removeEventListener("message",onHit);
+ },[ws,id]);
  useEffect(()=>{
   const node=root.current;if(!node)return;
   const scene=new THREE.Scene();scene.background=new THREE.Color("#3b1c49");
@@ -113,7 +126,8 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
  const hold=(type:string,endType?:string)=>({onPointerDown:(e:React.PointerEvent)=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);send(type,{active:true});},onPointerUp:()=>send(endType||type,{active:false}),onPointerCancel:()=>send(endType||type,{active:false})});
  return <div className="crazy-game"><div className="crazy-canvas" ref={root}/><div className="crazy-look" onClick={()=>{if(matchMedia("(pointer:fine)").matches){root.current?.querySelector("canvas")?.requestPointerLock?.();}}} onContextMenu={e=>e.preventDefault()} onPointerDown={e=>{look.current={id:e.pointerId,x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);}} onPointerMove={pointerMove} onPointerUp={()=>look.current=null} onPointerCancel={()=>look.current=null}/>
  <header className="crazy-hud"><div className="crazy-brand"><img src="/crazy-battle-logo.webp" alt="Crazy Battle"/><button aria-label="Sair da partida" onClick={onExit}>✕</button></div><strong>⏱ {Math.floor(state.seconds/60).toString().padStart(2,"0")}:{Math.floor(state.seconds%60).toString().padStart(2,"0")}</strong><span>👥 {state.players.filter(p=>p.alive).length}/{state.players.length}</span></header>
- <div className="crazy-crosshair">＋</div><div className="crazy-health"><b>♥</b><strong>{me?.hp??0}%</strong><div className="crazy-health-track"><div style={{height:(me?.hp??0)+"%",background:`hsl(${(me?.hp??0)*1.2} 95% 48%)`}}/></div></div>
+ <div className="crazy-crosshair">＋</div>
+ {impact&&<div key={impact.key} className={impact.type==="taken"?"crazy-impact-taken":"crazy-impact-dealt"} aria-hidden="true"/>}<div className="crazy-health"><b>♥</b><strong>{me?.hp??0}%</strong><div className="crazy-health-track"><div style={{height:(me?.hp??0)+"%",background:`hsl(${(me?.hp??0)*1.2} 95% 48%)`}}/></div></div>
  <button className="crazy-switch crazy-control" onClick={()=>{send("weapon");}}> {weapon==="sword"?"🏹":"⚔️"} ⇄</button>
  {(me?.hp??0)>0&&<div className="crazy-joystick crazy-control" onPointerDown={joystick} onPointerMove={joystick} onPointerUp={()=>{stick.current=null;input.current.x=0;input.current.z=0;}} onPointerCancel={()=>{stick.current=null;input.current.x=0;input.current.z=0;}}><div/></div>}
  {(me?.hp??0)>0&&<div className="crazy-actions">{weapon==="sword"?<><button className="crazy-control" {...hold("shield")}>🛡️</button><button className="crazy-control" onPointerDown={e=>{e.preventDefault();swingAt.current=performance.now();send("attack");}}>⚔️</button></>:<button className="crazy-control crazy-bow" {...hold("bowStart","bowRelease")} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);chargeStarted.current=performance.now();setCharge(true);send("bowStart");}} onPointerUp={()=>{chargeStarted.current=0;setCharge(false);setChargePower(0);send("bowRelease");}} onPointerCancel={()=>{chargeStarted.current=0;setCharge(false);setChargePower(0);send("bowRelease");}}>🏹 {charge?`${chargePower}%`:""}</button>}<button className="crazy-control crazy-jump" onPointerDown={e=>{e.preventDefault();input.current.jump=true;}}>⬆</button></div>}
