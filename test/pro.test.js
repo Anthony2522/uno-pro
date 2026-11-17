@@ -728,24 +728,26 @@ test("32 nomes da lista e anfitrião sempre humano",()=>{
   assert.equal(room.host_id,newcomer.guest_id);
 });
 
-test("acesso de desenvolvedor exige segredo e nome, não basta escrever Toninho",()=>{
-  const before=process.env.DEV_ACCESS_KEY;
-  process.env.DEV_ACCESS_KEY="um-segredo-longo-de-testes-2026";
+test("Tony exige senha de ambiente e pode excluir salas privadas ou públicas em andamento",()=>{
+  const before=process.env.UNO_ADMIN_PASSWORD;
+  process.env.UNO_ADMIN_PASSWORD="somente-senha-de-teste-2026";
   try{
-    const admin=call("register_guest",{p_nickname:"Toninho"});
+    const admin=call("register_guest",{p_nickname:"Tony"});
     const other=call("register_guest",{p_nickname:"Outra pessoa"});
-    const code=call("create_room",{p_token:other.token,p_name:"Apagavel",p_max_players:3,p_is_public:true}).code;
-    assert.throws(()=>call("dev_delete_public_room",{p_token:admin.token,p_code:code}),/DEV_ACCESS_DENIED/);
+    const code=call("create_room",{p_token:other.token,p_name:"Privada",p_max_players:3,p_is_public:false}).code;
+    assert.throws(()=>call("admin_list_rooms",{p_token:admin.token}),/DEV_ACCESS_DENIED/);
+    assert.throws(()=>call("admin_delete_room",{p_token:other.token,p_code:code}),/DEV_ACCESS_DENIED/);
     assert.throws(()=>call("dev_auth",{p_token:admin.token,p_key:"errada"}),/DEV_INVALID_KEY/);
-    assert.throws(()=>call("dev_auth",{p_token:other.token,p_key:process.env.DEV_ACCESS_KEY}),/DEV_NAME_REQUIRED/);
-    call("dev_auth",{p_token:admin.token,p_key:process.env.DEV_ACCESS_KEY});
-    call("join_room",{p_token:admin.token,p_code:code});
-    assert.equal(store.roomsByCode.get(code).host_id,admin.guest_id);
-    call("dev_delete_public_room",{p_token:admin.token,p_code:code});
+    assert.throws(()=>call("dev_auth",{p_token:other.token,p_key:process.env.UNO_ADMIN_PASSWORD}),/DEV_NAME_REQUIRED/);
+    call("dev_auth",{p_token:admin.token,p_key:process.env.UNO_ADMIN_PASSWORD});
+    assert.equal(call("dev_status",{p_token:admin.token}).is_dev,true);
+    const list=call("admin_list_rooms",{p_token:admin.token});
+    assert.ok(list.some(x=>x.code===code&&!x.is_public));
+    call("admin_delete_room",{p_token:admin.token,p_code:code});
     assert.equal(store.roomsByCode.has(code),false);
   }finally{
-    if(before===undefined)delete process.env.DEV_ACCESS_KEY;
-    else process.env.DEV_ACCESS_KEY=before;
+    if(before===undefined)delete process.env.UNO_ADMIN_PASSWORD;
+    else process.env.UNO_ADMIN_PASSWORD=before;
   }
 });
 
@@ -769,15 +771,15 @@ test("bot difícil espera 3 segundos e 2 segundos por carta consecutiva",()=>{
 });
 
 
-test("desenvolvedor entra como observador numa sala cheia e não ocupa uma vaga",()=>{
-  const old=process.env.DEV_ACCESS_KEY;process.env.DEV_ACCESS_KEY="uma-chave-segura-grande-2026";
+test("Tony autenticado entra como observador numa sala cheia e não ocupa uma vaga",()=>{
+  const old=process.env.UNO_ADMIN_PASSWORD;process.env.UNO_ADMIN_PASSWORD="outra-senha-forte-de-teste-2026";
   try{
     const a=call("register_guest",{p_nickname:"JogeA"});
     const b=call("register_guest",{p_nickname:"JogeB"});
-    const dev=call("register_guest",{p_nickname:"Toninho"});
+    const dev=call("register_guest",{p_nickname:"Tony"});
     const code=call("create_room",{p_token:a.token,p_name:"Sala lotada",p_max_players:2}).code;
     call("join_room",{p_token:b.token,p_code:code});
-    call("dev_auth",{p_token:dev.token,p_key:process.env.DEV_ACCESS_KEY});
+    call("dev_auth",{p_token:dev.token,p_key:process.env.UNO_ADMIN_PASSWORD});
     call("join_room",{p_token:dev.token,p_code:code});
     const r=store.roomsByCode.get(code);
     assert.equal(r.host_id,dev.guest_id);
@@ -786,8 +788,8 @@ test("desenvolvedor entra como observador numa sala cheia e não ocupa uma vaga"
     assert.equal(r.game.turn_order.length,2);
     assert.equal(call("get_room_state",{p_token:dev.token,p_code:code}).game.my_hand.length,0);
   }finally{
-    if(old===undefined)delete process.env.DEV_ACCESS_KEY;
-    else process.env.DEV_ACCESS_KEY=old;
+    if(old===undefined)delete process.env.UNO_ADMIN_PASSWORD;
+    else process.env.UNO_ADMIN_PASSWORD=old;
   }
 });
 
