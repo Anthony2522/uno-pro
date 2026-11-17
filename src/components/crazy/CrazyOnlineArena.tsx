@@ -23,16 +23,16 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
   const fire=new THREE.MeshBasicMaterial({color:"#ff6512"}),red=new THREE.MeshLambertMaterial({color:"#af2119"}),skin=new THREE.MeshLambertMaterial({color:"#f7b17b"});
   function block(parent:THREE.Object3D,x:number,y:number,z:number,sx:number,sy:number,sz:number,mat:THREE.Material){const mesh=new THREE.Mesh(cube,mat);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);parent.add(mesh);return mesh;}
   for(let x=-8;x<8;x++)for(let z=-8;z<8;z++){
-   const mat=(x+z)%11===0?fire:materials[Math.abs(x*7+z*13)%materials.length];
+   const mat=(x+z)%11===0?fire:materials[Math.abs(x*7+z*13)%materials.length]!;
    block(scene,x,-.5,z,1,1,1,mat);
-   if(x===-8||x===7||z===-8||z===7){for(let y=0;y<9;y++)block(scene,x,y+.5,z,1,1,1,materials[Math.abs(x+y+z)%4]);if((x+z)%3===0)block(scene,x,9.5,z,1,1,1,fire);}
+   if(x===-8||x===7||z===-8||z===7){for(let y=0;y<9;y++)block(scene,x,y+.5,z,1,1,1,materials[Math.abs(x+y+z)%4]!);if((x+z)%3===0)block(scene,x,9.5,z,1,1,1,fire);}
   }
   for(const x of [-5,0,5]){block(scene,x,4,-7.4,1.5,3,.15,red);block(scene,x,4,-7.29,.4,.9,.1,fire);block(scene,x,3,-6.9,.4,.5,.4,fire);}
   const fighters=new Map<string,THREE.Group>(),arrows=new Map<string,THREE.Mesh>();
-  function makeFighter(){const group=new THREE.Group();block(group,0,1.65,0,.7,.65,.6,skin);block(group,0,1,0,.85,.85,.5,red);block(group,0,1.99,0,.8,.2,.65,materials[3]);for(const x of [-.25,.25])block(group,x,.35,0,.3,.7,.4,materials[3]);for(const x of [-.6,.6])block(group,x,1.05,0,.3,.8,.4,red);scene.add(group);return group;}
+  function makeFighter(){const group=new THREE.Group();block(group,0,1.65,0,.7,.65,.6,skin);block(group,0,1,0,.85,.85,.5,red);block(group,0,1.99,0,.8,.2,.65,materials[3]!);for(const x of [-.25,.25])block(group,x,.35,0,.3,.7,.4,materials[3]!);for(const x of [-.6,.6])block(group,x,1.05,0,.3,.8,.4,red);scene.add(group);return group;}
   const blade=block(camera,.58,-.48,-.9,.18,.85,.18,new THREE.MeshLambertMaterial({color:"#e5d9df"}));
-  const shield=block(camera,-.58,-.6,-.85,.75,.95,.17,materials[2]);
-  const bow=block(camera,.62,-.45,-.95,.15,1.15,.2,materials[2]);scene.add(camera);
+  const shield=block(camera,-.58,-.6,-.85,.75,.95,.17,materials[2]!);
+  const bow=block(camera,.62,-.45,-.95,.15,1.15,.2,materials[2]!);scene.add(camera);
   const keyDown=(e:KeyboardEvent)=>{keys.current.add(e.code);if(e.code==="Space")input.current.jump=true;if(e.code==="KeyQ")send("weapon");};
   const keyUp=(e:KeyboardEvent)=>keys.current.delete(e.code);
   const mouse=(e:MouseEvent)=>{if(document.pointerLockElement===renderer.domElement){input.current.yaw-=e.movementX*.003;input.current.pitch=Math.max(-1.35,Math.min(1.35,input.current.pitch-e.movementY*.003));}};
@@ -49,7 +49,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    if(keys.current.size){i.x=(keys.current.has("KeyD")?1:0)-(keys.current.has("KeyA")?1:0);i.z=(keys.current.has("KeyS")?1:0)-(keys.current.has("KeyW")?1:0);}
    if(local){camera.position.set(local.x,local.y+1.65,local.z);camera.rotation.order="YXZ";camera.rotation.set(i.pitch,i.yaw,0);blade.visible=local.weapon==="sword";shield.visible=local.weapon==="sword";shield.position.y=local.shield?-.25:-.6;bow.visible=local.weapon==="bow";}
    for(const p of s.players){if(p.id===id||!p.alive){const g=fighters.get(p.id);if(g)g.visible=false;continue;}let g=fighters.get(p.id);if(!g){g=makeFighter();fighters.set(p.id,g);}g.visible=true;g.position.lerp(new THREE.Vector3(p.x,p.y,p.z),Math.min(1,dt*12));g.rotation.y=p.yaw;}
-   for(const a of s.arrows||[]){let m=arrows.get(a.id);if(!m){m=block(scene,0,0,0,.1,.1,.55,materials[1]);arrows.set(a.id,m);}m.position.lerp(new THREE.Vector3(a.x,a.y,a.z),Math.min(1,dt*16));}
+   for(const a of s.arrows||[]){let m=arrows.get(a.id);if(!m){m=block(scene,0,0,0,.1,.1,.55,materials[1]!);arrows.set(a.id,m);}m.position.lerp(new THREE.Vector3(a.x,a.y,a.z),Math.min(1,dt*16));}
    for(const [aid,m] of arrows)if(!(s.arrows||[]).some(a=>a.id===aid)){scene.remove(m);arrows.delete(aid);}
    if(now-network>50){network=now;if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",...i}));i.jump=false;}
    renderer.render(scene,camera);
