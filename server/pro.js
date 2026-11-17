@@ -1092,11 +1092,11 @@ export function proRpc(fn,args={}){
     return {ok:true};
   }
   if(fn==="update_nickname"){
-    const me=authenticate(args.p_token);
+    const me=authenticate(args.p_token),wasTony=me.nickname==="Tony";
     const result=originalRpc(fn,args);
-    // Changing away from Tony revokes administrator privileges server-side,
-    // so renaming back cannot silently bypass the password.
-    if(me.nickname!=="Tony")me.is_dev=false;
+    // Any name transition (including a legacy privileged nickname -> Tony)
+    // revokes privileged access until Tony re-enters the server-side password.
+    if(!wasTony || me.nickname!=="Tony")me.is_dev=false;
     return result;
   }
   if(fn==="join_room"){
