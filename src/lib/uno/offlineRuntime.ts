@@ -204,6 +204,21 @@ export function localRpc<T>(fn:string,args:Record<string,unknown>={}):T{
   if(fn!=="get_room_state"||store.roomsByCode.get(active.code)?.version!==lastSaveVersion)persist();
   return result as T;
 }
+/** Explicitly delete a local bot-only game and its backup from this device. */
+export function discardOfflineMatch(){
+  const local=read(LOCAL_KEY),backup=read(BACKUP_KEY);
+  try{
+    localStorage.removeItem(LOCAL_KEY);
+    if(!local||!backup||backup.code===local.code)localStorage.removeItem(BACKUP_KEY);
+  }catch{storageError=true;return false;}
+  if(active && active.source!=="sandbox" && (!local||active.code===local.code)){
+    active=null;
+    store.rooms.clear();store.roomsByCode.clear();
+    store.guestsById.clear();store.guestsByHash.clear();
+    lastSaveVersion=-1;
+  }
+  return true;
+}
 export function discardFinishedLocalMatch(){
   ensureLoaded();
   if(!active?.room?.game||active.room.game.status!=="finished")return;
