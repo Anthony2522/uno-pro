@@ -79,7 +79,7 @@ function RoomPage() {
     if(events.length)lastEffectId.current=events.at(-1)?.id??0;
     for(const event of next){
       if(event.type==="roach")continue; // The illustrated flight owns the arrival/sound cues.
-      sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
+      sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
     }
   },[state?.game?.effects,state?.game?.round]);
 
