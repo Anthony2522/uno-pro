@@ -3,9 +3,28 @@ import * as THREE from "three";
 /** Lightweight voxel arena. A single instanced draw is used per material. */
 export function createCrazyWorld(scene: THREE.Scene) {
   const cube = new THREE.BoxGeometry(1, 1, 1);
-  const stone = ["#4c3848", "#614051", "#78515a", "#3a2b3a"].map(color => new THREE.MeshLambertMaterial({ color }));
-  const magma = new THREE.MeshBasicMaterial({ color: "#ff5710" });
-  const hot = new THREE.MeshBasicMaterial({ color: "#ffb022" });
+  const textures: THREE.Texture[] = [];
+  function pixelTexture(base: [number,number,number], seed: number, lava: boolean) {
+    const canvas=document.createElement("canvas");canvas.width=16;canvas.height=16;
+    const ctx=canvas.getContext("2d");
+    let state=seed;const rng=()=>{state=(state*1664525+1013904223)>>>0;return state/4294967295;};
+    if(ctx)for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+      const n=rng(), grout=!lava&&(x%8===0||y%8===0);
+      const bright=lava?(n>.75?78:n>.35?36:-4):Math.floor((n-.5)*32);
+      const [r,g,b]=base;
+      const color=[r+bright,g+(lava?bright*.72:bright),b+(lava?bright*.3:bright)];
+      ctx.fillStyle="rgb("+color.map(v=>Math.max(0,Math.min(255,Math.round(grout?v*.5:v)))).join(",")+")";
+      ctx.fillRect(x,y,1,1);
+    }
+    const texture=new THREE.CanvasTexture(canvas);
+    texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestMipmapNearestFilter;
+    texture.colorSpace=THREE.SRGBColorSpace;textures.push(texture);return texture;
+  }
+  const stone = [
+    [76,56,72],[97,64,81],[120,81,90],[58,43,58]
+  ].map((rgb,i)=>new THREE.MeshLambertMaterial({map:pixelTexture(rgb as [number,number,number],i+14,false)}));
+  const magma=new THREE.MeshBasicMaterial({map:pixelTexture([240,65,10],80,true)});
+  const hot=new THREE.MeshBasicMaterial({map:pixelTexture([252,178,22],110,true)});
   const velvet = new THREE.MeshLambertMaterial({ color: "#a31c16", side: THREE.DoubleSide });
   const entries: Array<{ x: number; y: number; z: number }> [] = [[], [], [], [], [], [], []];
   const put = (kind: number, x: number, y: number, z: number) => entries[kind]!.push({ x, y, z });
@@ -64,5 +83,6 @@ export function createCrazyWorld(scene: THREE.Scene) {
     for (const mesh of instanced) mesh.dispose();
     cube.dispose(); panel.dispose();
     for (const material of mats) material.dispose();
+    for (const texture of textures) texture.dispose();
   };
 }
