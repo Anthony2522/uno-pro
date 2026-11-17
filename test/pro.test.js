@@ -751,6 +751,34 @@ test("Tony exige senha de ambiente e pode excluir salas privadas ou públicas em
   }
 });
 
+test("Tony encerra uma sala privada em andamento, e troca de nome revoga o admin",()=>{
+  const old=process.env.UNO_ADMIN_PASSWORD;
+  process.env.UNO_ADMIN_PASSWORD="senha-aleatoria-apenas-para-testes";
+  try{
+    const t=call("register_guest",{p_nickname:"Tony"});
+    const a=call("register_guest",{p_nickname:"Abertura"});
+    const b=call("register_guest",{p_nickname:"Segundo"});
+    call("dev_auth",{p_token:t.token,p_key:process.env.UNO_ADMIN_PASSWORD});
+    const code=call("create_room",{p_token:a.token,p_name:"Partida privada",p_is_public:false,p_max_players:2}).code;
+    call("join_room",{p_token:b.token,p_code:code});
+    call("start_game",{p_token:a.token,p_code:code});
+    assert.equal(store.roomsByCode.get(code).game.status,"playing");
+    assert.ok(call("admin_list_rooms",{p_token:t.token}).some(r=>r.code===code&&r.status==="playing"));
+    call("admin_delete_room",{p_token:t.token,p_code:code});
+    assert.equal(store.roomsByCode.has(code),false);
+    assert.throws(()=>call("get_room_state",{p_token:a.token,p_code:code}),/ROOM_NOT_FOUND/);
+    call("update_nickname",{p_token:t.token,p_nickname:"Outra Identidade"});
+    call("update_nickname",{p_token:t.token,p_nickname:"Tony"});
+    assert.equal(call("dev_status",{p_token:t.token}).is_dev,false);
+    assert.throws(()=>call("admin_list_rooms",{p_token:t.token}),/DEV_ACCESS_DENIED/);
+    call("dev_auth",{p_token:t.token,p_key:process.env.UNO_ADMIN_PASSWORD});
+    assert.equal(call("dev_status",{p_token:t.token}).is_dev,true);
+  }finally{
+    if(old===undefined)delete process.env.UNO_ADMIN_PASSWORD;
+    else process.env.UNO_ADMIN_PASSWORD=old;
+  }
+});
+
 test("bot difícil espera 3 segundos e 2 segundos por carta consecutiva",()=>{
   const s=setup(),{g,room,bot}=s;
   s.setTurn(bot);g.discard_pile=["b3"];g.current_color="b";
