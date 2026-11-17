@@ -64,7 +64,7 @@ export function RoachTransferAnimation({
     if(recipient)to=document.querySelector<HTMLElement>("[data-my-hand]")?.getBoundingClientRect();
     else{
       const seat=Array.from(document.querySelectorAll<HTMLElement>("[data-player-seat]"))
-        .find(el=>el.dataset.playerSeat===event.target);
+        .find(el=>el.dataset['playerSeat']===event.target);
       to=(seat?.querySelector<HTMLElement>("[data-seat-cards]")??seat)?.getBoundingClientRect();
     }
     const path=roachFlightPath(from,to,{width:window.innerWidth,height:window.innerHeight});
