@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BookOpen, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole } from "lucide-react";
+import { BookOpen, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
@@ -32,6 +32,7 @@ export type GameActions = {
   acceptSkip: ()=>void;
   sandboxSwitch?: ((id:string)=>void)|undefined;
   sandboxGrant?: ((kind:string)=>void)|undefined;
+  sandboxToggleBot?: (()=>void)|undefined;
 };
 
 export function GameTable({ state, busy, actions }: { state: RoomState; busy: boolean; actions: GameActions }) {
@@ -204,7 +205,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         <p className="font-bold text-violet-100">SANDBOX · Você controla {byId.get(me)?.nickname??"Jogador"}.
           <span className="ml-1 font-normal">Toque no status do outro jogador para trocar de mão.</span>
         </p>
-        {actions.sandboxGrant&&<SandboxCardPicker disabled={busy} onGrant={actions.sandboxGrant}/>}
+        <div className="flex items-center gap-2">{actions.sandboxToggleBot&&<Button variant="glass" size="sm" disabled={busy} onClick={actions.sandboxToggleBot} title="Alternar bot difícil no outro jogador" aria-label="Alternar bot difícil no outro jogador"><Bot className="size-4"/> {state.members.some(p=>p.bot)?"Desativar bot":"Bot difícil"}</Button>}{actions.sandboxGrant&&<SandboxCardPicker disabled={busy} onGrant={actions.sandboxGrant}/>}</div>
       </div>}
       {/* Opponents */}
       <section aria-label="Adversários" className="uno-opponents no-scrollbar -mx-2 flex shrink-0 gap-2 overflow-x-auto px-2 pb-1 pt-1 sm:justify-center">
