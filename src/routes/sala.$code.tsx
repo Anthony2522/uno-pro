@@ -39,7 +39,7 @@ function RoomPage() {
   const { code: rawCode } = Route.useParams();
   const code = rawCode.toUpperCase();
   const navigate = useNavigate();
-  const {language}=useLanguage();
+  const {language,tr}=useLanguage();
   const { state, fatal, connection, refresh, leave, token } = useRoom(code);
   const [busy, setBusy] = useState(false);
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
@@ -50,11 +50,11 @@ function RoomPage() {
     if(!state)return;
     const queued=!!state.members.find(m=>m.id===state.me)?.spectator;
     if(queued && state.game?.status==="playing" && !queuedNoticeShown.current){
-      toast.info("Partida em andamento, você está na fila de espera. Aguarde a próxima partida.",{duration:8000});
+      toast.info(language==="en"?"Match in progress: you are in the waiting queue. Please wait for the next round.":"Partida em andamento, você está na fila de espera. Aguarde a próxima partida.",{duration:8000});
       queuedNoticeShown.current=true;
     }
     if(!queued)queuedNoticeShown.current=false;
-  },[state]);
+  },[state,language]);
   const lastEffectRound = useRef<number|null>(null);
   useEffect(()=>{const timer=setInterval(()=>setEffectsClock(Date.now()),250);return()=>clearInterval(timer);},[]);
   const prev = useRef<{ seq: number; turn: string | null; status: string | null; members: number } | null>(null);
@@ -66,13 +66,13 @@ function RoomPage() {
         await fn();
       } catch (e) {
         sfx("error");
-        toast.error(errorMessage(e));
+        toast.error(tr(errorMessage(e)));
       } finally {
         setBusy(false);
         void refresh();
       }
     },
-    [refresh],
+    [refresh,tr],
   );
 
   // One shared five-second window. More than two notifications appear
@@ -109,7 +109,7 @@ function RoomPage() {
         }
         else if (a?.type === "draw" || a?.type === "auto_draw" || a?.type === "draw_pass" || a?.type === "catch") sfx("draw");
         if (g.status === "playing" && cur.turn === state.me && p.turn !== state.me) setTimeout(() => sfx("turn"), 180);
-        if (a?.target === state.me && a.n) toast(`${a.name} fez você comprar ${a.n}!`);
+        if (a?.target === state.me && a.n) toast(language==="en"?`${a.name} made you draw ${a.n} cards!`:`${a.name} fez você comprar ${a.n}!`);
       }
     }
     prev.current = cur;
@@ -192,7 +192,7 @@ function RoomPage() {
     sandboxToggleBot: state.room.sandbox ? ()=>act(()=>api.sandboxToggleBot(code)) : undefined,
     sandboxGrant: state.room.sandbox ? (kind)=>act(async()=>{
       const result=await api.sandboxGrantCard(code,kind);
-      toast.success("Carta adicionada à sua mão!");
+      toast.success(tr("Carta adicionada à sua mão!"));
       return result;
     }) : undefined,
   };
@@ -212,7 +212,7 @@ function RoomPage() {
       <AppHeader>
         <div className="mr-1 hidden min-w-0 flex-col items-end text-right md:flex">
           <span className="max-w-[14rem] truncate text-sm font-semibold">{state.room.name}</span>
-          <span className="font-display text-xs tracking-widest text-cyan">{state.room.code}{g && playing ? ` · rodada ${g.round}` : ""}</span>
+          <span className="font-display text-xs tracking-widest text-cyan">{state.room.code}{g && playing ? ` · ${language==="en"?"round":"rodada"} ${g.round}` : ""}</span>
         </div>
         {state.room.local_only && <span className="inline-flex items-center gap-1 rounded-full border border-cyan/40 bg-cyan/10 px-2 py-1 text-xs font-bold text-cyan"><WifiOff className="size-3.5"/> Offline</span>}
         {playing && !state.room.local_only && <CopyInviteButton code={state.room.code} compact />}
@@ -251,19 +251,19 @@ function RoomPage() {
               </span>
               <p className="min-w-0 flex-1 text-balance font-display font-bold leading-snug">
                 {e.type==="skip"?(
-                  (e.n??1)>1?`Bloqueio ×${e.n}: ${(e.target_names||[e.target_name]).filter(Boolean).join(" · ")}`:
+                  (e.n??1)>1?`${language==="en"?"Skip":"Bloqueio"} ×${e.n}: ${(e.target_names||[e.target_name]).filter(Boolean).join(" · ")}`:
                   `${e.name} → ${e.target_name??"Jogador"}`
                 ):
                 e.type==="penalty"?e.reason==="nine"?
-                  `${e.target_name??"Jogador"} +${e.n} · Regra do 9`:
-                  `${e.target_name??"Jogador"} comprou ${e.n??2} cartas`:
+                  `${e.target_name??(language==="en"?"Player":"Jogador")} +${e.n} · ${language==="en"?"9 rule":"Regra do 9"}`:
+                  language==="en"?`${e.target_name??"Player"} drew ${e.n??2} cards`:`${e.target_name??"Jogador"} comprou ${e.n??2} cartas`:
                 e.type==="color_wave"?"Nova cor escolhida":
                 e.type==="reverse"?
-                  `${e.name}: ${e.n??1} Volta(s)`:
+                  `${e.name}: ${e.n??1} ${language==="en"?"Reverse(s)":"Volta(s)"}`:
                 e.type==="bomb"?"Bomba: adversários sem Escudo compraram +2":
                 e.type==="machinegun"?"Metralhadora: cartas especiais reveladas e devolvidas ao baralho":
-                 e.type==="shield_armed"?`${e.name} ativou Escudo`:
-                 e.type==="vortex"?`${e.name} ativou Vórtice: ${e.n??0} carta(s) puxada(s)`:
+                 e.type==="shield_armed"?language==="en"?`${e.name} activated Shield`:`${e.name} ativou Escudo`:
+                 e.type==="vortex"?language==="en"?`${e.name} activated Vortex: ${e.n??0} cards pulled`:`${e.name} ativou Vórtice: ${e.n??0} carta(s) puxada(s)`:
                  e.type==="roach"?language==="en"?
                    `${e.name} passed a ${({"r":"red","y":"yellow","g":"green","b":"blue"} as Record<string,string>)[e.copy_color??"b"]} Roach to ${e.target_name??"another player"}!`:
                    `${e.name} enviou uma Barata ${COLOR_NAMES[(e.copy_color??"b") as CardColor]} para ${e.target_name??"outro jogador"}!`:
@@ -276,12 +276,12 @@ function RoomPage() {
                  e.type==="sword_armed"?language==="en"?`${e.name} activated Sword (+3 to the next attack)`:`${e.name} ativou Espada (+3 no próximo ataque)`:
                  e.type==="sword_boost"?language==="en"?`Sword: +${e.n??3} added to the draw debt`:`Espada: +${e.n??3} somados à dívida`:
                  e.type==="sword_strike"?language==="en"?`Sword hit ${e.target_name??"a player"}!`:`Espada atingiu ${e.target_name??"um jogador"}!`:
-                 e.type==="shield_defense"?`${e.target_name??e.name} foi defendido(a) pelo Escudo`:
+                 e.type==="shield_defense"?language==="en"?`${e.target_name??e.name} was protected by Shield`:`${e.target_name??e.name} foi defendido(a) pelo Escudo`:
                 e.type==="powerless"?"Sem Poderes: próxima vez de cada adversário só com números":
                 e.type==="negation"?"Negação: efeito anulado":
-                e.type==="uno"?`${e.name} gritou UNO!`:
-                e.type==="cut"?`${e.name} cortou ${e.target_name??"um jogador"}`:
-                e.type==="catch"?`${e.target_name??"Jogador"} denunciado!`:
+                e.type==="uno"?language==="en"?`${e.name} called UNO!`:`${e.name} gritou UNO!`:
+                e.type==="cut"?language==="en"?`${e.name} jumped in against ${e.target_name??"a player"}`:`${e.name} cortou ${e.target_name??"um jogador"}`:
+                e.type==="catch"?language==="en"?`${e.target_name??"Player"} caught without UNO!`:`${e.target_name??"Jogador"} denunciado!`:
                 e.name}
               </p>
               {e.type==="machinegun" && !!e.revealed?.length && (
@@ -326,7 +326,7 @@ function RoomPage() {
           ))}
         </div>
       )}
-      {state.members.find(m=>m.id===state.me)?.spectator && <div role="status" className="mx-auto mb-3 w-full max-w-5xl rounded-xl border border-cyan/40 bg-cyan/10 px-4 py-3 text-sm font-semibold text-cyan">Partida em andamento, você está na fila de espera. Aguarde a próxima partida.</div>}
+      {state.members.find(m=>m.id===state.me)?.spectator && <div role="status" className="mx-auto mb-3 w-full max-w-5xl rounded-xl border border-cyan/40 bg-cyan/10 px-4 py-3 text-sm font-semibold text-cyan">{language==="en"?"Match in progress: you are in the waiting queue. Please wait for the next round.":"Partida em andamento, você está na fila de espera. Aguarde a próxima partida."}</div>}
       {playing ? <GameTable state={state} busy={busy} actions={actions} /> : <WaitingRoom state={state} busy={busy} onStart={start} onAddBot={(difficulty)=>act(()=>api.addBot(token,code,difficulty))} onRemoveBot={(id)=>act(()=>api.removeBot(token,code,id))}
         onUpdateWinners={updateWinners}
         onUpdateSettings={async (startingCards:number,rules:RuleSettings,cards:CardSettings)=>{

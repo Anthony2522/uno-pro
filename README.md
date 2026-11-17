@@ -34,7 +34,7 @@ Nas configurações avançadas, a **quantidade de cartas iniciais** é a primeir
 - Coringa Detetive: revela privadamente as cartas do adversário selecionado por 10 segundos.
 - +2 Volta: inverte a direção e acumula duas compras; com dois jogadores, funciona como um +2 comum.
 - Primeiro colocado sai da disputa e os demais jogam pelo segundo.
-- 100 nomes engraçados para bots e alternância de português/inglês.
+- 32 nomes engraçados para bots (lista fixa atual em `server/botNames.js`) e alternância de português/inglês.
 
 ## Atualização Desuno, Bomba e animações
 
@@ -67,7 +67,7 @@ Para reproduzir os torneios: `node scripts/bot-benchmark.mjs --games=600` (bot d
 
 ## Novas regras e cartas (novembro de 2026)
 
-- O baralho tem 191 cartas: 1 Negação (N), 1 Sem Poderes (P) e 1 Metralhadora (M), além das cartas existentes.
+- Com todas as cartas opcionais ativadas, o baralho inicial tem **232 cartas** (conforme `newDeck()` em `server/game.js`). Entre os coringas especiais há uma Negação (N), um Sem Poderes (P) e uma Metralhadora (M). Desativar opcionais reduz o total.
 - **Negação**: cancela +2, +4 ou +5 acumulados, um Bloqueio direcionado ao usuário ou a proibição do Sem Poderes. O portador escolhe uma nova cor e ainda pode jogar normalmente; uma decisão de bloqueio expira após nove segundos sem resposta.
 - **Sem Poderes**: impede cartas especiais na próxima vez, permitindo apenas números, salvo se o portador usar Negação.
 - **Metralhadora**: substitui uma carta especial de cada adversário por uma carta numérica, privilegiando coringas, depois compras, depois Bloqueio/Volta. Nenhum jogador perde a vez por isso.

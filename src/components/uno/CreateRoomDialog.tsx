@@ -12,9 +12,11 @@ import { cn } from "@/lib/utils";
 import { AdvancedRoomSettingsFields } from "./AdvancedRoomSettingsFields";
 import {DEFAULT_CARD_SETTINGS,type CardSettings} from "@/lib/uno/cardSettings";
 import {startLocalSolo} from "@/lib/uno/offlineRuntime";
+import {useLanguage} from "@/lib/uno/i18n";
 
 export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: boolean; onOpenChange: (o: boolean) => void; offline?:boolean }) {
   const { guest, resetSession } = useReadyGuest();
+  const {language}=useLanguage();
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
@@ -132,7 +134,7 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
               ))}
             </select>
             <p className="text-xs text-muted-foreground">
-              {offline?`Você + ${max-1} ${max===2?"bot":"bots"} = ${max} jogadores na sala.`:`Capacidade máxima: ${max} jogadores (limite de 20).`}
+              {language==="en" ? (offline?`You + ${max-1} ${max===2?"bot":"bots"} = ${max} players in the room.`:`Maximum capacity: ${max} players (limit of 20).`) : (offline?`Você + ${max-1} ${max===2?"bot":"bots"} = ${max} jogadores na sala.`:`Capacidade máxima: ${max} jogadores (limite de 20).`)}
             </p>
           </fieldset>
 

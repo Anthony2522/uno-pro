@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {useLanguage} from "@/lib/uno/i18n";
 
 export async function copyText(text: string) {
   try {
@@ -29,16 +30,17 @@ export async function copyText(text: string) {
 }
 
 export function useCopyInvite(code: string) {
+  const {tr}=useLanguage();
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const copy = async (kind: "link" | "code") => {
     const text = kind === "link" ? `${window.location.origin}/sala/${code}` : code;
     const ok = await copyText(text);
     if (ok) {
       setCopied(kind);
-      toast.success(kind === "link" ? "Link de convite copiado!" : "Código copiado!");
+      toast.success(tr(kind === "link" ? "Link de convite copiado!" : "Código copiado!"));
       setTimeout(() => setCopied(null), 1800);
     } else {
-      toast.error("Não foi possível copiar. Copie manualmente: " + text);
+      toast.error(tr("Não foi possível copiar. Copie manualmente:") + " " + text);
     }
   };
   return { copied, copy };

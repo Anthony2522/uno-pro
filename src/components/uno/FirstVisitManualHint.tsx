@@ -1,10 +1,13 @@
 import {useEffect,useRef,useState} from "react";
 import {BookOpen} from "lucide-react";
+import {useLanguage} from "@/lib/uno/i18n";
 const KEY="unopro.manual.introduction.v1";
 const TEXT="Esse UNO tem regras adicionais, você pode verificá-las no manual.\n\nCaso não goste de alguma, a retire da sua partida em Configurações Avançadas.";
+const TEXT_EN="This UNO game has additional rules. You can check them in the rulebook.\n\nIf you do not like a rule, disable it under Advanced settings before starting a match.";
 type Anchor={left:number;top:number;arrowLeft:number};
 
 export function FirstVisitManualHint(){
+  const {language}=useLanguage();
   const [visible,setVisible]=useState(false);
   const initialized=useRef(false);
   const [anchor,setAnchor]=useState<Anchor>({left:8,top:80,arrowLeft:120});
@@ -44,6 +47,6 @@ export function FirstVisitManualHint(){
     <span aria-hidden="true" className="absolute -top-2 size-4 rotate-45 border-l border-t border-cyan/60 bg-navy"
       style={{left:anchor.arrowLeft-8}}/>
     <p className="mb-2 flex items-center gap-2 font-display font-bold text-cyan"><BookOpen className="size-4"/> Manual de regras</p>
-    <p className="whitespace-pre-line leading-relaxed">{TEXT}</p>
+    <p className="whitespace-pre-line leading-relaxed">{language==="en"?TEXT_EN:TEXT}</p>
   </aside>;
 }
