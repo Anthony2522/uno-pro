@@ -94,19 +94,19 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
     g.rotation.y=p.yaw;setNameplate(p,g);
     const gear=g.userData;
     const swing=moved?Math.sin(now*.012)*.45:0;
-    gear.legs[0].rotation.x=swing;gear.legs[1].rotation.x=-swing;
-    gear.arms[0].rotation.x=-swing*.65;gear.arms[1].rotation.x=swing*.65;
-    gear.equippedSword.visible=p.weapon==="sword";
-    gear.equippedShield.visible=p.weapon==="sword";
-    gear.equippedShield.position.z=p.shield?-.65:-.32;
-    gear.equippedBow.visible=p.weapon==="bow";}
+    gear["legs"][0].rotation.x=swing;gear["legs"][1].rotation.x=-swing;
+    gear["arms"][0].rotation.x=-swing*.65;gear["arms"][1].rotation.x=swing*.65;
+    gear["equippedSword"].visible=p.weapon==="sword";
+    gear["equippedShield"].visible=p.weapon==="sword";
+    gear["equippedShield"].position.z=p.shield?-.65:-.32;
+    gear["equippedBow"].visible=p.weapon==="bow";}
    for(const a of s.arrows||[]){let m=arrows.get(a.id);if(!m){m=block(scene,0,0,0,.1,.1,.55,materials[1]!);arrows.set(a.id,m);}m.position.lerp(new THREE.Vector3(a.x,a.y,a.z),Math.min(1,dt*16));}
    for(const [aid,m] of arrows)if(!(s.arrows||[]).some(a=>a.id===aid)){scene.remove(m);arrows.delete(aid);}
    if(now-network>50){network=now;if(chargeStarted.current)setChargePower(Math.min(100,Math.round((now-chargeStarted.current)/12)));if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",...i}));i.jump=false;}
    renderer.render(scene,camera);
   }frame=requestAnimationFrame(animate);
   const observer=new ResizeObserver(()=>{camera.aspect=node.clientWidth/node.clientHeight;camera.updateProjectionMatrix();renderer.setSize(node.clientWidth,node.clientHeight);});observer.observe(node);
-  return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.dispose();cleanupWorld();for(const group of fighters.values()){const weapon=group.userData.equippedSword as THREE.Mesh|undefined;if(weapon&&weapon.material instanceof THREE.Material)weapon.material.dispose();}for(const plate of nameplates.values()){plate.texture.dispose();plate.sprite.material.dispose();}cube.dispose();for(const m of materials)m.dispose();fire.dispose();red.dispose();skin.dispose();silver.dispose();gold.dispose();node.removeChild(renderer.domElement);};
+  return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.dispose();cleanupWorld();for(const group of fighters.values()){const weapon=group.userData["equippedSword"] as THREE.Mesh|undefined;if(weapon&&weapon.material instanceof THREE.Material)weapon.material.dispose();}for(const plate of nameplates.values()){plate.texture.dispose();plate.sprite.material.dispose();}cube.dispose();for(const m of materials)m.dispose();fire.dispose();red.dispose();skin.dispose();silver.dispose();gold.dispose();node.removeChild(renderer.domElement);};
  },[id,ws]);
  const pointerMove=(e:React.PointerEvent<HTMLDivElement>)=>{if(!look.current||look.current.id!==e.pointerId)return;input.current.yaw-=(e.clientX-look.current.x)*.004;input.current.pitch=Math.max(-1.35,Math.min(1.35,input.current.pitch-(e.clientY-look.current.y)*.004));look.current.x=e.clientX;look.current.y=e.clientY;};
  const joystick=(e:React.PointerEvent<HTMLDivElement>)=>{if(stick.current!==null&&stick.current!==e.pointerId)return;stick.current=e.pointerId;e.currentTarget.setPointerCapture(e.pointerId);const r=e.currentTarget.getBoundingClientRect();input.current.x=Math.max(-1,Math.min(1,(e.clientX-r.left-r.width/2)/(r.width*.4)));input.current.z=Math.max(-1,Math.min(1,(e.clientY-r.top-r.height/2)/(r.height*.4)));};
