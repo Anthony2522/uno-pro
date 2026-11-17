@@ -96,7 +96,7 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
  return <div className="crazy-game">
   <div className="crazy-canvas" ref={mount}/>
   <div className="crazy-look" onPointerDown={e=>{look.current={id:e.pointerId,x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);}} onPointerMove={lookMove} onPointerUp={()=>look.current=null} onPointerCancel={()=>look.current=null}/>
-  <header className="crazy-hud"><button onClick={onExit}>← Sair</button><strong>⏱ {String(Math.floor(seconds/60)).padStart(2,"0")}:{String(seconds%60).padStart(2,"0")}</strong><span>👥 {hp>0?1:0}/{enemyHp>0?2:1}</span></header>
+  <header className="crazy-hud"><div className="crazy-brand"><img src="/crazy-battle-logo.webp" alt="Crazy Battle"/><button aria-label="Sair do treino" onClick={onExit}>✕</button></div><strong>⏱ {String(Math.floor(seconds/60)).padStart(2,"0")}:{String(seconds%60).padStart(2,"0")}</strong><span>👥 {hp>0?1:0}/{enemyHp>0?2:1}</span></header>
   {enemyHp>0&&<div className="crazy-enemy-hp">Bot Guerreiro <span>{enemyHp}%</span><div style={{width:enemyHp+"%"}}/></div>}
   <div className="crazy-crosshair">＋</div>
   <div className="crazy-health"><b>♥</b><strong>{hp}%</strong><div className="crazy-health-track"><div style={{height:hp+"%",background:`hsl(${hp*1.2} 95% 48%)`}}/></div></div>
