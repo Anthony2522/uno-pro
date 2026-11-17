@@ -1102,6 +1102,11 @@ export function proRpc(fn,args={}){
   if(fn==="join_room"){
     const me=authenticate(args.p_token);
     const r=find(args.p_code);
+    if(!member(r,me.id) && r.is_public && r.status==="playing"){
+      // Late arrivals watch the ongoing round and wait for the next one.
+      r.members.push({guest_id:me.id,joined_at:Math.max(clock(),(r.members.at(-1)?.joined_at||0)+1),spectator:true});
+      bump(r,true);return {code:r.code,already:false};
+    }
     if(me.is_dev && me.nickname.trim()==="Tony" &&
       !member(r,me.id) && (r.status==="playing" || r.members.filter(m=>!m.spectator).length>=r.max_players)){
       // Allow the authenticated developer to host and spectate even full rooms.
@@ -1163,7 +1168,17 @@ export function proRpc(fn,args={}){
     bump(r);
     return {ok:true,initial_cards:count,rules:r.rules,cards_enabled:r.cards_enabled};
   }
-  if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
+  if(fn==="start_game"){
+    const r=find(args.p_code);
+    if(r.is_public && r.status==="waiting" && r.host_id===authenticate(args.p_token).id){
+      // FIFO: queued spectators take available seats before the next round.
+      let seats=r.max_players-r.members.filter(m=>!m.spectator).length;
+      for(const m of r.members.filter(m=>m.spectator).sort((a,b)=>a.joined_at-b.joined_at)){
+        if(seats<=0)break;
+        m.spectator=false;seats--;
+      }
+    }
+    const result=originalRpc(fn,args),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
     Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:null,mirror_played_as:null,roach_chains:{},lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
