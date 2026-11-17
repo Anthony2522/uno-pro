@@ -29,8 +29,8 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   };
   for(let x=-8;x<8;x++)for(let z=-8;z<8;z++){
    const edge=x===-8||x===7||z===-8||z===7;
-   add(x,-.5,z,(x+z)%9===0?lava:mats[(Math.abs(x*13+z*7))%mats.length]);
-   if(edge)for(let y=0;y<8;y++)add(x,y+.5,z,mats[(Math.abs(x+y*3+z))%mats.length]);
+   add(x,-.5,z,(x+z)%9===0?lava:mats[(Math.abs(x*13+z*7))%mats.length]!);
+   if(edge)for(let y=0;y<8;y++)add(x,y+.5,z,mats[(Math.abs(x+y*3+z))%mats.length]!);
    if(edge&&((x+z)%4===0))add(x,8.5,z,lava);
   }
   const banner=new THREE.MeshLambertMaterial({color:"#a71916"}),flame=new THREE.MeshBasicMaterial({color:"#ffa300"});
