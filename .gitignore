@@ -7,3 +7,6 @@ dist
 .tanstack
 .uno-state.json
 .uno-state.json.tmp
+# Optimized user-supplied Barata artwork assembled from committed binary fragments.
+public/roach-top.webp
+public/roach-front.webp
