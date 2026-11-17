@@ -10,7 +10,7 @@ import { UnoCard } from "@/components/uno/UnoCard";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/uno/api";
 import { useReadyGuest } from "@/lib/uno/guest";
-import {getLocalMatch,getLocalSandbox,discardOfflineMatch,startLocalSandbox} from "@/lib/uno/offlineRuntime";
+import {getLocalMatch,getLocalSandbox,discardOfflineMatch,discardSandboxMatch,startLocalSandbox} from "@/lib/uno/offlineRuntime";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -90,13 +90,14 @@ function Home() {
                   if(discardOfflineMatch())refreshOffline(n=>n+1);
                 }}><X className="size-5"/></Button>}
             </div>
-            <Button variant="glass" size="lg" className="w-full rounded-2xl border border-violet-400/40 bg-violet-500/10 text-violet-200"
+            <div className="flex gap-2"><Button variant="glass" size="lg" className="min-w-0 flex-1 rounded-2xl border border-violet-400/40 bg-violet-500/10 text-violet-200"
               onClick={()=>{
                 const code=sandbox?.playing?sandbox.code:startLocalSandbox(guest.nickname);
                 void navigate({to:"/sala/$code",params:{code}});
               }}>
               <FlaskConical className="size-5"/> {sandbox?.playing?"Continuar sala Sandbox":"Criar sala Sandbox (teste de cartas)"}
             </Button>
+              {sandbox&&<Button variant="glass" size="iconLg" className="h-11 w-12 shrink-0 rounded-2xl border border-destructive/35 text-destructive" title="Excluir sala Sandbox" aria-label="Excluir sala Sandbox" onClick={()=>{if(!window.confirm("Excluir sua sala Sandbox salva neste aparelho? Esta ação não pode ser desfeita."))return;if(discardSandboxMatch())refreshOffline(n=>n+1);}}><X className="size-5"/></Button>}</div>
             <p className="text-xs text-muted-foreground">Partidas offline e Sandbox ficam apenas neste aparelho. No Sandbox você controla os dois jogadores.</p>
           </div>
           {activeRoom && (
