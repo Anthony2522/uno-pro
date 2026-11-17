@@ -39,6 +39,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const game = state.game!;
   const {language}=useLanguage();
   const me = state.me;
+  const isSpectator=!!state.members.find(p=>p.id===me)?.spectator;
   const [pendingDetective,setPendingDetective]=useState<string|null>(null);
   const [pendingNegation,setPendingNegation]=useState(false);
   const [detectiveDismissed,setDetectiveDismissed]=useState(false);
@@ -378,8 +379,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
           🏆 {myPlacement.rank}º colocado! Aguardando os demais vencedores…
         </div>
       )}
-      {/* My area */}
-      <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
+      {/* Spectators watch the table without a hand or playable controls. */}
+      {isSpectator ? <div className="mx-auto w-full rounded-xl border border-glass-border bg-navy/80 px-4 py-4 text-center text-sm text-muted-foreground">Você está assistindo à partida. Sua vez de jogar será na próxima rodada, quando houver vaga.</div> : <section data-my-hand aria-label="Sua mão" className={cn("uno-hand shrink-0 z-20 -mx-2 border-t border-glass-border bg-navy/90 px-2 pb-[max(0.3rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-xl sm:mx-0 sm:rounded-t-3xl sm:border-x",handRows===1?"uno-hand-single":"uno-hand-double")}>
         <div className="uno-hand-toolbar grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 sm:gap-2">
           <span className="whitespace-nowrap text-[11px] font-bold text-foreground sm:text-sm" title="Cartas na sua mão">{myCount} {myCount===1?"carta":"cartas"}{(game.shields?.[me]||0)>0&&<Shield aria-label="Escudo ativo" className="ml-1 inline-block size-3.5 align-[-2px] text-cyan" strokeWidth={2.7}/>}{(game.swords?.[me]||0)>0&&<Sword aria-label="Espada ativa" className="ml-1 inline-block size-3.5 align-[-2px] text-amber-300" strokeWidth={2.7}/>} </span>
           <HandCardsGuide cards={hand} trigger={
@@ -416,7 +417,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             })}
           </div>
         </div>
-      </section>
+      </section>}
 
       {flights.length>0&&(
         <div className="pointer-events-none fixed inset-0 z-[60]" aria-hidden>
