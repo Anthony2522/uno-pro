@@ -93,9 +93,13 @@ export function shuffle(arr) {
 
 /** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 232 cards (including one Mirror Wild and four independent Roach cards). */
 export const CUSTOM_CARD_KEYS=Object.freeze(["T","H","E","L","V","C","A","W5","X","B","N","P","M","Q"]);
-export const DEFAULT_CARDS_ENABLED=Object.freeze(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true])));
+// Cerveja, Barata, Espada and Coringa Metralhadora are opt-in for new rooms.
+const DISABLED_BY_DEFAULT=new Set(["C","A","E","M"]);
+export const DEFAULT_CARDS_ENABLED=Object.freeze(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,!DISABLED_BY_DEFAULT.has(k)])));
 export function normalizeCardsEnabled(value){
-  return Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,value?.[k]!==false]));
+  return Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,
+    typeof value?.[k]==="boolean"?value[k]:DEFAULT_CARDS_ENABLED[k]
+  ]));
 }
 function customCardKey(card){
   const value=cardValue(card);
