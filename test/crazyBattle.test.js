@@ -60,7 +60,7 @@ test("Crazy Battle: joining twice or forging starts cannot hijack lobby",async()
   const joined=await host.until("joined");await host.until("state");
   const guest=await app.client();guest.send("join",{code:joined.code,player:"Guest"});
   await guest.until("joined");await guest.until("state");
-  guest.send("start");await guest.until("state"); // Host and guest are still in lobby.
+  guest.send("start");host.send("list");const before=await host.until("rooms");assert.equal(before.rooms.find(r=>r.code===joined.code)?.status,"lobby");
   host.send("start");const played=await host.until("state");
   assert.ok(played.players.length>=2);
   guest.send("join",{code:joined.code,player:"Impostor"});
