@@ -48,13 +48,13 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   const bot:Bot={mesh:botGroup,hp:100,alive:true,attackAt:0,position:new THREE.Vector3(0,0,-4.8)};
   botGroup.position.copy(bot.position);
   const player=new THREE.Vector3(0,0,4.5);
-  let vy=0,ground=true,last=performance.now(),elapsed=0,swordAt=0,bowStart=0,arrowObjects:{mesh:THREE.Mesh,velocity:THREE.Vector3,ttl:number}[]=[];
+  let vy=0,ground=true,last=performance.now(),elapsed=0,lastSecond=-1,finished=false,swordAt=0,bowStart=0,arrowObjects:{mesh:THREE.Mesh,velocity:THREE.Vector3,ttl:number}[]=[];
   const swordMat=new THREE.MeshLambertMaterial({color:"#c6c2d0"}),shieldMat=new THREE.MeshLambertMaterial({color:"#71361c"});
   const handSword=new THREE.Mesh(geo,swordMat);handSword.scale.set(.18,.85,.19);scene.add(handSword);
   const handShield=new THREE.Mesh(geo,shieldMat);handShield.scale.set(.75,.95,.18);scene.add(handShield);
   const bow=new THREE.Mesh(geo,shieldMat);bow.scale.set(.12,1.25,.18);scene.add(bow);
   const arrowMat=new THREE.MeshLambertMaterial({color:"#e3c6a0"});
-  const hurt=(amount:number)=>{bot.hp=Math.max(0,bot.hp-amount);setEnemyHp(Math.ceil(bot.hp));if(bot.hp===0){bot.alive=false;bot.mesh.visible=false;setWinner("Vitória!");}};
+  const hurt=(amount:number)=>{bot.hp=Math.max(0,bot.hp-amount);setEnemyHp(Math.ceil(bot.hp));if(bot.hp===0){bot.alive=false;bot.mesh.visible=false;finished=true;setWinner("Vitória!");}};
   const launch=(power:number)=>{const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(actions.current.pitch,actions.current.yaw,0,"YXZ"));const mesh=new THREE.Mesh(geo,arrowMat);mesh.scale.set(.09,.09,.55);mesh.position.copy(camera.position).addScaledVector(direction,.65);scene.add(mesh);arrowObjects.push({mesh,velocity:direction.multiplyScalar(7+power*11),ttl:3});};
   const down=(e:KeyboardEvent)=>{keys.current.add(e.code);if(e.code==="Space")actions.current.jump=true;if(e.code==="KeyQ")changeWeapon();if(e.code==="Escape")document.exitPointerLock?.();};
   const up=(e:KeyboardEvent)=>{keys.current.delete(e.code);};
@@ -68,9 +68,9 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
   let frame=0;
   const animate=(now:number)=>{
    frame=requestAnimationFrame(animate);const dt=Math.min(.04,(now-last)/1000);last=now;
-   if(!winner){elapsed+=dt;if(Math.floor(elapsed)!==seconds)setSeconds(Math.floor(elapsed));}
+   if(!finished){elapsed+=dt;if(Math.floor(elapsed)!==lastSecond){lastSecond=Math.floor(elapsed);setSeconds(lastSecond);}}
    const a=actions.current,k=keys.current;
-   if(!winner){
+   if(!finished){
     let mx=a.moveX+(k.has("KeyD")?1:0)-(k.has("KeyA")?1:0),mz=-a.moveY+(k.has("KeyS")?1:0)-(k.has("KeyW")?1:0);
     const length=Math.hypot(mx,mz)||1;mx/=length;mz/=length;
     const sin=Math.sin(a.yaw),cos=Math.cos(a.yaw);
@@ -82,7 +82,7 @@ export function CrazyArena({onExit}:{onExit:()=>void}) {
     if(bot.alive){
      if(dist>1.5){const dir=new THREE.Vector3(player.x-bot.position.x,0,player.z-bot.position.z).normalize();bot.position.addScaledVector(dir,dt*1.25);bot.mesh.position.copy(bot.position);}
      bot.mesh.rotation.y=Math.atan2(player.x-bot.position.x,player.z-bot.position.z);
-     if(dist<1.8&&now-bot.attackAt>1100){bot.attackAt=now;const blocked=a.shield&&a.weapon==="sword"&&Math.cos(a.yaw-Math.atan2(bot.position.x-player.x,player.z-bot.position.z))<-.1;setHp(h=>{const next=Math.max(0,h-(blocked?2:15));if(next===0)setWinner("Derrota");return next;});}
+     if(dist<1.8&&now-bot.attackAt>1100){bot.attackAt=now;const toBot=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const facing=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));const blocked=a.shield&&a.weapon==="sword"&&facing.dot(toBot)>.2;setHp(h=>{const next=Math.max(0,h-(blocked?2:15));if(next===0){finished=true;setWinner("Derrota");}return next;});}
     }
     if(a.weapon==="sword"&&a.attack&&!a.shield&&now-swordAt>620){swordAt=now;if(bot.alive&&dist<2.5){const dir=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const forward=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));if(forward.dot(dir)>.35)hurt(20);}a.attack=false;}
     if(a.weapon==="bow"){if(a.attack){if(!bowStart)bowStart=now;setCharge(Math.min(100,Math.floor((now-bowStart)/12)));}else if(bowStart){launch(clamp((now-bowStart)/1200,0,1));bowStart=0;setCharge(0);}}else bowStart=0;
