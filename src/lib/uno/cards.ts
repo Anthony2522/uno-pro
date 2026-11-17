@@ -8,6 +8,13 @@ export const COLOR_NAMES: Record<CardColor, string> = {
   b: "Azul",
 };
 
+const ROACH_CARD=/^[rygb]A@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export function isRoach(card:string):boolean{return ROACH_CARD.test(card);}
+export function roachId(card:string):string|null{return isRoach(card)?card.slice(3):null;}
+export function sameCardFace(a:string,b:string):boolean {
+  return a===b||(isRoach(a)&&isRoach(b)&&a[0]===b[0]);
+}
+
 export function isWild(card: string): boolean {
   return card === "W" || card === "W4" || card === "W5" || card === "X" || card === "B" || card === "N" || card === "P" || card === "M" || card === "Q";
 }
@@ -17,7 +24,7 @@ export function cardColor(card: string): CardColor | null {
 }
 
 export function cardValue(card: string): string {
-  return isWild(card) ? card : card.slice(1);
+  return isRoach(card)?"A":isWild(card) ? card : card.slice(1);
 }
 
 /** Mirrors the server rule in public._playable. */
@@ -38,6 +45,7 @@ export function cardLabel(card: string, mirrorAs?:string|null): string {
   if (card === "N") return "Coringa Negação";
   if (card === "P") return "Coringa Sem Poderes";
   if (card === "M") return "Coringa Metralhadora";
+  if (isRoach(card)) return `Barata ${COLOR_NAMES[card[0] as CardColor]}`;
   if (cardValue(card) === "H") return `Escudo ${COLOR_NAMES[card[0] as CardColor]}`;
   if (cardValue(card) === "V") return `Vórtice ${COLOR_NAMES[card[0] as CardColor]}`;
   if (cardValue(card) === "C") return `Cerveja ${COLOR_NAMES[card[0] as CardColor]}`;
@@ -71,7 +79,7 @@ export function sortHand(cards: string[]): string[] {
     if (c === "Q") return 408;
     const ci = COLORS.indexOf(c[0] as CardColor) * 100;
     const v = cardValue(c);
-    const vi = v === "S" ? 10 : v === "R" ? 11 : v === "D" ? 12 : v === "T" ? 13 : v === "H" ? 14 : v === "V" ? 15 : v === "C" ? 16 : v === "L" ? 17 : v === "E" ? 18 : Number(v);
+    const vi = v === "S" ? 10 : v === "R" ? 11 : v === "D" ? 12 : v === "T" ? 13 : v === "H" ? 14 : v === "V" ? 15 : v === "C" ? 16 : v === "L" ? 17 : v === "E" ? 18 : v === "A" ? 19 : Number(v);
     return ci + vi;
   };
   return [...cards].sort((a, b) => order(a) - order(b));

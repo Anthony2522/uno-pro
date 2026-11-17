@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
 import { UnoCard } from "@/components/uno/UnoCard";
+import {CockroachIcon} from "@/components/uno/CockroachIcon";
+import {COLOR_NAMES,type CardColor} from "@/lib/uno/cards";
 import { cardLabel } from "@/lib/uno/cards";
 import { useLanguage } from "@/lib/uno/i18n";
 import { ConnectionBanner, CopyInviteButton, LeaveButton } from "@/components/uno/RoomTopBar";
@@ -74,7 +76,7 @@ function RoomPage() {
     }
     const next=events.filter(e=>e.id>(lastEffectId.current??0));
     if(events.length)lastEffectId.current=events.at(-1)?.id??0;
-    for(const event of next)sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"?"play":event.type==="sword_boost"?"draw4":event.type);
+    for(const event of next)sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
   },[state?.game?.effects,state?.game?.round]);
 
   // Sounds on state transitions.
@@ -212,6 +214,7 @@ function RoomPage() {
                  e.type==="powerless"?<ZapOff className="size-6"/>:
                  e.type==="machinegun"?<Crosshair className="size-6"/>:
                  e.type==="vortex"?<img src="/vortice.svg" alt="" className="h-6 w-6 object-contain brightness-0 invert"/>:
+                 e.type==="roach"||e.type==="roach_end"?<CockroachIcon className="size-7 text-cyan"/>:
                  e.type==="beer"||e.type==="beer_forced"?<Beer className="size-6"/>:
                  e.type==="lock"?<LockKeyhole className="size-6"/>:
                  e.type==="sword_armed"||e.type==="sword_boost"||e.type==="sword_strike"?<Sword className="size-6"/>:
@@ -237,6 +240,12 @@ function RoomPage() {
                 e.type==="machinegun"?"Metralhadora: cartas especiais reveladas e devolvidas ao baralho":
                  e.type==="shield_armed"?`${e.name} ativou Escudo`:
                  e.type==="vortex"?`${e.name} ativou Vórtice: ${e.n??0} carta(s) puxada(s)`:
+                 e.type==="roach"?language==="en"?
+                   `${e.name} passed a ${({"r":"red","y":"yellow","g":"green","b":"blue"} as Record<string,string>)[e.copy_color??"b"]} Roach to ${e.target_name??"another player"}!`:
+                   `${e.name} enviou uma Barata ${COLOR_NAMES[(e.copy_color??"b") as CardColor]} para ${e.target_name??"outro jogador"}!`:
+                 e.type==="roach_end"?language==="en"?
+                   `${e.name} ended this Roach chain — no new copy.`:
+                   `${e.name} encerrou a cadeia da Barata: sem nova cópia!`:
                  e.type==="beer"?"Cerveja: os adversários jogarão automaticamente":
                  e.type==="beer_forced"?`${e.name}: jogada aleatória pela Cerveja`:
                  e.type==="lock"?language==="en"?`Lock: next turn, opponents may only play ${({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[e.color??"b"]} cards (no wilds).`:`Cadeado: na próxima vez, adversários só poderão usar cartas ${({r:"vermelhas",y:"amarelas",g:"verdes",b:"azuis"} as Record<string,string>)[e.color??"b"]}, sem coringas.`:

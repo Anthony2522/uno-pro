@@ -15,7 +15,7 @@ const WILDS=new Set(["W","W4","W5","X","B","N","P","M","Q"]);
 // Q is physically a wild even before another one is played. Its *effect*
 // changes with the latest real wild, without revealing an opponent's hand.
 const resolved=(card,mirrorAs="W")=>card==="Q"?(mirrorAs||"W"):card;
-const value=(c,mirrorAs="W")=>WILDS.has(c)?resolved(c,mirrorAs):c.slice(1);
+const value=(c,mirrorAs="W")=>/^[rygb]A@[0-9a-f-]{36}$/.test(c)?"A":WILDS.has(c)?resolved(c,mirrorAs):c.slice(1);
 const number=(c,mirrorAs="W")=>/^[0-9]$/.test(value(c,mirrorAs));
 const wild=c=>WILDS.has(c);
 const drawValue=(c,mirrorAs="W")=>{const e=resolved(c,mirrorAs);return e==="W5"?5:e==="W4"?4:e?.slice(1)==="D"||e?.slice(1)==="T"?2:0;};
@@ -147,6 +147,12 @@ function evaluate(plan,color,context,remaining) {
   const protectionScale=len<=3?.10:len<=6?1.20:len<=10?1:.72;
   // All effects below are computed only from our hand and public rival counts.
   const specialPlayed=plan.map(c=>value(c,mirrorAs));
+  // Playing a Roach transfers one card to a not-yet-visited opponent.
+  // Its chain is not a simple attack and may already be at its final recipient.
+  for(const card of plan)if(value(card,mirrorAs)==="A"){
+    const eligible=context.roachTargets?.[card]??1;
+    if(eligible>0)score+=3.4+Math.min(7,threatTotal*.9);
+  }
   if(specialPlayed.includes("H")){
     score+=tune.shieldValue*(context.shieldArmed?-3:5.5+Math.min(2,threatTotal*.20));
   }

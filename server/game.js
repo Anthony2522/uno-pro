@@ -67,11 +67,17 @@ export function cleanText(p) {
 }
 const cleanCode = (c) => cleanText(c).toUpperCase();
 
+// Every original Roach is assigned its own UUID; copies retain this ID while
+// their colors change. The chain identifier is never shared across originals.
+export const ROACH_RE=/^[rygb]A@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const isRoach=card=>typeof card==="string"&&ROACH_RE.test(card);
+export const roachChainId=card=>isRoach(card)?card.slice(3):null;
+export const makeRoach=(color,id=crypto.randomUUID())=>color+"A@"+id;
 const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M|Q)$/;
 const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X" || c === "B" || c === "N" || c === "P" || c === "M" || c === "Q";
-export const cardValue = (c) => (isWild(c) ? c : c.slice(1));
+export const cardValue = (c) => (isRoach(c)?"A":isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
-  return isWild(c) || c[0] === color || (!isWild(top) && c.slice(1) === top.slice(1));
+  return isWild(c) || c[0] === color || (!isWild(top) && cardValue(c) === cardValue(top));
 }
 const advance = (idx, dir, steps, n) => (((idx + dir * steps) % n) + n) % n;
 
@@ -85,14 +91,14 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 228 cards (including one Mirror Wild). */
-export const CUSTOM_CARD_KEYS=Object.freeze(["T","H","E","L","V","C","W5","X","B","N","P","M","Q"]);
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 232 cards (including one Mirror Wild and four independent Roach cards). */
+export const CUSTOM_CARD_KEYS=Object.freeze(["T","H","E","L","V","C","A","W5","X","B","N","P","M","Q"]);
 export const DEFAULT_CARDS_ENABLED=Object.freeze(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true])));
 export function normalizeCardsEnabled(value){
   return Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,value?.[k]!==false]));
 }
 function customCardKey(card){
-  const value=card.startsWith("W")?card:card.length>1?card.slice(1):card;
+  const value=cardValue(card);
   return CUSTOM_CARD_KEYS.includes(value)?value:null;
 }
 export function newDeck(cardsEnabled=DEFAULT_CARDS_ENABLED) {
@@ -105,7 +111,12 @@ export function newDeck(cardsEnabled=DEFAULT_CARDS_ENABLED) {
   for (let i = 0; i < 10; i++) d.push("W", "W4");
   for (let i = 0; i < 2; i++) d.push("W5");
   d.push("X", "B", "N", "P", "M", "Q"); // One of each custom wild per fresh deck.
-  for (const col of ["r", "y", "g", "b"]) d.push(col + "T", col + "T", col + "H", col + "H", col + "V", col + "V", col + "C", col + "L", col + "L", col + "E", col + "E");
+  for (const col of ["r", "y", "g", "b"]) {
+    d.push(col + "T", col + "T", col + "H", col + "H", col + "V", col + "V", col + "C", col + "L", col + "L", col + "E", col + "E");
+    // One original for each color. Every new infinite-deck refill creates
+    // four NEW chains, never reviving an old discarded chain.
+    if(cardsEnabled.A!==false)d.push(makeRoach(col));
+  }
   return shuffle(d.filter(card=>{
     const custom=customCardKey(card);
     return !custom || cardsEnabled[custom]!==false;
@@ -539,7 +550,7 @@ const handlers = {
     const g = lockedGame(r);
     if (currentPlayer(g) !== me.id) fail("NOT_YOUR_TURN");
     const h = r.hands.get(me.id);
-    if (!h || typeof p_card !== "string" || !CARD_RE.test(p_card) || !h.cards.includes(p_card)) fail("CARD_NOT_IN_HAND");
+    if (!h || typeof p_card !== "string" || !(CARD_RE.test(p_card)||isRoach(p_card)) || !h.cards.includes(p_card)) fail("CARD_NOT_IN_HAND");
     if (g.has_drawn && p_card !== g.drawn_card) fail("MUST_PLAY_DRAWN");
     const top = g.discard_pile[g.discard_pile.length - 1];
     if (!playable(p_card, top, g.current_color)) fail("INVALID_CARD");

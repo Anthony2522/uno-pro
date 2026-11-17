@@ -1,5 +1,6 @@
 import { Ban, Repeat2, Eye, Bomb, Shield, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword, Scan, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {CockroachIcon} from "./CockroachIcon";
 import { cardLabel, cardValue, isWild } from "@/lib/uno/cards";
 
 const INNER_BG: Record<string, string> = {
@@ -31,6 +32,7 @@ function Symbol({ card, corner }: { card: string; corner?: boolean }) {
   if (v === "V") return <img src="/vortice.svg" alt="" draggable={false}
     className={corner ? "h-[16cqw] w-[20cqw] object-contain brightness-0 invert" : "h-[49cqw] w-[66cqw] object-contain"}/>;
   if (v === "C") return <Beer className={corner ? "size-[18cqw]" : "size-[48cqw]"} strokeWidth={2.7}/>;
+  if (v === "A") return <CockroachIcon className={corner?"size-[19cqw]":"size-[55cqw]"} style={{"--cockroach-wing-line":"white"} as React.CSSProperties}/>;
   if (v === "L") return <LockKeyhole className={corner ? "size-[18cqw]" : "size-[48cqw]"} strokeWidth={3}/>;
   if (v === "E") return <Sword className={corner ? "size-[18cqw]" : "size-[49cqw]"} strokeWidth={3}/>;
   if(v==="X")return (

@@ -4,7 +4,7 @@ import path from "node:path";
 import {pathToFileURL} from "node:url";
 import {build} from "esbuild";
 import {proRpc} from "../server/pro.js";
-import {store} from "../server/game.js";
+import {store,makeRoach,roachChainId} from "../server/game.js";
 
 async function bundledRuntime(){
   const result=await build({
@@ -116,7 +116,7 @@ test("sala offline aceita configurações antes de iniciar: número de bots, ven
     const options={
       name:"Partida personalizada",maxPlayers:5,startingCards:6,winners:1,
       rules:{repeat:false,sequence:false,nine:false,cut:false,stack:true},
-      cards:{T:false,H:false,E:true,L:true,V:false,C:false,W5:false,X:false,B:true,N:true,P:true,M:false,Q:true}
+      cards:{T:false,H:false,E:true,L:true,V:false,C:false,A:false,W5:false,X:false,B:true,N:true,P:true,M:false,Q:true}
     };
     const code=runtime.startLocalSolo("Jogador",options);
     const state=runtime.localRpc("get_room_state",{p_code:code});
@@ -155,7 +155,7 @@ test("sala offline permite escolher 19 bots (20 jogadores no total)",async()=>{
     const code=runtime.startLocalSolo("Anfitrião",{name:"19 bots",maxPlayers:20,
       startingCards:8,winners:2,
       rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
-      cards:{T:true,H:true,E:true,L:true,V:true,C:true,W5:true,X:true,B:true,N:true,P:true,M:true,Q:true}
+      cards:{T:true,H:true,E:true,L:true,V:true,C:true,A:true,W5:true,X:true,B:true,N:true,P:true,M:true,Q:true}
     });
     const state=runtime.localRpc("get_room_state",{p_code:code});
     assert.equal(state.room.max_players,20);
@@ -163,6 +163,51 @@ test("sala offline permite escolher 19 bots (20 jogadores no total)",async()=>{
     assert.equal(state.members.filter(m=>m.bot).length,19);
     assert.equal(new Set(state.members.map(m=>m.nickname)).size,20);
     assert.equal(state.game.my_hand.length,8);
+  }finally{
+    if(saved.storage===undefined)delete globalThis.localStorage;else globalThis.localStorage=saved.storage;
+    if(saved.window===undefined)delete globalThis.window;else globalThis.window=saved.window;
+    if(saved.document===undefined)delete globalThis.document;else globalThis.document=saved.document;
+    if(saved.navigator)Object.defineProperty(globalThis,"navigator",saved.navigator);else delete globalThis.navigator;
+  }
+});
+
+test("backup de partida solo offline mantém a cadeia da Barata após perda do servidor",async()=>{
+  const player=proRpc("register_guest",{p_nickname:"BarataOffline"});
+  const {code}=proRpc("create_room",{p_token:player.token,p_name:"Barata salva",p_max_players:3});
+  proRpc("add_bot",{p_token:player.token,p_code:code,p_difficulty:"easy"});
+  proRpc("add_bot",{p_token:player.token,p_code:code,p_difficulty:"hard"});
+  proRpc("start_game",{p_token:player.token,p_code:code});
+  const room=store.roomsByCode.get(code),g=room.game;
+  const original=makeRoach("r"),id=roachChainId(original);
+  room.hands.get(player.guest_id).cards=[original,"g4"];
+  g.turn_idx=g.turn_order.indexOf(player.guest_id);
+  g.turn_cards=[];g.turn_mode=null;g.pending_draw=0;g.nine=null;
+  g.discard_pile=["r4"];g.current_color="r";
+  proRpc("play_card",{p_token:player.token,p_code:code,p_card:original});
+  const recipient=g.roach_chains[id].received[0];
+  const copied=room.hands.get(recipient).cards.find(c=>roachChainId(c)===id);
+  assert.ok(copied,"cópia circula antes de desconectar");
+  const backup=proRpc("export_solo_snapshot",{p_token:player.token,p_code:code});
+  const data=new Map([["unopro.solo.server-backup.v1",
+    JSON.stringify({...backup,token:player.token,source:"rescued"})]]);
+  const saved={storage:globalThis.localStorage,window:globalThis.window,document:globalThis.document,
+    navigator:Object.getOwnPropertyDescriptor(globalThis,"navigator")};
+  globalThis.localStorage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,String(v)),removeItem:k=>data.delete(k)};
+  globalThis.window={setInterval:()=>1};
+  globalThis.document={visibilityState:"visible",addEventListener:()=>{}};
+  Object.defineProperty(globalThis,"navigator",{configurable:true,value:{storage:{persist:async()=>true}}});
+  try{
+    const runtime=await bundledRuntime();
+    const browser=await import(runtime+"#roach-rescue");
+    assert.equal(browser.rescueSoloMatch(code),true);
+    const local=browser.localRpc("export_solo_snapshot");
+    assert.deepEqual(local.room.game.roach_chains[id].received,[recipient]);
+    const hands=new Map(local.room.hands);
+    assert.ok(hands.get(recipient).cards.includes(copied),"mesma cópia, com mesma cor e cadeia");
+    const reloaded=await import(runtime+"#roach-refresh");
+    const snapshot=reloaded.localRpc("export_solo_snapshot");
+    assert.deepEqual(snapshot.room.game.roach_chains[id].received,[recipient]);
+    assert.equal(snapshot.room.game.roach_chains[id].completed,false);
   }finally{
     if(saved.storage===undefined)delete globalThis.localStorage;else globalThis.localStorage=saved.storage;
     if(saved.window===undefined)delete globalThis.window;else globalThis.window=saved.window;

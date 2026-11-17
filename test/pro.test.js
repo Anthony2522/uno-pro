@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {store, newDeck, CUSTOM_CARD_KEYS, normalizeCardsEnabled, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
+import {store, newDeck, isRoach, roachChainId, makeRoach, CUSTOM_CARD_KEYS, normalizeCardsEnabled, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
 import {serializeState,hydrateState} from "../server/persistence.js";
 import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
 import { inferColorGaps,chooseHardPlan } from "../server/hardBotStrategy.js";
@@ -91,9 +91,9 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("baralho de 228 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora",()=>{
+test("baralho de 232 cartas inclui as quatro Baratas, Escudo, Negação e Espelho",()=>{
   const deck=newDeck();
-  assert.equal(deck.length,228);
+  assert.equal(deck.length,232);
   for(const c of ["N","P","M","Q"])assert.equal(deck.filter(x=>x===c).length,1);
   assert.equal(deck.filter(c=>c==="B").length,1);
   assert.equal(deck.filter(c=>c==="X").length,1);
@@ -109,6 +109,7 @@ test("baralho de 228 cartas inclui Escudo, Negação, Sem Poderes e Metralhadora
     assert.equal(deck.filter(c=>c===col+"H").length,2);
     assert.equal(deck.filter(c=>c===col+"V").length,2);
     assert.equal(deck.filter(c=>c===col+"C").length,1);
+    assert.equal(deck.filter(c=>isRoach(c)&&c[0]===col).length,1,"uma Barata original por cor");
   }
 });
 test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
@@ -120,7 +121,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
   // The one Mirror is never duplicated if it is already in another hand.
-  assert.equal(g.draw_pile.length,mirrorAlreadyDealt?226:227);
+  assert.equal(g.draw_pile.length,mirrorAlreadyDealt?230:231);
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -456,6 +457,9 @@ test("9 termina quando resta um, ou penaliza todos os omissos após o tempo",()=
   const r=store.roomsByCode.get(code),g=r.game;
   g.turn_idx=0;g.discard_pile=["b9"];g.current_color="b";
   r.hands.get(a.guest_id).cards=["b9","r9","r8"];
+  // A next human with no matching card can receive an unrelated auto-draw
+  // during proSweep. Give each respondent a matching red card to isolate 9 penalties.
+  for(const p of [b,c,d])r.hands.get(p.guest_id).cards=["r1","b3"];
   const before=[b,c,d].map(p=>r.hands.get(p.guest_id).cards.length);
   call("play_card",{p_token:a.token,p_code:code,p_card:"b9"});
   call("play_card",{p_token:a.token,p_code:code,p_card:"r9"});
@@ -1944,13 +1948,13 @@ test("Somente o humano de uma partida contra bots pode exportar o salvamento com
 
 test("seleções de cartas retiram só as inventadas e mantêm o baralho essencial",()=>{
   const allDisabled=Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,false]));
-  assert.deepEqual(CUSTOM_CARD_KEYS,["T","H","E","L","V","C","W5","X","B","N","P","M","Q"]);
+  assert.deepEqual(CUSTOM_CARD_KEYS,["T","H","E","L","V","C","A","W5","X","B","N","P","M","Q"]);
   const deck=newDeck(normalizeCardsEnabled(allDisabled));
   assert.equal(deck.length,176,"números, Volta, Bloqueio, +2, Coringa e +4 permanecem");
   assert.ok(["rR","yS","bD","W","W4"].every(card=>deck.includes(card)));
-  assert.ok(deck.every(card=>!["T","H","E","L","V","C"].includes(card.slice(1))&&!["W5","X","B","N","P","M","Q"].includes(card)));
+  assert.ok(deck.every(card=>!isRoach(card)&&!["T","H","E","L","V","C"].includes(card.slice(1))&&!["W5","X","B","N","P","M","Q"].includes(card)));
   const defaultDeck=newDeck();
-  assert.equal(defaultDeck.length,228,"todas ativadas por padrão");
+  assert.equal(defaultDeck.length,232,"todas ativadas por padrão");
   assert.equal(defaultDeck.filter(c=>c==="Q").length,1);
 });
 test("sala online aplica escolha de cartas na distribuição, compras e revanche",()=>{

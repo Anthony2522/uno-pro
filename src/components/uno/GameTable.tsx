@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import type { RoomState } from "@/lib/uno/api";
-import { cardLabel, cardValue, COLOR_NAMES, isPlayable, isWild, type CardColor } from "@/lib/uno/cards";
+import { cardLabel, cardValue, sameCardFace, COLOR_NAMES, isPlayable, isWild, type CardColor } from "@/lib/uno/cards";
 import { describeAction } from "@/lib/uno/describe";
 import { useLanguage } from "@/lib/uno/i18n";
 import { sfx } from "@/lib/uno/sound";
@@ -55,7 +55,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const lockedColor = myTurn && game.lock_remaining?.includes(me) ? game.lock_color : null;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
   const hand = useMemo(()=>{
-    const colors=["b","y","g","r"], special=["R","S","H","E","L","V","C","W","D","T","W4","W5","X","B","N","P","M","Q"];
+    const colors=["b","y","g","r"], special=["R","S","H","E","L","V","C","A","W","D","T","W4","W5","X","B","N","P","M","Q"];
     const col=(c:string)=>colors.indexOf(c[0]??"")===-1?4:colors.indexOf(c[0]??"");
     const rank=(c:string)=>{const v=cardValue(c);return /^\d$/.test(v)?Number(v):10+Math.max(0,special.indexOf(v));};
     return [...game.my_hand].sort((a,b)=>rank(a)-rank(b)||col(a)-col(b));
@@ -110,7 +110,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
     if(busy || nine || game.detective_pending_color || game.wild_color_pending_player || game.vortex_pending || forcedByBeer)return false;
     if(game.powerless_remaining?.includes(me) && !/^[rygb][0-9]$/.test(c))return false;
     if(lockedColor && (isWild(c) || c[0]!==lockedColor))return false;
-    if(!myTurn)return state.room.rules.cut && c===game.top_card && (!pending || counterCard(c));
+    if(!myTurn)return state.room.rules.cut && sameCardFace(c,game.top_card) && (!pending || counterCard(c));
     if(pending&&!played.length)return counterCard(c);
     if(!played.length)return isPlayable(c,game.top_card,game.current_color);
     const first=played[0]!,last=played[played.length-1]!;

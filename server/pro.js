@@ -5,7 +5,7 @@ import { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import { chooseHardPlan } from "./hardBotStrategy.js";
 import { chooseHardPlan as chooseHardPlanBaseline } from "./hardBotStrategyBaseline.js";
 export { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
-import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, CUSTOM_CARD_KEYS, normalizeCardsEnabled, LIMITS, isSoloHumanBotMatch, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
+import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, isRoach, roachChainId, CUSTOM_CARD_KEYS, normalizeCardsEnabled, LIMITS, isSoloHumanBotMatch, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
 const BEER_DELAY_MS = 3000;
 const VORTEX_CARD_DELAY_MS = 1250;
@@ -32,10 +32,13 @@ export function chooseCutDelay(difficulty, random=Math.random) {
   return random()<.10?10000:25000;
 }
 const weight = c => c==="W5" ? 5 : c==="W4" ? 4 : c?.slice(1)==="D" || c?.slice(1)==="T" ? 2 : 0;
-const value = c => wild(c) ? c : c.slice(1);
+const value = c => isRoach(c)?"A":wild(c) ? c : c.slice(1);
 const wild = c => c==="W"||c==="W4"||c==="W5"||c==="X"||c==="B"||c==="N"||c==="P"||c==="M"||c==="Q";
 // The Mirror is one physical card. Its current effect follows the most recent REAL wild.
 const reflected=(g,c)=>c==="Q"?(g.last_wild||"W"):c;
+// The chain UUID identifies *copies*, not the card face. Two Baratas of the
+// same color are visibly identical for the jump-in rule, even across chains.
+const sameCardFace=(a,b)=>a===b||(isRoach(a)&&isRoach(b)&&a[0]===b[0]);
 const hasNegation=(r,id)=>hand(r,id).cards.some(c=>reflected(r.game,c)==="N");
 const negationCard=(r,id)=>hand(r,id).cards.includes("N")?"N":(r.game.last_wild==="N"&&hand(r,id).cards.includes("Q")?"Q":null);
 const COLORS = ["r","y","g","b"];
@@ -75,7 +78,7 @@ function planBotCut(r,source) {
   const topCard=top(g),start=clock();
   const due={};
   if(ready(r).cut)for(const id of g.turn_order) {
-    if(id===source || !isBot(id) || !hand(r,id).cards.includes(topCard))continue;
+    if(id===source || !isBot(id) || !hand(r,id).cards.some(card=>sameCardFace(card,topCard)))continue;
     const difficulty=store.guestsById.get(id)?.difficulty;
     due[id]=start+chooseCutDelay(difficulty);
   }
@@ -85,13 +88,15 @@ function botCutTick(r) {
   const g=r.game,w=g?.bot_cut;
   if(!w || g.status!=="playing" || g.nine || actionLocked(g) || !ready(r).cut || w.top!==top(g))return;
   for(const [id,due] of Object.entries(w.due)) {
-    if(clock()<due || id===current(g) || !g.turn_order.includes(id) || !hand(r,id).cards.includes(w.top))continue;
+    if(clock()<due || id===current(g) || !g.turn_order.includes(id) || !hand(r,id).cards.some(card=>sameCardFace(card,w.top)))continue;
     if(g.pending_draw && !canCounter(g,w.top))continue;
     try {
       const counts={r:0,y:0,g:0,b:0};
       for(const card of hand(r,id).cards)if(counts[card[0]]!==undefined)counts[card[0]]++;
       const color=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
-      play(r,id,w.top,color);
+      const cuttingCard=hand(r,id).cards.find(card=>sameCardFace(card,w.top));
+      if(!cuttingCard)continue;
+      play(r,id,cuttingCard,color);
       if(g.status==="playing" && current(g)===id && !g.vortex_queue) finish(r);
     } catch (e) { if(!(e instanceof RpcError))throw e; }
     break;
@@ -176,6 +181,41 @@ function botUnoAndCatchTick(r) {
     const delay=store.guestsById.get(id)?.difficulty==="hard"?4000:15000;
     catchUnoBy(r,id,delay);
   }
+}
+// Each original roach has a permanent independent chain UUID in its card ID.
+function passRoach(r,actor,card){
+  if(!isRoach(card))return null;
+  const g=r.game,chainId=roachChainId(card);
+  g.roach_chains??={};
+  const chain=g.roach_chains[chainId]??={
+    origin:actor,received:[],completed:false
+  };
+  if(chain.completed)return null;
+  // Only an original's initiator or a prior recipient can play a chain card.
+  if(actor!==chain.origin&&!chain.received.includes(actor))
+    fail("INVALID_ROACH_CHAIN");
+  const eligible=g.turn_order.filter(id=>id!==chain.origin &&
+    id!==actor && !chain.received.includes(id));
+  if(!eligible.length){
+    chain.completed=true;
+    effect(r,"roach_end",actor,card,card[0],{chain_id:chainId});
+    return {completed:true,chain_id:chainId};
+  }
+  const recipient=eligible[crypto.randomInt(eligible.length)];
+  const color=COLORS[crypto.randomInt(COLORS.length)];
+  const copy=color+"A@"+chainId;
+  const recipientHand=hand(r,recipient);
+  recipientHand.cards.push(copy);
+  // Receiving a card resets UNO just like drawing one.
+  recipientHand.uno_called=false;
+  recipientHand.uno_since=null;
+  recipientHand.bot_uno_plan=null;
+  chain.received.push(recipient);
+  effect(r,"roach",actor,card,color,{
+    target:recipient,target_name:name(recipient),copy_color:color,
+    chain_id:chainId,remaining:eligible.length-1,
+  });
+  return {target:recipient,color,copy,chain_id:chainId,completed:false};
 }
 function effect(r,kind,by,card,color,details={}){
   const g=r.game,now=clock();
@@ -505,13 +545,13 @@ function play(r,id,card,color,targetId,options={}){
   if(g.skip_reaction && !cutting)fail("SKIP_DECISION_PENDING");
   // No cooldown for initial plays or cuts while an announcement is shown.
   if(g.nine)fail("NINE_ACTIVE");
-  if(!h.cards.includes(card)||!(/^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M|Q)$/).test(card))fail("CARD_NOT_IN_HAND");
+  if(!h.cards.includes(card)||!((/^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M|Q)$/).test(card)||isRoach(card)))fail("CARD_NOT_IN_HAND");
   const effective=reflected(g,card);
   const cutVictim=cutting?current(g):null;
   if(cutting){
     const debt=g.pending_draw>0;
     if(g.skip_reaction)g.skip_reaction=null;
-    if(!rules.cut||!g.turn_order.includes(id)||card!==top(g))fail("CUT_NOT_ALLOWED");
+    if(!rules.cut||!g.turn_order.includes(id)||!sameCardFace(card,top(g)))fail("CUT_NOT_ALLOWED");
     if(debt && !canCounter(g,card))fail("CUT_NOT_ALLOWED");
     if(series.length)finish(r,false,true);
     if(g.status!=="playing"||g.nine||(g.pending_draw && !canCounter(g,card)))fail("CUT_NOT_ALLOWED");
@@ -544,6 +584,8 @@ function play(r,id,card,color,targetId,options={}){
   g.card_moves.push({id:g.card_move_seq,by:id,name:name(id),card,mirror_as:card==="Q"?effective:null,previous_top:previousTop,at:clock()});
   if(card==="Q")g.mirror_played_as=effective;
   else if(wild(card))g.last_wild=card;
+  // Deliver before checking victory: the last Barata also sends its copy.
+  if(isRoach(card))passRoach(r,id,card);
   if(g.card_moves.length>40)g.card_moves.shift();
   // Commit the wild (including a jump-in) before asking its owner for the color.
   if(wild(card)&&card!=="X"&&!color){g.wild_pending_color=id;g.wild_pending_since=clock();}
@@ -611,6 +653,7 @@ function vortexTick(r){
   h.cards.splice(idx,1);
   const previousTop=top(g);
   g.discard_pile.push(card);g.current_color=card[0];
+  if(isRoach(card))passRoach(r,actor,card);
   g.card_move_seq=(g.card_move_seq||0)+1;
   g.card_moves.push({id:g.card_move_seq,by:actor,name:name(actor),card,previous_top:previousTop,at:clock()});
   if(g.card_moves.length>40)g.card_moves.shift();
@@ -688,6 +731,12 @@ function hardBotTick(r,id,h){
       selfId:id,counts,history:g.public_history||{},rules:ready(r),
       pendingDraw:g.pending_draw,pendingUncounterable:g.pending_uncounterable,
       mirrorAs:g.last_wild||"W", swordArmed:!!g.swords?.[id], shieldArmed:!!g.shields?.[id],
+      roachTargets:Object.fromEntries(h.cards.filter(isRoach).map(card=>{
+        const chain=g.roach_chains?.[roachChainId(card)];
+        const origin=chain?.origin??id,visited=chain?.received??[];
+        const eligible=g.turn_order.filter(p=>p!==id&&p!==origin&&!visited.includes(p));
+        return [card,eligible.length];
+      })),
       profile:store.guestsById.get(id)?.ai_profile||null,
       random:Math.random
     });
@@ -1099,7 +1148,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="start_game"){const result=originalRpc(fn,args),r=find(args.p_code),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
-    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:null,mirror_played_as:null,lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
+    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:null,mirror_played_as:null,roach_chains:{},lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
     for(const h of r.hands.values())h.uno_since=null;
     return result;
