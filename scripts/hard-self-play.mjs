@@ -3,11 +3,12 @@
 // The single host is a non-participating spectator; no hidden opponent hands are given to AI.
 // Usage: UNO_SELF_PLAY=1 node scripts/hard-self-play.mjs [--full|--quick]
 import crypto from "node:crypto";
-import {store,newDeck,setClock} from "../server/game.js";
+import {store,newDeck,setClock,CUSTOM_CARD_KEYS} from "../server/game.js";
 import {proRpc,proSweep} from "../server/pro.js";
 import {HARD_AI_WEIGHTS} from "../server/hardBotStrategy.js";
 
 if(process.env.UNO_SELF_PLAY!=="1")throw Error("Set UNO_SELF_PLAY=1 for isolated tournament");
+const ALL_OPTIONALS=Object.fromEntries(CUSTOM_CARD_KEYS.map(key=>[key,true]));
 const rawNow=Date.now,rawRandom=Math.random,rawRandomInt=crypto.randomInt;
 let virtualNow=1800000000000;
 Date.now=()=>virtualNow;setClock(()=>virtualNow);
@@ -51,7 +52,7 @@ function match(seed,variants){
   try{
     host=proRpc("register_guest",{p_nickname:"Torneio"});
     const {code}=proRpc("create_room",{p_token:host.token,p_name:"IA "+seed,p_is_public:false,p_max_players:n+1,
-      p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},p_winners:1,p_starting_cards:8});
+      p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},p_cards_enabled:ALL_OPTIONALS,p_winners:1,p_starting_cards:8});
     room=store.roomsByCode.get(code);
     for(let seat=0;seat<n;seat++){
       const player=proRpc("add_bot",{p_token:host.token,p_code:code,p_difficulty:"hard"});
@@ -71,7 +72,7 @@ function match(seed,variants){
     g.bot_move=null;g.bot_cut=null;g.last_wild=null;g.mirror_played_as=null;g.status="playing";room.status="playing";
     // Seed again after setup. All seats see the same physical 232-card distribution for a given seed.
     rand=makeRandom(seed*971+5107);Math.random=rand;crypto.randomInt=(cap)=>Math.floor(rand()*cap);
-    const d=newDeck();
+    const d=newDeck(ALL_OPTIONALS);
     if(d.length!==232||!d.includes("Q")||!d.includes("rE")||!d.includes("bH")||!d.includes("rC")||!d.some(c=>/^rA@/.test(c)))throw Error("incomplete deck");
     const topIndex=d.findIndex(c=>/^[rygb][0-9]$/.test(c));
     const [first]=d.splice(topIndex,1);
