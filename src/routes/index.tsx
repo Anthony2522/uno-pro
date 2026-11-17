@@ -113,6 +113,8 @@ function Home() {
           )}
         </section>
 
+        <section className="mt-8 rounded-3xl border border-orange-500/50 bg-gradient-to-r from-red-950 via-orange-950 to-red-950 p-6 text-white shadow-xl"><div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-2xl font-black text-orange-300">🔥 Crazy Battle</h2><p className="mt-2 text-sm text-orange-100">Novo jogo de combate 3D em arena voxel. Teste inicial contra bot.</p></div><Link to="/crazy-battle" className="rounded-2xl bg-gradient-to-r from-red-600 to-orange-500 px-6 py-4 font-black text-white">Entrar no Crazy Battle ⚔️</Link></div></section>
+
         <AdminRoomsPanel />
         <div ref={roomsRef} className="mt-8 grid scroll-mt-24 gap-6 lg:grid-cols-[1fr_22rem]">
           <PublicRooms onCreate={() => setCreateOpen(true)} />
