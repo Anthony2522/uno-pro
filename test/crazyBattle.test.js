@@ -81,3 +81,25 @@ test("Crazy Battle: disconnected player can resume with verified token",async()=
   const accepted=await restored.until("joined");assert.equal(accepted.id,joined.id);
  }finally{await app.close();}
 });
+
+test("Crazy Battle: server computes shielded sword damage between online clients",async()=>{
+ const app=await setup();
+ try{
+  const host=await app.client();host.send("create",{player:"Ataque"});
+  const created=await host.until("joined");await host.until("state");
+  const guest=await app.client();guest.send("join",{code:created.code,player:"Defesa"});
+  await guest.until("joined");await guest.until("state");
+  host.send("start");await host.until("state");
+  // Move from (-4,-4) toward opponent at (4,4) at the server-authorized speed.
+  host.send("input",{x:0,z:-1,yaw:-3*Math.PI/4,pitch:0});
+  await new Promise(r=>setTimeout(r,2400));
+  host.send("input",{x:0,z:0,yaw:-3*Math.PI/4,pitch:0});
+  guest.send("input",{x:0,z:0,yaw:Math.PI/4,pitch:0});
+  guest.send("shield",{active:true});
+  await new Promise(r=>setTimeout(r,120));
+  host.send("attack");
+  const hit=await host.until("hit",2500);
+  assert.equal(hit.blocked,true);
+  assert.equal(hit.hp,98);
+ }finally{await app.close();}
+});
