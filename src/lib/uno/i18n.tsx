@@ -30,7 +30,7 @@ const dictionary:Record<string,string>={
   "Regras da partida": "Match rules",
   "Regras opcionais": "Optional rules",
   "De 2 a 20 cartas; padrão de 8.": "From 2 to 20 cards; default is 8.",
-  "Todas as regras e cartas opcionais vêm ativadas. As cartas comuns (números, Volta, Bloqueio, +2, Coringa e +4) permanecem no baralho.": "All optional rules and cards are enabled by default. Basic cards (numbers, Reverse, Skip, +2, Wild and +4) always remain in the deck.",
+  "Por padrão, Cerveja, Barata, Espada e Coringa Metralhadora começam desativados. Você pode ativá-los abaixo; as demais regras e cartas seguem seus padrões atuais.": "Beer, Cockroach, Sword and Machine Gun Wild start disabled by default. You can enable them below; all other rules and cards keep their current defaults.",
   "Com três ou mais participantes, o último a apertar 9 compra cartas.": "With three or more players, the last to press 9 draws cards.",
   "Permite lançar várias cartas do mesmo número ou símbolo, inclusive em cores diferentes.": "Play multiple cards with the same number or symbol, even in different colors.",
   "Permite números consecutivos da mesma cor, para cima ou para baixo.": "Play consecutive numbers of the same color, ascending or descending.",

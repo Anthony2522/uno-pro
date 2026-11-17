@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import {newDeck,isRoach,roachChainId,makeRoach,store,cardValue,playable} from "../server/game.js";
+import {newDeck,isRoach,roachChainId,makeRoach,store,cardValue,playable,CUSTOM_CARD_KEYS} from "../server/game.js";
 import {proRpc,proSweep} from "../server/pro.js";
 import {serializeState,hydrateState} from "../server/persistence.js";
 
@@ -29,7 +29,8 @@ function match(n){
 }
 
 test("Barata: há exatamente uma original por cor, quatro cadeias distintas e 232 cartas",()=>{
-  const first=newDeck(),second=newDeck();
+  const allEnabled=Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true]));
+  const first=newDeck(allEnabled),second=newDeck(allEnabled);
   assert.equal(first.length,232);
   for(const color of ["r","y","g","b"]){
     const originals=first.filter(c=>isRoach(c)&&c[0]===color);
@@ -149,7 +150,7 @@ test("baralho configurado sem Barata nunca a introduz, inclusive ao renovar",()=
   const deck=newDeck({A:false});
   assert.equal(deck.length,228);
   assert.equal(deck.some(isRoach),false);
-  const fresh=newDeck();
+  const fresh=newDeck(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true])));
   assert.equal(fresh.length,232);
 });
 

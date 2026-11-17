@@ -21,6 +21,8 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [max, setMax] = useState(6);
+  const [easyBots,setEasyBots] = useState(1);
+  const [hardBots,setHardBots] = useState(1);
   const [winners, setWinners] = useState(2);
   const [startingCards, setStartingCards] = useState(8);
   const [advanced, setAdvanced] = useState(false);
@@ -35,7 +37,9 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
       setError(null);
       setAdvanced(false);
       setStartingCards(8);
-      setMax(offline?3:6);
+      setMax(6);
+      setEasyBots(1);
+      setHardBots(1);
       setWinners(2);
       setCards({...DEFAULT_CARD_SETTINGS});
       setRules({repeat:true,sequence:true,nine:true,cut:true,stack:true});
@@ -43,7 +47,9 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
   }, [open, guest.nickname, offline]);
 
   const clean = name.replace(/\s+/g, " ").trim();
-  const valid = clean.length >= 2 && clean.length <= 32;
+  const totalBots=easyBots+hardBots;
+  const totalPlayers=offline?totalBots+1:max;
+  const valid=clean.length>=2&&clean.length<=32&&(!offline||totalBots>=1);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -51,10 +57,14 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
       setError("O nome da sala precisa ter de 2 a 32 caracteres.");
       return;
     }
+    if(offline && (totalBots<1||totalBots>19)){
+      setError("Selecione de 1 a 19 bots no total.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const code=offline ? startLocalSolo(guest.nickname,{name:clean,maxPlayers:max,startingCards,winners,rules,cards}) :
+      const code=offline ? startLocalSolo(guest.nickname,{name:clean,maxPlayers:totalPlayers,easyBots,hardBots,startingCards,winners,rules,cards}) :
         (await api.createRoom(guest.token, clean, isPublic, max, rules, startingCards, winners, cards)).code;
       onOpenChange(false);
       navigate({ to: "/sala/$code", params: { code } });
@@ -71,7 +81,7 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
       <DialogContent onOpenAutoFocus={(event)=>event.preventDefault()} className="glass-strong max-h-[90dvh] overflow-y-auto overscroll-contain touch-pan-y rounded-3xl border-glass-border sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">{offline?"Criar sala offline":"Criar sala"}</DialogTitle>
-          <DialogDescription>{offline?"Escolha o número de bots, as regras, as cartas e os vencedores antes de jogar. Sem Wi-Fi durante a partida.":"Você será o anfitrião e poderá iniciar a partida."}</DialogDescription>
+          <DialogDescription>{offline?"Escolha separadamente bots fáceis e difíceis, além das regras, cartas e vencedores. Sem Wi-Fi durante a partida.":"Você será o anfitrião e poderá iniciar a partida."}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-5" noValidate>
           <div className="space-y-2">
@@ -117,26 +127,69 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
             </div>
           </fieldset>}
 
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">{offline?"Quantidade de bots":"Máximo de jogadores"}</legend>
-            <select
-              value={offline?max-1:max}
-              onChange={e=>{
-                const next=Number(e.target.value)+(offline?1:0);
-                setMax(next);
-                setWinners(v=>Math.min(v,next-1));
-              }}
-              aria-label={offline?"Quantidade de bots":"Máximo de jogadores"}
-              className="h-12 w-full rounded-xl border border-glass-border bg-navy px-3 text-base text-foreground"
-            >
-              {Array.from({length:19},(_,i)=>offline?i+1:i+2).map(n=>(
-                <option key={n} value={n}>{n} {offline?(n===1?"bot":"bots"):(n===1?"jogador":"jogadores")}</option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
-              {language==="en" ? (offline?`You + ${max-1} ${max===2?"bot":"bots"} = ${max} players in the room.`:`Maximum capacity: ${max} players (limit of 20).`) : (offline?`Você + ${max-1} ${max===2?"bot":"bots"} = ${max} jogadores na sala.`:`Capacidade máxima: ${max} jogadores (limite de 20).`)}
-            </p>
-          </fieldset>
+          {offline ? (
+            <fieldset className="space-y-3">
+              <legend className="text-sm font-medium">Quantidade de bots por dificuldade</legend>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-1.5">
+                  <span className="text-sm font-semibold text-foreground">Bots fáceis</span>
+                  <select
+                    value={easyBots}
+                    onChange={e=>{
+                      const count=Number(e.target.value);
+                      setEasyBots(count);
+                      setWinners(v=>Math.min(v,Math.max(1,count+hardBots)));
+                    }}
+                    aria-label="Quantidade de bots fáceis"
+                    className="h-12 w-full rounded-xl border border-glass-border bg-navy px-3 text-base text-foreground"
+                  >
+                    {Array.from({length:20-hardBots},(_,i)=>i).map(n=>
+                      <option key={n} value={n}>{n} {n===1?"bot fácil":"bots fáceis"}</option>)}
+                  </select>
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-sm font-semibold text-foreground">Bots difíceis</span>
+                  <select
+                    value={hardBots}
+                    onChange={e=>{
+                      const count=Number(e.target.value);
+                      setHardBots(count);
+                      setWinners(v=>Math.min(v,Math.max(1,easyBots+count)));
+                    }}
+                    aria-label="Quantidade de bots difíceis"
+                    className="h-12 w-full rounded-xl border border-glass-border bg-navy px-3 text-base text-foreground"
+                  >
+                    {Array.from({length:20-easyBots},(_,i)=>i).map(n=>
+                      <option key={n} value={n}>{n} {n===1?"bot difícil":"bots difíceis"}</option>)}
+                  </select>
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Você + {easyBots} {easyBots===1?"bot fácil":"bots fáceis"} + {hardBots} {hardBots===1?"bot difícil":"bots difíceis"} = {totalPlayers} {totalPlayers===1?"jogador":"jogadores"}. Limite: 19 bots.
+              </p>
+              {totalBots===0&&<p role="alert" className="text-xs text-destructive">Selecione pelo menos um bot para começar.</p>}
+            </fieldset>
+          ) : (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Máximo de jogadores</legend>
+              <select
+                value={max}
+                onChange={e=>{
+                  const next=Number(e.target.value);
+                  setMax(next);
+                  setWinners(v=>Math.min(v,next-1));
+                }}
+                aria-label="Máximo de jogadores"
+                className="h-12 w-full rounded-xl border border-glass-border bg-navy px-3 text-base text-foreground"
+              >
+                {Array.from({length:19},(_,i)=>i+2).map(n=>
+                  <option key={n} value={n}>{n} jogadores</option>)}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {language==="en" ? `Maximum capacity: ${max} players (limit of 20).` : `Capacidade máxima: ${max} jogadores (limite de 20).`}
+              </p>
+            </fieldset>
+          )}
 
 
           <fieldset className="space-y-2">
@@ -144,7 +197,7 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
             <select value={winners} onChange={e=>setWinners(Number(e.target.value))}
               className="h-11 w-full rounded-xl border border-glass-border bg-navy px-3 text-foreground"
               aria-label="Quantidade de vencedores">
-              {Array.from({length:max-1},(_,i)=>i+1).map(n=>
+              {Array.from({length:Math.max(1,totalPlayers-1)},(_,i)=>i+1).map(n=>
                 <option key={n} value={n}>{n} {n===1?"vencedor":"vencedores"}</option>)}
             </select>
             <p className="text-xs text-muted-foreground">

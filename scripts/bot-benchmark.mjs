@@ -1,9 +1,11 @@
 // Deterministic tournament against the real UNO Pro turn engine.
 // Uses public state and virtual time; never delays a real multiplayer session.
-import {store,setClock} from "../server/game.js";
+import {store,setClock,CUSTOM_CARD_KEYS} from "../server/game.js";
 import crypto from "node:crypto";
 import {proRpc,proSweep} from "../server/pro.js";
 
+// Keep historical bot benchmarks comparable on the full optional-card deck.
+const ALL_OPTIONALS=Object.fromEntries(CUSTOM_CARD_KEYS.map(key=>[key,true]));
 const origNow=Date.now,origRandom=Math.random,origRandomInt=crypto.randomInt;
 let fakeNow=1_800_000_000_000;
 Date.now=()=>fakeNow;
@@ -51,7 +53,7 @@ function runMatch(seed){
   crypto.randomInt=(n)=>Math.floor(random()*n); // Only this offline benchmark overrides entropy.
   fakeNow=1_800_000_000_000+seed*100000000;
   const human=call("register_guest",{p_nickname:"Benchmark Humano"});
-  const code=call("create_room",{p_token:human.token,p_name:"Torneio "+seed,p_max_players:3}).code;
+  const code=call("create_room",{p_token:human.token,p_name:"Torneio "+seed,p_max_players:3,p_cards_enabled:ALL_OPTIONALS}).code;
   const hardId=call("add_bot",{p_token:human.token,p_code:code,p_difficulty:"hard"}).id;
   const otherId=call("add_bot",{p_token:human.token,p_code:code,p_difficulty:mode==="paired"?"hard":"easy"}).id;
   const room=store.roomsByCode.get(code);

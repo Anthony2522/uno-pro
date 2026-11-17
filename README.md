@@ -67,7 +67,7 @@ Para reproduzir os torneios: `node scripts/bot-benchmark.mjs --games=600` (bot d
 
 ## Novas regras e cartas (novembro de 2026)
 
-- Com todas as cartas opcionais ativadas, o baralho inicial tem **232 cartas** (conforme `newDeck()` em `server/game.js`). Entre os coringas especiais há uma Negação (N), um Sem Poderes (P) e uma Metralhadora (M). Desativar opcionais reduz o total.
+- O baralho padrão tem **215 cartas**, com Cerveja, Barata, Espada e Coringa Metralhadora inicialmente desativadas nas novas salas. Elas continuam disponíveis nas Configurações avançadas. Ao habilitar todas as cartas opcionais, o baralho completo possui **232 cartas**.
 - **Negação**: cancela +2, +4 ou +5 acumulados, um Bloqueio direcionado ao usuário ou a proibição do Sem Poderes. O portador escolhe uma nova cor e ainda pode jogar normalmente; uma decisão de bloqueio expira após nove segundos sem resposta.
 - **Sem Poderes**: impede cartas especiais na próxima vez, permitindo apenas números, salvo se o portador usar Negação.
 - **Metralhadora**: substitui uma carta especial de cada adversário por uma carta numérica, privilegiando coringas, depois compras, depois Bloqueio/Volta. Nenhum jogador perde a vez por isso.

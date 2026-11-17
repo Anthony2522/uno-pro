@@ -92,7 +92,7 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
 });
 
 test("baralho de 232 cartas inclui as quatro Baratas, Escudo, Negação e Espelho",()=>{
-  const deck=newDeck();
+  const deck=newDeck(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true])));
   assert.equal(deck.length,232);
   for(const c of ["N","P","M","Q"])assert.equal(deck.filter(x=>x===c).length,1);
   assert.equal(deck.filter(c=>c==="B").length,1);
@@ -121,7 +121,7 @@ test("baralho vazio renova baralho completo mantendo carta de descarte",()=>{
   const drawn=call("draw_card",{p_token:a.token,p_code:s.code});
   assert.ok(drawn.card);
   // The one Mirror is never duplicated if it is already in another hand.
-  assert.equal(g.draw_pile.length,mirrorAlreadyDealt?230:231);
+  assert.equal(g.draw_pile.length,newDeck(room.cards_enabled).length-1-(mirrorAlreadyDealt?1:0));
   assert.equal(g.discard_pile.at(-1),"g6");
 });
 test("após comprar pode jogar outra carta da mão, sem ser a comprada",()=>{
@@ -1988,7 +1988,8 @@ test("seleções de cartas retiram só as inventadas e mantêm o baralho essenci
   assert.ok(["rR","yS","bD","W","W4"].every(card=>deck.includes(card)));
   assert.ok(deck.every(card=>!isRoach(card)&&!["T","H","E","L","V","C"].includes(card.slice(1))&&!["W5","X","B","N","P","M","Q"].includes(card)));
   const defaultDeck=newDeck();
-  assert.equal(defaultDeck.length,232,"todas ativadas por padrão");
+  assert.equal(defaultDeck.length,215,"quatro tipos especiais começam desabilitados");
+  assert.ok(!defaultDeck.some(c=>isRoach(c)||c==="M"||["C","E"].includes(c.slice(1))));
   assert.equal(defaultDeck.filter(c=>c==="Q").length,1);
 });
 test("sala online aplica escolha de cartas na distribuição, compras e revanche",()=>{
@@ -2179,4 +2180,21 @@ test("bot pode usar Negação reativa contra Bloqueio mesmo afetado pela Cerveja
   assert.equal(room.hands.get(bot).cards.includes("N"),false);
   assert.equal(g.skip_reaction,null);
   assert.ok(g.effects.some(e=>e.type==="negation"&&e.by===bot));
+});
+
+test("Cerveja, Barata, Espada e Metralhadora começam desligadas, mas podem ser reativadas",()=>{
+  const defaults=normalizeCardsEnabled();
+  for(const key of ["C","A","E","M"])assert.equal(defaults[key],false,key);
+  for(const key of CUSTOM_CARD_KEYS.filter(k=>!["C","A","E","M"].includes(k)))
+    assert.equal(defaults[key],true,key);
+  const full=normalizeCardsEnabled({C:true,A:true,E:true,M:true});
+  assert.equal(newDeck(full).length,232);
+  const owner=call("register_guest",{p_nickname:"Padrão cartas"});
+  const {code}=call("create_room",{p_token:owner.token,p_name:"Padrões atuais",p_max_players:3});
+  const room=store.roomsByCode.get(code);
+  for(const key of ["C","A","E","M"])assert.equal(room.cards_enabled[key],false,key);
+  call("update_room_settings",{p_token:owner.token,p_code:code,
+    p_starting_cards:8,p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
+    p_cards_enabled:full});
+  for(const key of ["C","A","E","M"])assert.equal(room.cards_enabled[key],true,key);
 });

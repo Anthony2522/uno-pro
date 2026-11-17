@@ -177,12 +177,22 @@ export function getRecoverableSoloRoom(code:string){
 }
 export type OfflineRoomConfig={
   name:string; maxPlayers:number; startingCards:number; winners:number;
+  /** Optional for compatibility with older callers; creation UI sends both counts. */
+  easyBots?:number; hardBots?:number;
   rules:{repeat:boolean;sequence:boolean;nine:boolean;cut:boolean;stack:boolean};
   cards:Record<string,boolean>;
 };
 export function startLocalSolo(nickname:string,options?:OfflineRoomConfig){
   ensureLoaded();
   if(active?.source!=="sandbox"&&active?.room?.game?.status==="playing")return active.code;
+  const botCount=(options?.maxPlayers??3)-1;
+  const explicit=options?.easyBots!==undefined||options?.hardBots!==undefined;
+  const easyBots=explicit?(options?.easyBots??0):Math.ceil(botCount/2);
+  const hardBots=explicit?(options?.hardBots??0):Math.floor(botCount/2);
+  if(!Number.isInteger(botCount)||botCount<1||botCount>19||
+    !Number.isInteger(easyBots)||!Number.isInteger(hardBots)||
+    easyBots<0||hardBots<0||easyBots+hardBots!==botCount)
+    throw new Error("Selecione de 1 a 19 bots e confira a soma das dificuldades.");
   store.rooms.clear();store.roomsByCode.clear();
   store.guestsById.clear();store.guestsByHash.clear();
   active=null;
@@ -199,9 +209,9 @@ export function startLocalSolo(nickname:string,options?:OfflineRoomConfig){
   store.roomsByCode.delete(created.code);
   room.code="OFF"+created.code.slice(0,5);
   store.roomsByCode.set(room.code,room);
-  const botCount=(options?.maxPlayers??3)-1;
+  // Create exactly the chosen number of easy and hard opponents.
   for(let i=0;i<botCount;i++)proRpc("add_bot",{
-    p_token:guest.token,p_code:room.code,p_difficulty:i%2===0?"easy":"hard"
+    p_token:guest.token,p_code:room.code,p_difficulty:i<easyBots?"easy":"hard"
   });
   proRpc("start_game",{p_token:guest.token,p_code:room.code});
   active={version:VERSION,source:"local",code:room.code,token:guest.token,

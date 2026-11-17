@@ -49,7 +49,7 @@ export function AdvancedRoomSettingsFields({
         {Array.from({length:19},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} {language==="en"?"cards":"cartas"}</option>)}
       </select>
     </label>
-    <p className="text-xs text-muted-foreground">{tr("Todas as regras e cartas opcionais vêm ativadas. As cartas comuns (números, Volta, Bloqueio, +2, Coringa e +4) permanecem no baralho.")}</p>
+    <p className="text-xs text-muted-foreground">{tr("Por padrão, Cerveja, Barata, Espada e Coringa Metralhadora começam desativados. Você pode ativá-los abaixo; as demais regras e cartas seguem seus padrões atuais.")}</p>
     <section aria-label="Regras opcionais" className="space-y-2">
       <h3 className="px-1 font-display text-sm font-bold text-cyan">{tr("Regras da partida")}</h3>
       {RULE_ITEMS.map(([key,label,description])=>(

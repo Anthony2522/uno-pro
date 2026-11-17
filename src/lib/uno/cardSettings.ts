@@ -20,8 +20,8 @@ export const CUSTOM_WILD_CARDS=[
 export type CustomCardKey=typeof CUSTOM_COLOR_CARDS[number]["key"]|typeof CUSTOM_WILD_CARDS[number]["key"];
 export type CardSettings=Record<CustomCardKey,boolean>;
 export const DEFAULT_CARD_SETTINGS:CardSettings={
-  T:true,H:true,E:true,L:true,V:true,C:true,A:true,
-  W5:true,X:true,B:true,N:true,P:true,M:true,Q:true
+  T:true,H:true,E:false,L:true,V:true,C:false,A:false,
+  W5:true,X:true,B:true,N:true,P:true,M:false,Q:true
 };
 export function enabledCardSettings(changes?:Partial<CardSettings>):CardSettings{
   return {...DEFAULT_CARD_SETTINGS,...changes};
