@@ -3,6 +3,7 @@ import * as THREE from "three";
 import "./crazy.css";
 import { createCrazyWorld } from "./world";
 import { makeCrazyVisuals, normalizeWarriorSkin, type WarriorRig } from "./visuals";
+import { crazyPixelRatio, crazyShouldRender, crazyMustUnlockCursor } from "./performance";
 export type Fighter={id:string;name:string;x:number;y:number;z:number;yaw:number;pitch:number;hp:number;weapon:string;shield:boolean;alive:boolean;bot:boolean;skin?:"red"|"blue"};
 export type MatchState={type:string;status:string;seconds:number;winner:string|null;host:string;players:Fighter[];arrows:{id:string;x:number;y:number;z:number}[]};
 type Props={ws:WebSocket,id:string,state:MatchState,onExit:()=>void};
@@ -11,6 +12,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
  const [charge,setCharge]=useState(false),[chargePower,setChargePower]=useState(0);
  const chargeStarted=useRef(0);
  const swingAt=useRef(-10000);
+ const otherSwings=useRef(new Map<string,number>());
  const [impact,setImpact]=useState<{key:number,type:"taken"|"dealt"}|null>(null);
  const keys=useRef(new Set<string>()),look=useRef<{id:number,x:number,y:number}|null>(null),stick=useRef<number|null>(null);
  const send=(type:string,other:Record<string,unknown>={})=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type,...other}));};
@@ -21,6 +23,12 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
   const onHit=(event:MessageEvent)=>{
    try{
     const msg=JSON.parse(event.data);
+    if(msg.type==="swing"&&typeof msg.id==="string"){otherSwings.current.set(msg.id,performance.now());return;}
+    if(msg.type==="state"&&crazyMustUnlockCursor(msg.status, msg.players?.find((p:Fighter)=>p.id===id)?.hp??0)){
+      const locked=document.pointerLockElement;
+      if(locked&&root.current?.contains(locked))document.exitPointerLock?.();
+      return;
+    }
     if(msg.type!=="hit")return;
     if(msg.target===id)setImpact({key:Date.now(),type:"taken"});
     else if(msg.attacker===id)setImpact({key:Date.now(),type:"dealt"});
@@ -30,11 +38,18 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
   return()=>ws.removeEventListener("message",onHit);
  },[ws,id]);
  useEffect(()=>{
+   if(crazyMustUnlockCursor(state.status,me?.hp??0)){
+     const locked=document.pointerLockElement;
+     if(locked&&root.current?.contains(locked))document.exitPointerLock?.();
+     keys.current.clear();
+   }
+ },[state.status,me?.hp]);
+ useEffect(()=>{
   const node=root.current;if(!node)return;
   const scene=new THREE.Scene();scene.background=new THREE.Color("#3b1c49");
   const camera=new THREE.PerspectiveCamera(75,node.clientWidth/node.clientHeight,.05,60);
   const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});
-  renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+  renderer.setPixelRatio(crazyPixelRatio(node.clientWidth,node.clientHeight,devicePixelRatio));
   renderer.setSize(node.clientWidth,node.clientHeight);
   renderer.outputColorSpace=THREE.SRGBColorSpace;
   node.appendChild(renderer.domElement);
@@ -69,7 +84,7 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
      const rig=visuals.createWarrior(skin);scene.add(rig.group);return rig;
    }
    const weapons=visuals.createViewWeapons(camera,"red");scene.add(camera);
-   const isPlaying=()=>data.current.status==="playing"&&(data.current.players.find(p=>p.id===id)?.hp??0)>0;
+   const isPlaying=()=>!crazyMustUnlockCursor(data.current.status,data.current.players.find(p=>p.id===id)?.hp??0);
    const keyDown=(e:KeyboardEvent)=>{
      if(!isPlaying())return;
      if(["Space","KeyE","KeyQ"].includes(e.code))e.preventDefault();
@@ -88,13 +103,18 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
    };
    const mouseUp=(e:MouseEvent)=>{if(e.button===0&&chargeStarted.current){chargeStarted.current=0;setCharge(false);setChargePower(0);send("bowRelease");}if(e.button===2)send("shield",{active:false});};
    const prevent=(e:Event)=>e.preventDefault();
+   const unlockAfterFinish=()=>{const locked=document.pointerLockElement;if(!isPlaying()&&locked&&root.current?.contains(locked))document.exitPointerLock?.();};
+   document.addEventListener("pointerlockchange",unlockAfterFinish);
    const lockOnPlay=()=>{if(isPlaying()&&matchMedia("(hover:hover) and (pointer:fine)").matches&&document.pointerLockElement!==renderer.domElement)renderer.domElement.requestPointerLock?.();};
    renderer.domElement.addEventListener("click",lockOnPlay);renderer.domElement.addEventListener("contextmenu",prevent);
    window.addEventListener("keydown",keyDown);window.addEventListener("keyup",keyUp);window.addEventListener("blur",clearKeys);
    window.addEventListener("mousemove",mouse);window.addEventListener("mousedown",mouseDown);window.addEventListener("mouseup",mouseUp);
-   let frame=0,last=performance.now(),network=0;
+   let frame=0,last=performance.now(),lastRendered=0,network=0,lastPercent=-1;
   function animate(now:number){
-   frame=requestAnimationFrame(animate);const dt=Math.min(.05,(now-last)/1000);last=now;
+   frame=requestAnimationFrame(animate);
+   if(document.hidden||!crazyShouldRender(now,lastRendered))return;
+   lastRendered=now;const dt=Math.min(.05,(now-last)/1000);last=now;
+   if(!isPlaying()){unlockAfterFinish();if(data.current.status==="finished")return;}
    const s=data.current,local=s.players.find(p=>p.id===id),i=input.current;
    if(keys.current.size){i.x=(keys.current.has("KeyD")?1:0)-(keys.current.has("KeyA")?1:0);i.z=(keys.current.has("KeyS")?1:0)-(keys.current.has("KeyW")?1:0);}else if(stick.current===null){i.x=0;i.z=0;}
    const elapsedSwing=now-swingAt.current;
@@ -108,20 +128,20 @@ export function CrazyOnlineArena({ws,id,state,onExit}:Props){
      if(!rig){rig=makeFighter(normalizeWarriorSkin(p.skin));fighters.set(p.id,rig);}
      rig.group.visible=true;
      if(rig.skin!==normalizeWarriorSkin(p.skin))rig.setSkin(normalizeWarriorSkin(p.skin));
-     const moved=Math.hypot(p.x-rig.group.position.x,p.z-rig.group.position.z)>.03;
+     const moved=Math.hypot(p.x-rig.group.position.x,p.z-rig.group.position.z)>.005;
      rig.group.position.lerp(new THREE.Vector3(p.x,p.y,p.z),Math.min(1,dt*12));
      rig.group.rotation.y=p.yaw;
      setNameplate(p,rig.group);
      rig.setEquipment(p.weapon==="bow"?"bow":"sword",p.shield);
-     rig.animate(now,moved);
+     rig.animate(now,moved,now-(otherSwings.current.get(p.id)??-10000),p.shield,p.weapon==="bow"?"bow":"sword");
    }
    for(const a of s.arrows||[]){let m=arrows.get(a.id);if(!m){m=block(scene,0,0,0,.1,.1,.55,materials[1]!);arrows.set(a.id,m);}m.position.lerp(new THREE.Vector3(a.x,a.y,a.z),Math.min(1,dt*16));}
    for(const [aid,m] of arrows)if(!(s.arrows||[]).some(a=>a.id===aid)){scene.remove(m);arrows.delete(aid);}
-   if(now-network>50){network=now;if(chargeStarted.current)setChargePower(Math.min(100,Math.round((now-chargeStarted.current)/12)));if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",...i}));i.jump=false;}
+   if(now-network>50){network=now;if(chargeStarted.current){const percent=Math.min(100,Math.floor((now-chargeStarted.current)/60)*5);if(percent!==lastPercent){lastPercent=percent;setChargePower(percent);}}else lastPercent=-1;if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",...i}));i.jump=false;}
    renderer.render(scene,camera);
   }frame=requestAnimationFrame(animate);
-  const observer=new ResizeObserver(()=>{camera.aspect=node.clientWidth/node.clientHeight;camera.updateProjectionMatrix();renderer.setSize(node.clientWidth,node.clientHeight);});observer.observe(node);
-  return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("blur",clearKeys);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.domElement.removeEventListener("click",lockOnPlay);
+  const observer=new ResizeObserver(()=>{camera.aspect=node.clientWidth/node.clientHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(crazyPixelRatio(node.clientWidth,node.clientHeight,devicePixelRatio));renderer.setSize(node.clientWidth,node.clientHeight);});observer.observe(node);
+  return()=>{cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener("pointerlockchange",unlockAfterFinish);window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("blur",clearKeys);window.removeEventListener("mousemove",mouse);window.removeEventListener("mousedown",mouseDown);window.removeEventListener("mouseup",mouseUp);renderer.domElement.removeEventListener("contextmenu",prevent);renderer.domElement.removeEventListener("click",lockOnPlay);
    if(document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();
    renderer.dispose();cleanupWorld();visuals.dispose();for(const plate of nameplates.values()){plate.texture.dispose();plate.sprite.material.dispose();}cube.dispose();for(const m of materials)m.dispose();fire.dispose();red.dispose();skin.dispose();node.removeChild(renderer.domElement);};
  },[id,ws]);
