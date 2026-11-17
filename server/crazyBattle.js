@@ -16,7 +16,7 @@ const playerState = p => ({id:p.id,name:p.name,x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch
 const snapshot = room => ({type:"state",code:room.code,status:room.status,host:room.host,seconds:room.seconds,winner:room.winner,
  players:[...room.players.values(),...room.bots.values()].map(playerState),
  arrows:room.arrows.map(a=>({id:a.id,x:a.x,y:a.y,z:a.z}))});
-const lobby = room => broadcast(room, snapshot(room));
+const lobby = room => {broadcast(room, snapshot(room));room.announceRooms?.();};
 const randomCode = () => { let c; do {c=randomBytes(4).toString("hex").toUpperCase();}while(rooms.has(c));return c;};
 function spawn(p, index){const spots=[[-4,-4],[4,4],[-4,4],[4,-4],[0,5],[5,0],[-5,0],[0,-5]];[p.x,p.z]=spots[index%spots.length];p.y=0;p.hp=100;p.vy=0;p.shield=false;p.weapon="sword";p.cooldown=0;p.chargeAt=0;p.defendUntil=0;p.input={x:0,z:0,jump:false};}
 function participant(id,name,ws,bot=false){return {id,name,ws,bot,resumeKey:randomBytes(24).toString("hex"),disconnectedAt:0,x:0,y:0,z:0,yaw:0,pitch:0,hp:100,vy:0,shield:false,weapon:"sword",cooldown:0,chargeAt:0,input:{x:0,z:0,jump:false}};}
@@ -105,6 +105,7 @@ function tick(room){
 }
 export function attachCrazyBattle(server){
  const wss=new WebSocketServer({server,path:"/api/crazy/ws",maxPayload:2048});
+ const announceRooms=()=>{const info={type:"rooms",rooms:publicRooms()};for(const client of wss.clients)send(client,info);};
  const timer=setInterval(()=>{
   const now=Date.now();
   for(const r of rooms.values()){
@@ -115,7 +116,7 @@ export function attachCrazyBattle(server){
      finish(r);lobby(r);
     }
    }
-   if(r.players.size===0){rooms.delete(r.code);continue;}
+   if(r.players.size===0){rooms.delete(r.code);announceRooms();continue;}
    tick(r);
   }
  },TICK_MS);
@@ -143,7 +144,7 @@ export function attachCrazyBattle(server){
    if(msg.type==="create"){
     if(room)return fail("Já está em uma sala");
     if(rooms.size>=100)return fail("Limite de salas atingido");
-    const code=randomCode();room={code,name:clean(msg.name||"Arena",36),private:!!msg.private,host:id,status:"lobby",winner:null,seconds:0,players:new Map(),bots:new Map(),arrows:[]};
+    const code=randomCode();room={code,name:clean(msg.name||"Arena",36),private:!!msg.private,announceRooms,host:id,status:"lobby",winner:null,seconds:0,players:new Map(),bots:new Map(),arrows:[]};
     const p=participant(id,clean(msg.player||"Jogador"),ws);room.players.set(id,p);rooms.set(code,room);send(ws,{type:"joined",id,code,resumeKey:p.resumeKey});lobby(room);return;
    }
    if(msg.type==="join"){
@@ -183,7 +184,7 @@ export function attachCrazyBattle(server){
    if(!p||p.ws!==ws)return;
    if(deliberateLeave){room.players.delete(id);if(room.host===id)room.host=room.players.keys().next().value??null;}
    else {p.ws=null;p.disconnectedAt=Date.now();p.input={x:0,z:0,jump:false};p.shield=false;p.chargeAt=0;}
-   if(!room.players.size){rooms.delete(room.code);return;}
+   if(!room.players.size){rooms.delete(room.code);announceRooms();return;}
    finish(room);lobby(room);
   });
  });
