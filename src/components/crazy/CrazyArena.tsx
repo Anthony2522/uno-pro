@@ -96,7 +96,8 @@ function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}
     player.z=clamp(player.z+moveVZ*dt,-6.1,6.1);
     if(a.jump&&ground){vy=5.3;ground=false;}a.jump=false;
     vy-=15*dt;player.y+=vy*dt;if(player.y<=0){player.y=0;vy=0;ground=true;}
-    const dist=bot.position.distanceTo(new THREE.Vector3(player.x,0,player.z));
+    const targetDX=bot.position.x-player.x,targetDZ=bot.position.z-player.z;
+    const dist=Math.hypot(targetDX,targetDZ);
     if(bot.alive){
      if(dist>1.55){
        const deltaX=player.x-bot.position.x,deltaZ=player.z-bot.position.z;
@@ -116,12 +117,23 @@ function CrazyArenaRound({onExit,onRestart}:{onExit:()=>void;onRestart:()=>void}
      const botWeapon=dist>3.4?"bow":"sword";
      botRig.setEquipment(botWeapon,false);
      botRig.animate(now,dist>1.55,now-bot.attackAt,false,botWeapon);
-          if(dist<1.8&&now-bot.attackAt>1100){bot.attackAt=now;const toBot=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const facing=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));const blocked=a.shield&&a.weapon==="sword"&&facing.dot(toBot)>.2;currentHp=Math.max(0,currentHp-(blocked?2:15));setHp(currentHp);if(currentHp===0)finish("Derrota");}
+          if(dist<1.8&&now-bot.attackAt>1100){bot.attackAt=now;const facingDot=(-Math.sin(a.yaw)*targetDX-Math.cos(a.yaw)*targetDZ)/Math.max(.01,dist);const blocked=a.shield&&a.weapon==="sword"&&facingDot>.2;currentHp=Math.max(0,currentHp-(blocked?2:15));setHp(currentHp);if(currentHp===0)finish("Derrota");}
     }
-    if(a.weapon==="sword"&&a.attack&&!a.shield&&now-swordAt>620){swordAt=now;if(bot.alive&&dist<2.5){const dir=new THREE.Vector3(bot.position.x-player.x,0,bot.position.z-player.z).normalize();const forward=new THREE.Vector3(-Math.sin(a.yaw),0,-Math.cos(a.yaw));if(forward.dot(dir)>.35)hurt(20);}a.attack=false;}
+    // Local bot uses the same solid character space as the online arena.
+    if(bot.alive&&Math.abs(player.y-bot.position.y)<1.55){
+      const diffX=player.x-bot.position.x,diffZ=player.z-bot.position.z;
+      const separation=Math.hypot(diffX,diffZ);
+      if(separation<.74){
+        const directionX=separation>.001?diffX/separation:1;
+        const directionZ=separation>.001?diffZ/separation:0;
+        player.x=clamp(bot.position.x+directionX*.74,-6.1,6.1);
+        player.z=clamp(bot.position.z+directionZ*.74,-6.1,6.1);
+      }
+    }
+    if(a.weapon==="sword"&&a.attack&&!a.shield&&now-swordAt>620){swordAt=now;if(bot.alive&&dist<2.5){const facingDot=(-Math.sin(a.yaw)*targetDX-Math.cos(a.yaw)*targetDZ)/Math.max(.01,dist);if(facingDot>.35)hurt(20);}a.attack=false;}
     if(a.weapon==="bow"){if(a.attack){if(!bowStart)bowStart=now;const nextCharge=Math.min(100,Math.floor((now-bowStart)/60)*5);if(nextCharge!==lastCharge){lastCharge=nextCharge;setCharge(nextCharge);}}else if(bowStart){launch(clamp((now-bowStart)/1200,0,1));bowStart=0;lastCharge=-1;setCharge(0);}}else bowStart=0;
     for(const ar of [...arrowObjects]){ar.mesh.position.addScaledVector(ar.velocity,dt);ar.velocity.y-=9*dt;ar.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),ar.velocity.clone().normalize());ar.ttl-=dt;
-     if(bot.alive&&ar.mesh.position.distanceTo(bot.position.clone().add(new THREE.Vector3(0,1,0)))<.8){hurt(12);ar.ttl=0;}
+     if(bot.alive){const dx=ar.mesh.position.x-bot.position.x,dy=ar.mesh.position.y-(bot.position.y+1),dz=ar.mesh.position.z-bot.position.z;if(dx*dx+dy*dy+dz*dz<.64){hurt(12);ar.ttl=0;}}
      if(ar.ttl<=0||ar.mesh.position.y<0||Math.abs(ar.mesh.position.x)>7.5||Math.abs(ar.mesh.position.z)>7.5){scene.remove(ar.mesh);ar.mesh.geometry.dispose();arrowObjects=arrowObjects.filter(item=>item!==ar);}
     }
    }
