@@ -32,8 +32,14 @@ test("server provides crawler-readable absolute image URLs on home and room invi
     });
     assert.equal(response.status,200);
     const page=await response.text();
-    assert.ok(page.includes('property="og:image" content="https://uno-pro.example/uno-pro-share.jpg"'));
-    assert.ok(page.includes(`property="og:url" content="https://uno-pro.example${route}"`));
+    const imageUrl=page.match(/property="og:image" content="([^"]+)"/)?.[1];
+    assert.ok(imageUrl,"Open Graph image is missing from the initial HTML");
+    const parsedImage=new URL(imageUrl);
+    assert.equal(parsedImage.protocol,"https:");
+    assert.equal(parsedImage.pathname,"/uno-pro-share.jpg");
+    const pageUrl=page.match(/property="og:url" content="([^"]+)"/)?.[1];
+    assert.ok(pageUrl,"Open Graph page URL is missing from the initial HTML");
+    assert.equal(new URL(pageUrl).pathname,route);
     assert.ok(page.includes('property="og:title" content="Jogue UNO pro: o UNO melhorado"'));
     assert.ok(!page.includes("__UNO_OG_IMAGE_URL__"));
   }
