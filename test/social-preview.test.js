@@ -12,6 +12,10 @@ test("sharing metadata uses the requested Portuguese copy and large image",()=>{
   assert.match(htmlSource,/og:image:width" content="1200"/);
   assert.match(htmlSource,/og:image:height" content="628"/);
   assert.match(htmlSource,/name="twitter:image"/);
+  assert.match(htmlSource,/property="og:url" content="https:\/\/uno-pro-xp6e\.onrender\.com\/"/);
+  assert.match(htmlSource,/property="og:image" content="https:\/\/uno-pro-xp6e\.onrender\.com\/uno-pro-share\.jpg"/);
+  assert.match(htmlSource,/name="twitter:image" content="https:\/\/uno-pro-xp6e\.onrender\.com\/uno-pro-share\.jpg"/);
+  assert.doesNotMatch(htmlSource,/__UNO_OG_(?:IMAGE|PAGE)_URL__/);
   assert.ok(existsSync(imagePath),"Open Graph image must exist in public/");
   const jpg=readFileSync(imagePath);
   assert.equal(jpg[0],0xff);
@@ -37,6 +41,7 @@ test("server provides crawler-readable absolute image URLs on home and room invi
     const parsedImage=new URL(imageUrl);
     assert.equal(parsedImage.protocol,"https:");
     assert.equal(parsedImage.pathname,"/uno-pro-share.jpg");
+    assert.equal(parsedImage.hostname,"uno-pro-xp6e.onrender.com");
     const pageUrl=page.match(/property="og:url" content="([^"]+)"/)?.[1];
     assert.ok(pageUrl,"Open Graph page URL is missing from the initial HTML");
     assert.equal(new URL(pageUrl).pathname,route);
