@@ -226,9 +226,11 @@ function handleStatic(req, res, url) {
   const hostHeader = req.headers.host || "";
   const host = /^[a-z0-9.-]+(?::[0-9]{1,5})?$/i.test(hostHeader) ? hostHeader : "localhost";
   const origin = `${secure ? "https" : "http"}://${host}`;
+  // index.html ships with valid absolute URLs even when a static host serves
+  // dist/ directly. For this Node server, keep room invite canonicals accurate.
   const html = fs.readFileSync(index, "utf8")
-    .replaceAll("__UNO_OG_IMAGE_URL__", origin + "/uno-pro-share.jpg")
-    .replaceAll("__UNO_OG_PAGE_URL__", origin + url.pathname);
+    .replace(/(<meta property="og:url" content=")[^"]*(")/,
+      (_match, before, after) => before + origin + url.pathname + after);
   res.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-cache",
