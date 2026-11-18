@@ -16,10 +16,10 @@ import {getLocalMatch,getLocalSandbox,discardOfflineMatch,discardSandboxMatch,st
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "UNO Pro — jogue UNO online com amigos" },
-      { name: "description", content: "Crie uma sala, mande o link e jogue UNO em tempo real com seus amigos. Sem cadastro, direto no navegador." },
-      { property: "og:title", content: "UNO Pro — jogue UNO online com amigos" },
-      { property: "og:description", content: "Salas em tempo real, sem cadastro. Crie, convide e jogue pelo celular ou computador." },
+      { title: "Jogue UNO pro: o UNO melhorado" },
+      { name: "description", content: "Jogue com amigos online e contra bots" },
+      { property: "og:title", content: "Jogue UNO pro: o UNO melhorado" },
+      { property: "og:description", content: "Jogue com amigos online e contra bots" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
