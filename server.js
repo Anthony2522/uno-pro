@@ -217,7 +217,25 @@ function handleStatic(req, res, url) {
     res.writeHead(404);
     return res.end();
   }
-  return serveFile(res, index, 200, req);
+  // Social crawlers (WhatsApp, Telegram, Facebook, X) often read only HTML.
+  // Resolve the image against the actual public hostname so custom domains and
+  // room invite links receive a working absolute HTTPS image URL.
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const secure = req.socket.encrypted ||
+    (typeof forwardedProto === "string" && forwardedProto.split(",")[0].trim().toLowerCase() === "https");
+  const hostHeader = req.headers.host || "";
+  const host = /^[a-z0-9.-]+(?::[0-9]{1,5})?$/i.test(hostHeader) ? hostHeader : "localhost";
+  const origin = `${secure ? "https" : "http"}://${host}`;
+  const html = fs.readFileSync(index, "utf8")
+    .replaceAll("__UNO_OG_IMAGE_URL__", origin + "/uno-pro-share.jpg")
+    .replaceAll("__UNO_OG_PAGE_URL__", origin + url.pathname);
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-cache",
+    "X-Content-Type-Options": "nosniff",
+  });
+  if (req.method === "HEAD") return res.end();
+  res.end(html);
 }
 
 // ---------- server ----------

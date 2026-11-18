@@ -24,10 +24,10 @@ import {offlineStorageError} from "@/lib/uno/offlineRuntime";
 export const Route = createFileRoute("/sala/$code")({
   head: ({ params }) => ({
     meta: [
-      { title: `Sala ${params.code.toUpperCase()} — UNO Pro` },
-      { name: "description", content: "Você foi convidado para uma partida de UNO Pro. Entre com seu apelido e jogue em tempo real." },
-      { property: "og:title", content: `Bora jogar UNO? Sala ${params.code.toUpperCase()}` },
-      { property: "og:description", content: "Clique para entrar na sala e jogar UNO com os amigos — sem cadastro." },
+      { title: "Jogue UNO pro: o UNO melhorado" },
+      { name: "description", content: "Jogue com amigos online e contra bots" },
+      { property: "og:title", content: "Jogue UNO pro: o UNO melhorado" },
+      { property: "og:description", content: "Jogue com amigos online e contra bots" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
