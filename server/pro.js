@@ -8,6 +8,7 @@ export { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, isRoach, roachChainId, CUSTOM_CARD_KEYS, normalizeCardsEnabled, LIMITS, isSoloHumanBotMatch, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
 const BEER_DELAY_MS = 3000;
+const DRAW_REPLY_MS = 5000; // A fixed response window independent of the hand.
 const VORTEX_CARD_DELAY_MS = 1250;
 const SOLO_RECOVERY_MS = 5 * 60_000;
 export function chooseBotMoveDelay(difficulty) {
@@ -89,7 +90,7 @@ function botCutTick(r) {
   if(!w || g.status!=="playing" || g.nine || actionLocked(g) || !ready(r).cut || w.top!==top(g))return;
   for(const [id,due] of Object.entries(w.due)) {
     if(clock()<due || id===current(g) || !g.turn_order.includes(id) || !hand(r,id).cards.some(card=>sameCardFace(card,w.top)))continue;
-    if(g.pending_draw && !canCounter(g,w.top))continue;
+    if(g.pending_draw && (!ready(r).stack || !canCounter(g,w.top)))continue;
     try {
       const counts={r:0,y:0,g:0,b:0};
       for(const card of hand(r,id).cards)if(counts[card[0]]!==undefined)counts[card[0]]++;
@@ -106,6 +107,7 @@ function nextTurn(g,idx){
   g.turn_idx=idx;g.turn_cards=[];g.turn_mode=null;g.turn_step=0;g.has_drawn=false;g.drawn_card=null;
   const now=clock();
   g.offline_since=null;
+  g.pending_draw_deadline=g.pending_draw>0?now+DRAW_REPLY_MS:null;
   // Do not consume the 50-second turn clock during queued 5-second notifications.
   g.turn_started_at=Math.max(now,g.visual_until||now);
   g.bot_move=null; // The next bot turn draws its delay exactly once.
@@ -405,6 +407,10 @@ function negateEffect(r,id,color){
   if(!reactionCard)fail("NEGATION_NOT_IN_HAND");
   if(!["r","y","g","b"].includes(color))fail("COLOR_REQUIRED");
   const reaction=g.skip_reaction?.target===id;
+  if(g.pending_draw>0 && current(g)===id && !g.turn_cards?.length &&
+    g.pending_draw_deadline!=null && clock()>=g.pending_draw_deadline){
+    resolveDebt(r);fail("DRAW_RESPONSE_EXPIRED");
+  }
   const debt=g.pending_draw>0&&current(g)===id&&!g.turn_cards.length;
   const powerless=(g.powerless_remaining||[]).includes(id)&&current(g)===id&&!g.turn_cards.length;
   const locked=(g.lock_remaining||[]).includes(id)&&current(g)===id&&!g.turn_cards.length;
@@ -417,7 +423,7 @@ function negateEffect(r,id,color){
     nextTurn(g,g.turn_order.indexOf(id));
   }
   if(debt){
-    g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;clearSwordDebt(g);
+    g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;g.pending_draw_deadline=null;clearSwordDebt(g);
   }
   if(powerless){g.powerless_remaining=[];g.powerless_target=null;}
   if(locked){g.lock_remaining=[];g.lock_target=null;g.lock_color=null;}
@@ -432,27 +438,29 @@ function negateEffect(r,id,color){
   g.seq++;bump(r);
   return result;
 }
-function resolveDebt(r){const g=r.game;if(!g||!g.pending_draw||g.nine)return;
-  // Beer decides whether to counter or accept the debt after its visible countdown.
+function resolveDebt(r){
+  const g=r.game;
+  if(!g||g.status!=="playing"||!g.pending_draw||g.nine)return;
   if((g.beer_remaining||[]).includes(current(g))&&!g.beer_resolving)return;
-  // Disconnects preserve the seat for the reduced turn window. An
-  // unresolved draw penalty is accepted only when that window expires.
-  const actor=current(g),guest=store.guestsById.get(actor);
-  if(g.turn_cards?.length)return; // A player already responded; never charge them during an unfinished combo.
+  if(g.turn_cards?.length)return; // A counter is already played; its combo can finish.
+  const actor=current(g);
   if(consumeShield(r,actor,"draw")){
-    g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;clearSwordDebt(g);
-    g.seq++;bump(r);return;
+    g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
+    g.pending_draw_deadline=null;clearSwordDebt(g);g.seq++;bump(r);return;
   }
-  if(!isBot(actor)&&(!guest||guest.last_seen<clock()-LIMITS.onlineMs))return;
-  if(hasNegation(r,current(g)))return;
-  if((g.pending_uncounterable || ready(r).stack) && hand(r,current(g)).cards.some(c=>canCounter(g,c)&&allowedDuringRestrictions(g,c)))return;
-  const loser=current(g),n=g.pending_draw,attacker=g.pending_source||loser;
-  observePublic(r,loser,{kind:"forced_draw",color:g.current_color,n});
-  draw(r,loser,n);swordStrikeIfDrawn(r,loser);clearSwordDebt(g);g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
-  completePowerlessTurn(g,loser);
-  g.last_action={type:"stack_take",by:loser,name:name(loser),n};
-  effect(r,"penalty",attacker,null,null,{target:loser,target_name:name(loser),n});g.seq++;
-  nextTurn(g,advance(g.turn_idx,g.direction,1,g.turn_order.length));bump(r);
+  // Older snapshots may lack this field. Never use the hand or online state
+  // to decide if a debt is paid before the deadline.
+  g.pending_draw_deadline??=clock()+DRAW_REPLY_MS;
+  if(clock()<g.pending_draw_deadline)return;
+  const n=g.pending_draw,attacker=g.pending_source||actor;
+  observePublic(r,actor,{kind:"forced_draw",color:g.current_color,n});
+  draw(r,actor,n);swordStrikeIfDrawn(r,actor);clearSwordDebt(g);
+  g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
+  g.pending_draw_deadline=null;
+  completePowerlessTurn(g,actor);
+  g.last_action={type:"stack_take",by:actor,name:name(actor),n};
+  effect(r,"penalty",attacker,null,null,{target:actor,target_name:name(actor),n});
+  g.seq++;nextTurn(g,advance(g.turn_idx,g.direction,1,g.turn_order.length));bump(r);
 }
 function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fail("NINE_ACTIVE");
   if(g.vortex_queue)fail("VORTEX_RESOLVING");
@@ -470,7 +478,7 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
     }
     completePowerlessTurn(g,actor);
     if(g.pending_draw){const owed=g.pending_draw,attacker=g.pending_source||actor;
-      observePublic(r,actor,{kind:"forced_draw",color:g.current_color,n:owed});draw(r,actor,owed);swordStrikeIfDrawn(r,actor);clearSwordDebt(g);g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;g.last_action={type:"stack_take",by:actor,name:name(actor),n:owed};effect(r,"penalty",attacker,null,null,{target:actor,target_name:name(actor),n:owed});}
+      observePublic(r,actor,{kind:"forced_draw",color:g.current_color,n:owed});draw(r,actor,owed);swordStrikeIfDrawn(r,actor);clearSwordDebt(g);g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;g.pending_draw_deadline=null;g.last_action={type:"stack_take",by:actor,name:name(actor),n:owed};effect(r,"penalty",attacker,null,null,{target:actor,target_name:name(actor),n:owed});}
     else {if(!g.has_drawn)draw(r,actor,1);
       observePublic(r,actor,{kind:"pass",color:g.turn_start_color??g.current_color});
       g.last_action={type:automatic?"auto":"pass",by:actor,name:name(actor)};}
@@ -541,6 +549,10 @@ function play(r,id,card,color,targetId,options={}){
   if(g.wild_pending_color)fail("WILD_COLOR_PENDING");
   if(g.vortex_queue)fail("VORTEX_RESOLVING");
   if(current(g)===id && (g.beer_remaining||[]).includes(id) && !g.beer_resolving && !options.defensiveNegation)fail("BEER_FORCED");
+  if(g.pending_draw>0 && !g.turn_cards?.length &&
+    g.pending_draw_deadline!=null && clock()>=g.pending_draw_deadline && !g.beer_resolving){
+    resolveDebt(r);fail("DRAW_RESPONSE_EXPIRED");
+  }
   const cutting=current(g)!==id||(g.skip_reaction?.target===id&&card===top(g));
   if(g.skip_reaction && !cutting)fail("SKIP_DECISION_PENDING");
   // No cooldown for initial plays or cuts while an announcement is shown.
@@ -552,12 +564,12 @@ function play(r,id,card,color,targetId,options={}){
     const debt=g.pending_draw>0;
     if(g.skip_reaction)g.skip_reaction=null;
     if(!rules.cut||!g.turn_order.includes(id)||!sameCardFace(card,top(g)))fail("CUT_NOT_ALLOWED");
-    if(debt && !canCounter(g,card))fail("CUT_NOT_ALLOWED");
+    if(debt && (!rules.stack || !canCounter(g,card)))fail("CUT_NOT_ALLOWED");
     if(series.length)finish(r,false,true);
-    if(g.status!=="playing"||g.nine||(g.pending_draw && !canCounter(g,card)))fail("CUT_NOT_ALLOWED");
+    if(g.status!=="playing"||g.nine||(g.pending_draw && (!rules.stack || !canCounter(g,card))))fail("CUT_NOT_ALLOWED");
     nextTurn(g,g.turn_order.indexOf(id));series=[];
   }
-  if(g.pending_draw && !series.length && !canCounter(g,card))fail("MUST_COUNTER_OR_DRAW");
+  if(g.pending_draw && !series.length && (!rules.stack || !canCounter(g,card)))fail("MUST_COUNTER_OR_DRAW");
   if(!allowedDuringRestrictions(g,card,id))fail((g.lock_remaining||[]).includes(id)&&current(g)===id?"LOCK_COLOR_ONLY":"POWERLESS_NUMBER_ONLY");
   // After buying, the player may select ANY compatible card from their hand.
   if(!series.length){if(!g.pending_draw && !playable(card,g))fail("INVALID_CARD");}
@@ -697,7 +709,7 @@ function finishEmptyHand(r,id){
     emitTurnEffect(r,id,g.turn_cards||[],g.direction);
     g.status="finished";
     g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1,win:true};
-    g.pending_draw=0;clearSwordDebt(g);g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
+    g.pending_draw=0;g.pending_draw_deadline=null;clearSwordDebt(g);g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
   }
   finish(r,false,true);
   const target=current(g);
@@ -721,6 +733,7 @@ function resolveDetective(r,id,color){
 }
 function hardBotTick(r,id,h){
   const g=r.game,turn=g.bot_move;
+  if(turn.acceptDebt)return;
   if(!turn.plan){
     const counts=Object.fromEntries(g.turn_order.filter(p=>p!==id)
       .map(p=>[p,r.hands.get(p)?.cards.length??0]));
@@ -740,9 +753,9 @@ function hardBotTick(r,id,h){
       profile:store.guestsById.get(id)?.ai_profile||null,
       random:Math.random
     });
-    if(decision.kind==="accept"){finish(r,true);return;}
+    if(decision.kind==="accept"){if(g.pending_draw){turn.acceptDebt=true;return;}finish(r,true);return;}
     if(decision.kind==="draw"||!decision.cards.length){
-      if(g.pending_draw){finish(r,true);return;}
+      if(g.pending_draw){turn.acceptDebt=true;return;}
       if(g.has_drawn){finish(r,true);return;}
       const previousColor=g.current_color;
       const drawn=draw(r,id,1)[0]||null;
@@ -770,15 +783,19 @@ function beerTick(r){
      g.turn_cards?.length || !(g.beer_remaining||[]).includes(current(g)))return false;
   if(g.beer_due===null||g.beer_due===undefined)g.beer_due=clock()+BEER_DELAY_MS;
   if(clock()<g.beer_due)return true; // All viewers see three seconds before the forced move.
+  if(g.pending_draw){
+    g.pending_draw_deadline??=clock()+DRAW_REPLY_MS;
+    if(clock()<g.pending_draw_deadline)return true;
+  }
   const actor=current(g),h=hand(r,actor);
   // A shield cancels a stacked debt before Beer selects the forced move.
   if(g.pending_draw && consumeShield(r,actor,"draw")){
-    g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;clearSwordDebt(g);
+    g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;g.pending_draw_deadline=null;clearSwordDebt(g);
   }
   // Remove the effect first: a Vortex or duel Reverse can end a move inside play().
   g.beer_remaining=g.beer_remaining.filter(id=>id!==actor);
   let options=h.cards.filter(c=>allowedDuringRestrictions(g,c,actor) &&
-    (g.pending_draw?canCounter(g,c):playable(c,g)));
+    (g.pending_draw?(ready(r).stack&&canCounter(g,c)):playable(c,g)));
   if(!options.length && !g.pending_draw){
     const previousColor=g.current_color;
     const newCard=draw(r,actor,1)[0]||null;
@@ -817,15 +834,18 @@ function botTick(r){
     negateEffect(r,id,colorForNegation());return;
   }
   if(g.pending_draw>0&&hasNegation(r,id)&&!g.turn_cards.length&&
-    (!counter(r,id)||(!hard&&g.pending_draw>=5))){
+    (!rules.stack||!counter(r,id)||(!hard&&g.pending_draw>=5))){
     negateEffect(r,id,colorForNegation());return;
   }
+  if(g.pending_draw && !rules.stack)return;
   if(!g.bot_move || g.bot_move.id!==id){
-    g.bot_move={id,due:clock()+chooseBotMoveDelay(bot.difficulty),played:0};
+    const delay=g.pending_draw?Math.min(4000,chooseBotMoveDelay(bot.difficulty)):chooseBotMoveDelay(bot.difficulty);
+    g.bot_move={id,due:clock()+delay,played:0};
   }
+  if(g.bot_move.acceptDebt)return;
   if(clock()<g.bot_move.due || (g.turn_cards.length===0 && actionLocked(g)))return;
   if(hard&&bot.ai_variant!=="legacy")return hardBotTick(r,id,h);
-  if(g.pending_draw && g.turn_cards.length===0 && !counter(r,id)&&!hasNegation(r,id)){finish(r,true);return;}
+  if(g.pending_draw && g.turn_cards.length===0 && !counter(r,id)&&!hasNegation(r,id)){g.bot_move.acceptDebt=true;return;}
   const score=c=>{
     const match=h.cards.filter(x=>x!==c && value(reflected(g,x))===value(reflected(g,c))).length;
     const run=h.cards.filter(x=>x[0]===c[0] && /^[0-9]$/.test(value(reflected(g,x))) && /^[0-9]$/.test(value(reflected(g,c))) &&
@@ -839,7 +859,7 @@ function botTick(r){
   };
   let options;
   if(!g.turn_cards.length){
-    options=h.cards.filter(c=>allowedDuringRestrictions(g,c)&&(g.pending_draw?canCounter(g,c):playable(c,g)));
+    options=h.cards.filter(c=>allowedDuringRestrictions(g,c)&&(g.pending_draw?(rules.stack&&canCounter(g,c)):playable(c,g)));
     if(!options.length && !g.pending_draw){
       const previousColor=g.current_color;
       const drawn=draw(r,id,1)[0];g.has_drawn=true;g.drawn_card=drawn||null;rememberDraw(r,id,drawn);
@@ -858,7 +878,7 @@ function botTick(r){
         (same&&rules.repeat)||(run&&rules.sequence);
     });
   }
-  if(!options.length){finish(r,true);return;}
+  if(!options.length){if(g.pending_draw){g.bot_move.acceptDebt=true;return;}finish(r,true);return;}
   options.sort((a,b)=>score(b)-score(a));
   const pick=hard || Math.random()<.6 ? options[0] : options[Math.floor(Math.random()*options.length)];
   const target=reflected(g,pick)==="X"?g.turn_order.filter(p=>p!==id)
@@ -892,7 +912,7 @@ function finishWhenOnlyBots(r){
   }
   g.winner_id=g.placements[0]?.id??null;
   g.second_winner_id=g.placements[1]?.id??null;
-  g.status="finished";r.status="waiting";g.nine=null;g.pending_draw=0;clearSwordDebt(g);
+  g.status="finished";r.status="waiting";g.nine=null;g.pending_draw=0;g.pending_draw_deadline=null;clearSwordDebt(g);
   g.last_action={type:"bots_only_end",by:g.winner_id,name:name(g.winner_id),win:true};
   g.seq++;bump(r,true);
   return true;
@@ -914,7 +934,7 @@ function removeForTimeout(r,id){
     g.status="finished";r.status="waiting";
     g.winner_id=g.placements[0]?.id??remaining;
     g.second_winner_id=g.placements[1]?.id??null;
-    g.nine=null;g.pending_draw=0;clearSwordDebt(g);
+    g.nine=null;g.pending_draw=0;g.pending_draw_deadline=null;clearSwordDebt(g);
   }else{
     const target=nextId===id?g.turn_order[0]:nextId;
     nextTurn(g,Math.max(0,g.turn_order.indexOf(target)));
@@ -947,6 +967,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
         if(g.bot_cut){for(const id of Object.keys(g.bot_cut.due||{}))g.bot_cut.due[id]+=delta;}
         if(g.nine){g.nine.deadline+=delta;g.nine.started_at+=delta;for(const id of Object.keys(g.nine.botTimes||{}))g.nine.botTimes[id]+=delta;}
         if(g.skip_reaction?.deadline)g.skip_reaction.deadline+=delta;
+        if(g.pending_draw_deadline!=null)g.pending_draw_deadline+=delta;
         if(g.beer_due)g.beer_due+=delta;
         if(g.vortex_queue?.next_at)g.vortex_queue.next_at+=delta;
         if(g.wild_pending_since)g.wild_pending_since+=delta;
@@ -991,6 +1012,8 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     botCutTick(r);
     if(g.nine||g.skip_reaction)continue; // A jump-in or skip response is pending.
     if(beerTick(r))continue;
+    if(g.pending_draw && isBot(current(g)) &&
+       (g.turn_cards?.length || g.pending_draw_deadline==null || time<g.pending_draw_deadline))botTick(r);
     resolveDebt(r);
     if(g.nine||g.skip_reaction||g.status!=="playing")continue;
     // Auto-draw once when there is no playable card anywhere in the hand.
@@ -1180,7 +1203,7 @@ export function proRpc(fn,args={}){
     }
     const result=originalRpc(fn,args),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
-    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:null,mirror_played_as:null,roach_chains:{},lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
+    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_draw_deadline:null,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:null,mirror_played_as:null,roach_chains:{},lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
     for(const h of r.hands.values())h.uno_since=null;
     return result;
@@ -1189,6 +1212,7 @@ export function proRpc(fn,args={}){
     result.is_dev=!!authenticate(args.p_token).is_dev;
     result.members=result.members.map(m=>({ ...m,bot:isBot(m.id),difficulty:store.guestsById.get(m.id)?.difficulty||null,spectator:!!r.members.find(x=>x.guest_id===m.id)?.spectator}));
     if(g&&result.game){result.game.turn_cards=[...(g.turn_cards||[])];result.game.pending_draw=g.pending_draw||0;
+       result.game.pending_draw_deadline=g.pending_draw&&g.pending_draw_deadline!=null?stamp(g.pending_draw_deadline):null;
       result.game.nine=g.nine?{source:g.nine.source,count:g.nine.count,eligible:[...g.nine.eligible],pressed:[...g.nine.pressed],deadline:stamp(g.nine.deadline)}:null;
       result.game.effects=[...(g.effects||[])];
       result.game.action_locked_until=activeNotification(g) && actionLocked(g)
