@@ -550,7 +550,7 @@ function play(r,id,card,color,targetId,options={}){
   if(g.vortex_queue)fail("VORTEX_RESOLVING");
   if(current(g)===id && (g.beer_remaining||[]).includes(id) && !g.beer_resolving && !options.defensiveNegation)fail("BEER_FORCED");
   if(g.pending_draw>0 && !g.turn_cards?.length &&
-    g.pending_draw_deadline!=null && clock()>=g.pending_draw_deadline){
+    g.pending_draw_deadline!=null && clock()>=g.pending_draw_deadline && !g.beer_resolving){
     resolveDebt(r);fail("DRAW_RESPONSE_EXPIRED");
   }
   const cutting=current(g)!==id||(g.skip_reaction?.target===id&&card===top(g));
@@ -1012,7 +1012,8 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     botCutTick(r);
     if(g.nine||g.skip_reaction)continue; // A jump-in or skip response is pending.
     if(beerTick(r))continue;
-    if(g.pending_draw && isBot(current(g)))botTick(r);
+    if(g.pending_draw && isBot(current(g)) &&
+       (g.turn_cards?.length || g.pending_draw_deadline==null || time<g.pending_draw_deadline))botTick(r);
     resolveDebt(r);
     if(g.nine||g.skip_reaction||g.status!=="playing")continue;
     // Auto-draw once when there is no playable card anywhere in the hand.
