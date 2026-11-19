@@ -77,7 +77,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
   const pending = game.pending_draw || 0;
   const effectiveCard=(c:string)=>c==="Q"?(game.last_wild||"W"):c;
-  const counterCard=(c:string)=>{const e=effectiveCard(c);return game.pending_uncounterable?e==="W5":e==="W4"||e==="W5"||cardValue(e)==="D"||cardValue(e)==="T";};
+  const counterCard=(c:string)=>{const e=effectiveCard(c);return state.room.rules.stack && (game.pending_uncounterable?e==="W5":e==="W4"||e==="W5"||cardValue(e)==="D"||cardValue(e)==="T");};
   const hasNegation=game.my_hand.includes("N")||(game.last_wild==="N"&&game.my_hand.includes("Q"));
   const lastPrivateNotice=useRef<number|null>(null);
   useEffect(()=>{
@@ -154,6 +154,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const normalDeadline=new Date(game.turn_started_at).getTime()+50000;
   const deadline=game.offline_deadline_at ? Math.min(normalDeadline,new Date(game.offline_deadline_at).getTime()) : normalDeadline;
   const remaining=Math.min(50,Math.max(0,Math.ceil((deadline-clock)/1000)));
+  const debtRemaining=pending>0&&game.pending_draw_deadline
+    ?Math.max(0,Math.ceil((new Date(game.pending_draw_deadline).getTime()-clock)/1000)):5;
   const nineRemaining=nine?Math.max(0,Math.ceil((new Date(nine.deadline).getTime()-clock)/1000)):0;
   const nineReady=!!nine&&nine.eligible.includes(me)&&!nine.pressed.includes(me);
   const feed = describeAction(game.last_action, me);
@@ -262,7 +264,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         <div className="uno-turn-controls relative z-10 flex shrink-0 items-center justify-center gap-2">
           <div role="status" aria-live="polite"
             className={cn("rounded-full px-3 py-2 font-display text-[11px] font-bold sm:px-5 sm:text-sm",myTurn?"bg-cyan text-navy animate-pulse-ring":"glass")}>
-            {myTurn ? ("Sua vez · "+remaining+"s") : current ? `Vez de ${current.nickname}` : "…"}
+            {myTurn ? (pending>0&&!played.length ? `${language==="en"?"Counter or draw":"Revidar ou comprar"} · ${debtRemaining}s` : `${language==="en"?"Your turn":"Sua vez"} · ${remaining}s`) : current ? `${language==="en"?"Turn:":"Vez de"} ${current.nickname}` : "…"}
           </div>
           {myTurn && !nine && !forcedByBeer && (
             <Button variant="hero" className="h-9 shrink-0 rounded-xl px-3 text-xs sm:h-11 sm:px-4 sm:text-sm"
@@ -288,14 +290,17 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <p className="mt-2 text-sm text-muted-foreground">O último a apertar compra {nine.count} carta(s).</p>
           </div>
         )}
-        {myTurn && !forcedByBeer && !!pending && played.length===0 && (hand.some(counterCard)) && !nine && (
+        {myTurn && !forcedByBeer && !!pending && played.length===0 && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
-            <p className="font-display font-bold">Você quer comprar {pending} cartas ou rebater?</p>
-            <p className="mt-1 text-sm text-cyan">Revidar → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong>
+            <p className="font-display font-bold">{language==="en"?`Draw ${pending} cards or counter?`:`Você quer comprar ${pending} cartas ou rebater?`}</p>
+            <p className="mt-1 text-sm text-warning">{language==="en"
+              ?`Automatic draw in ${debtRemaining}s if you do not counter.`
+              :`Compra automática em ${debtRemaining}s se você não revidar.`}</p>
+            {hand.some(counterCard)&&<p className="mt-1 text-sm text-cyan">Revidar → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong>
               {!game.pending_uncounterable && hand.some(c=>cardValue(c)==="T") && game.turn_order.length>2 && <> · +2 Volta → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)-game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong></>}
-            </p>
+            </p>}
             <div className="mt-3 flex flex-wrap justify-center gap-2">
-              <Button variant="glass" className="rounded-xl" onClick={actions.accept} disabled={busy}>Comprar {pending} e passar</Button>
+              <Button variant="glass" className="rounded-xl" onClick={actions.accept} disabled={busy}>{language==="en"?`Draw ${pending} and pass`:`Comprar ${pending} e passar`}</Button>
               {hasNegation&&<Button variant="hero" className="rounded-xl" disabled={busy} onClick={()=>setPendingNegation(true)}>Usar Negação</Button>}
             </div>
           </div>
@@ -327,12 +332,6 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             {hasNegation&&<Button variant="glass" className="ml-2 h-9 rounded-lg" disabled={busy} onClick={()=>setPendingNegation(true)}>Negar efeito</Button>}
           </div>
         )}
-        {myTurn&&!forcedByBeer&&pending>0&&hasNegation&&played.length===0&&
-          !hand.some(counterCard)&&(
-            <Button variant="hero" className="relative z-20 rounded-xl" onClick={()=>setPendingNegation(true)} disabled={busy}>
-              Anular +{pending} com Negação
-            </Button>
-          )}
         <div className="uno-stack relative z-10 flex items-center gap-4 sm:gap-8">
           <button
             type="button"

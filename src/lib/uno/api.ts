@@ -87,6 +87,7 @@ export type GameState = {
   last_draw: { card: string; nonce: number; at: string } | null;
   turn_cards: string[];
   pending_draw: number;
+  pending_draw_deadline?: string | null;
   can_catch_uno: boolean;
   nine: {source: string; count: number; eligible: string[]; pressed: string[]; deadline: string} | null;
 };
