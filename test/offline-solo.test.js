@@ -34,6 +34,8 @@ test("solo offline reuses shared full engine and survives browser reload",async(
     assert.equal(state.room.local_only,true);
     assert.equal(state.members.length,3);
     assert.equal(state.members.filter(p=>p.bot).length,2);
+    assert.equal(state.members.filter(p=>p.bot&&p.difficulty==="easy").length,0);
+    assert.equal(state.members.filter(p=>p.bot&&p.difficulty==="hard").length,2);
     assert.ok(state.game.my_hand.length>0);
     assert.ok(storage.has("unopro.offline.solo.v2"));
     const initialHand=[...state.game.my_hand];

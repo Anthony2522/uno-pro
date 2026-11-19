@@ -187,8 +187,8 @@ export function startLocalSolo(nickname:string,options?:OfflineRoomConfig){
   if(active?.source!=="sandbox"&&active?.room?.game?.status==="playing")return active.code;
   const botCount=(options?.maxPlayers??3)-1;
   const explicit=options?.easyBots!==undefined||options?.hardBots!==undefined;
-  const easyBots=explicit?(options?.easyBots??0):Math.ceil(botCount/2);
-  const hardBots=explicit?(options?.hardBots??0):Math.floor(botCount/2);
+  const easyBots=explicit?(options?.easyBots??0):0;
+  const hardBots=explicit?(options?.hardBots??0):botCount;
   if(!Number.isInteger(botCount)||botCount<1||botCount>19||
     !Number.isInteger(easyBots)||!Number.isInteger(hardBots)||
     easyBots<0||hardBots<0||easyBots+hardBots!==botCount)

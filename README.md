@@ -30,7 +30,7 @@ Nas configurações avançadas, a **quantidade de cartas iniciais** é a primeir
 ## Regras recentes
 
 - 50 segundos de turno, com anúncios que não consomem tempo.
-- 8 cartas iniciais, configuráveis de 2 a 20.
+- 8 cartas iniciais, configuráveis de 2 a 30.
 - Coringa Detetive: revela privadamente as cartas do adversário selecionado por 10 segundos.
 - +2 Volta: inverte a direção e acumula duas compras; com dois jogadores, funciona como um +2 comum.
 - Primeiro colocado sai da disputa e os demais jogam pelo segundo.

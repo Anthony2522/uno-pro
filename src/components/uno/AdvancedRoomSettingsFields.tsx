@@ -42,11 +42,11 @@ export function AdvancedRoomSettingsFields({
   return <div className="space-y-3">
     <label className="block rounded-xl border border-glass-border/60 bg-navy/40 p-3">
       <span className="block text-sm font-semibold">Cartas iniciais por jogador</span>
-      <span className="mb-2 block text-xs text-muted-foreground">{tr("De 2 a 20 cartas; padrão de 8.")}</span>
+      <span className="mb-2 block text-xs text-muted-foreground">{tr("De 2 a 30 cartas; padrão de 8.")}</span>
       <select value={startingCards} onChange={e=>onStartingCardsChange(Number(e.target.value))}
         aria-label="Cartas iniciais por jogador"
         className="h-11 w-full rounded-xl border border-glass-border bg-navy px-3 text-sm text-foreground">
-        {Array.from({length:19},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} {language==="en"?"cards":"cartas"}</option>)}
+        {Array.from({length:29},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} {language==="en"?"cards":"cartas"}</option>)}
       </select>
     </label>
     <p className="text-xs text-muted-foreground">{tr("Por padrão, Cerveja, Barata, Espada e Coringa Metralhadora começam desativados. Você pode ativá-los abaixo; as demais regras e cartas seguem seus padrões atuais.")}</p>

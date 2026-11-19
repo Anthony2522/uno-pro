@@ -21,8 +21,8 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [max, setMax] = useState(6);
-  const [easyBots,setEasyBots] = useState(1);
-  const [hardBots,setHardBots] = useState(1);
+  const [easyBots,setEasyBots] = useState(0);
+  const [hardBots,setHardBots] = useState(2);
   const [winners, setWinners] = useState(2);
   const [startingCards, setStartingCards] = useState(8);
   const [advanced, setAdvanced] = useState(false);
@@ -38,8 +38,8 @@ export function CreateRoomDialog({ open, onOpenChange, offline=false }: { open: 
       setAdvanced(false);
       setStartingCards(8);
       setMax(6);
-      setEasyBots(1);
-      setHardBots(1);
+      setEasyBots(offline?0:1);
+      setHardBots(offline?2:1);
       setWinners(2);
       setCards({...DEFAULT_CARD_SETTINGS});
       setRules({repeat:true,sequence:true,nine:true,cut:true,stack:true});

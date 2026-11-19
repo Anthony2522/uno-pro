@@ -155,7 +155,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const deadline=game.offline_deadline_at ? Math.min(normalDeadline,new Date(game.offline_deadline_at).getTime()) : normalDeadline;
   const remaining=Math.min(50,Math.max(0,Math.ceil((deadline-clock)/1000)));
   const debtRemaining=pending>0&&game.pending_draw_deadline
-    ?Math.max(0,Math.ceil((new Date(game.pending_draw_deadline).getTime()-clock)/1000)):5;
+    ?Math.max(0,Math.ceil((new Date(game.pending_draw_deadline).getTime()-clock)/1000)):remaining;
   const nineRemaining=nine?Math.max(0,Math.ceil((new Date(nine.deadline).getTime()-clock)/1000)):0;
   const nineReady=!!nine&&nine.eligible.includes(me)&&!nine.pressed.includes(me);
   const feed = describeAction(game.last_action, me);

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {store, newDeck, isRoach, roachChainId, makeRoach, CUSTOM_CARD_KEYS, normalizeCardsEnabled, sweep as basicSweep, isSoloHumanBotMatch} from "../server/game.js";
 import {serializeState,hydrateState} from "../server/persistence.js";
-import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
+import {proRpc,proSweep,chooseNineDelay,chooseCutDelay,chooseDrawReplyDelay,chooseBotMoveDelay,chooseBotUnoDelay,BOT_NAMES} from "../server/pro.js";
 import { inferColorGaps,chooseHardPlan } from "../server/hardBotStrategy.js";
 const call=(fn,args)=>proRpc(fn,args);
 function setup(rules) {
@@ -273,8 +273,20 @@ test("probabilidades exatas dos bots no desafio do 9 e no corte",()=>{
   assert.equal(chooseNineDelay("hard",()=>0.74999),2000);
   assert.equal(chooseNineDelay("hard",()=>0.75),5000);
   assert.equal(chooseCutDelay("easy",()=>0),40000);
-  assert.equal(chooseCutDelay("hard",()=>0.09),10000);
-  assert.equal(chooseCutDelay("hard",()=>0.11),25000);
+  assert.equal(chooseCutDelay("hard",()=>0),3000);
+  assert.equal(chooseCutDelay("hard",()=>0.1999),3000);
+  assert.equal(chooseCutDelay("hard",()=>0.20),10000);
+  assert.equal(chooseCutDelay("hard",()=>0.3999),10000);
+  assert.equal(chooseCutDelay("hard",()=>0.40),20000);
+  assert.equal(chooseCutDelay("hard",()=>0.7999),20000);
+  assert.equal(chooseCutDelay("hard",()=>0.80),null);
+  assert.equal(chooseCutDelay("hard",()=>0.999),null);
+  assert.equal(chooseCutDelay("easy",()=>.999),40000);
+  assert.equal(chooseDrawReplyDelay(false,()=>0),4000);
+  assert.equal(chooseDrawReplyDelay(false,()=>0.5),5000);
+  assert.equal(chooseDrawReplyDelay(false,()=>1),6000);
+  assert.equal(chooseDrawReplyDelay(true,()=>0),50000);
+  assert.equal(chooseDrawReplyDelay(true,()=>1),50000);
 });
 
 test("bot só responde ao 9 depois do seu tempo sorteado",()=>{
@@ -301,6 +313,8 @@ test("corte de bot respeita o tempo agendado e registra quem foi cortado",()=>{
   room.hands.get(s.bot).cards=["b1","r0","g2"];
   s.play(a,"b1");
   assert.equal(g.bot_cut.top,"b1");
+  // A hard bot may legitimately skip the cut (20%); force a due here to test execution.
+  g.bot_cut.due[s.bot] ??= Date.now()+3000;
   assert.equal(g.bot_cut.due[s.bot]>Date.now(),true);
   g.bot_cut.due[s.bot]=Date.now()+10000;
   proSweep();
@@ -955,7 +969,8 @@ test("offline com compra acumulada aguarda o limite reduzido antes de passar",()
   assert.equal(g.turn_order[g.turn_idx],a.guest_id);
   assert.equal(g.pending_draw,4);
   const before=room.hands.get(a.guest_id).cards.length;
-  g.offline_since=Date.now()-31000;
+  // A player without a response now pays in 4–6s, not after offline grace.
+  g.pending_draw_deadline=Date.now()-1;
   proSweep();
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
   assert.equal(g.pending_draw,0);
@@ -2220,7 +2235,7 @@ test("Cerveja, Barata, Espada e Metralhadora começam desligadas, mas podem ser 
   for(const key of ["C","A","E","M"])assert.equal(room.cards_enabled[key],true,key);
 });
 
-test("cobrança em cinco segundos não revela se o jogador tem como rebater",()=>{
+test("dívida recebe 4–6s sem defesa e 50s com resposta válida",()=>{
   for(const hasCounter of [false,true]){
     const s=setup(),{room,g,a,b}=s;
     s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
@@ -2230,12 +2245,19 @@ test("cobrança em cinco segundos não revela se o jogador tem como rebater",()=
     assert.equal(g.turn_order[g.turn_idx],b.guest_id);
     assert.equal(g.pending_draw,4);
     const before=room.hands.get(b.guest_id).cards.length;
-    assert.ok(g.pending_draw_deadline>Date.now()+4000);
+    const ms=g.pending_draw_deadline-Date.now();
+    assert.ok(hasCounter ? ms>49000&&ms<=50000 : ms>3800&&ms<=6000,
+      `wrong response time: ${ms}ms; counter=${hasCounter}`);
     proSweep();assert.equal(g.pending_draw,4);
     assert.equal(room.hands.get(b.guest_id).cards.length,before);
     const view=call("get_room_state",{p_token:a.token,p_code:s.code}).game;
     assert.equal(view.pending_draw,4);
-    assert.ok(new Date(view.pending_draw_deadline).getTime()>Date.now());
+    assert.equal(new Date(view.pending_draw_deadline).getTime(),g.pending_draw_deadline);
+    if(hasCounter){
+      g.pending_draw_deadline=Date.now()+20000;
+      proSweep();assert.equal(g.pending_draw,4,
+        "keeping a counter must not automatically accept the attack early");
+    }
     expireDebt(g);
     assert.equal(room.hands.get(b.guest_id).cards.length,before+4);
     assert.equal(g.pending_draw,0);
@@ -2275,4 +2297,52 @@ test("+5 e regra sem empilhamento impedem resposta de +2 Volta ou +4",()=>{
     expireDebt(g);
     assert.equal(room.hands.get(b.guest_id).cards.length,before+expected);
   }
+});
+
+test("Negação também preserva 50 segundos para reagir contra dívida",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W5","r1"];
+  room.hands.get(b.guest_id).cards=["N","b1"];
+  s.play(a,"W5","g");s.end(a);
+  assert.equal(g.pending_draw,5);
+  assert.ok(g.pending_draw_deadline-Date.now()>49000);
+  const before=room.hands.get(b.guest_id).cards.length;
+  g.pending_draw_deadline=Date.now()+10000;proSweep();
+  assert.equal(room.hands.get(b.guest_id).cards.length,before);
+  call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"r"});
+  assert.equal(g.pending_draw,0);
+  assert.equal(g.pending_draw_deadline,null);
+  assert.equal(room.hands.get(b.guest_id).cards.length,before-1);
+});
+
+test("+5 só abre o turno completo se houver +5 ou Negação que possa defendê-lo",()=>{
+  for(const [cards,long] of [
+    [["W4","yT"],false],[["W5","r3"],true],[["N","r3"],true]
+  ]){
+    const s=setup(),{room,g,a,b}=s;
+    s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+    room.hands.get(a.guest_id).cards=["W5","r1"];
+    room.hands.get(b.guest_id).cards=cards;
+    s.play(a,"W5","r");s.end(a);
+    const delay=g.pending_draw_deadline-Date.now();
+    assert.ok(long ? delay>49000 : delay>=3800&&delay<=6000,JSON.stringify({cards,delay}));
+  }
+});
+
+test("30 cartas iniciais aceitas em criação e edição; 31 rejeitadas",()=>{
+  const owner=call("register_guest",{p_nickname:"Trinta"});
+  const {code}=call("create_room",{p_token:owner.token,p_name:"30 iniciais",p_max_players:2,p_starting_cards:30});
+  const r=store.roomsByCode.get(code);
+  assert.equal(r.initial_cards,30);
+  const rules={repeat:true,sequence:true,nine:true,cut:true,stack:true};
+  call("update_room_settings",{p_token:owner.token,p_code:code,p_starting_cards:30,p_rules:rules});
+  assert.equal(r.initial_cards,30);
+  assert.throws(()=>call("create_room",{p_token:owner.token,p_name:"31 inválidas",p_max_players:2,p_starting_cards:31}),/INVALID_STARTING_CARDS/);
+  assert.throws(()=>call("update_room_settings",{p_token:owner.token,p_code:code,p_starting_cards:31,p_rules:rules}),/INVALID_STARTING_CARDS/);
+  const guest=call("register_guest",{p_nickname:"Segundo"});
+  call("join_room",{p_token:guest.token,p_code:code});
+  call("start_game",{p_token:owner.token,p_code:code});
+  assert.equal(r.hands.get(owner.guest_id).cards.length,30);
+  assert.equal(r.hands.get(guest.guest_id).cards.length,30);
 });

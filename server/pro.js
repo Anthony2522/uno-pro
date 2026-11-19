@@ -8,7 +8,10 @@ export { BOT_NAMES, BOT_NAMES_EN } from "./botNames.js";
 import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, isRoach, roachChainId, CUSTOM_CARD_KEYS, normalizeCardsEnabled, LIMITS, isSoloHumanBotMatch, sweep as basicSweep, onBump as basicOnBump, RpcError} from "./game.js";
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
 const BEER_DELAY_MS = 3000;
-const DRAW_REPLY_MS = 5000; // A fixed response window independent of the hand.
+// A legal draw defense offers 50 seconds; otherwise sample one 4–6s delay.
+export function chooseDrawReplyDelay(canRespond,random=Math.random){
+  return canRespond?50000:4000+Math.round(Math.max(0,Math.min(1,random()))*2000);
+}
 const VORTEX_CARD_DELAY_MS = 1250;
 const SOLO_RECOVERY_MS = 5 * 60_000;
 export function chooseBotMoveDelay(difficulty) {
@@ -30,7 +33,9 @@ export function chooseNineDelay(difficulty, random=Math.random) {
 }
 export function chooseCutDelay(difficulty, random=Math.random) {
   if(difficulty!=="hard")return 40000;
-  return random()<.10?10000:25000;
+  const roll=random();
+  // 20% three seconds, 20% ten, 40% twenty, 20% skip the cut.
+  return roll<.2?3000:roll<.4?10000:roll<.8?20000:null;
 }
 const weight = c => c==="W5" ? 5 : c==="W4" ? 4 : c?.slice(1)==="D" || c?.slice(1)==="T" ? 2 : 0;
 const value = c => isRoach(c)?"A":wild(c) ? c : c.slice(1);
@@ -73,6 +78,10 @@ function shuffle(a){const b=[...a];for(let k=b.length-1;k>0;k--){const j=crypto.
 // A +5 is always stackable only by another +5. It can also answer +2/+4.
 const canCounter=(g,c)=>g.pending_uncounterable ? reflected(g,c)==="W5" : (isDraw(reflected(g,c))||reflected(g,c)==="W5");
 const counter=(r,id)=>hand(r,id).cards.some(c=>canCounter(r.game,c));
+function canAnswerDebt(r,id){
+  return hasNegation(r,id)||(ready(r).stack &&
+    hand(r,id).cards.some(c=>canCounter(r.game,c)&&allowedDuringRestrictions(r.game,c,id)));
+}
 function planBotCut(r,source) {
   const g=r.game;
   if(!g || g.status!=="playing")return;
@@ -81,7 +90,8 @@ function planBotCut(r,source) {
   if(ready(r).cut)for(const id of g.turn_order) {
     if(id===source || !isBot(id) || !hand(r,id).cards.some(card=>sameCardFace(card,topCard)))continue;
     const difficulty=store.guestsById.get(id)?.difficulty;
-    due[id]=start+chooseCutDelay(difficulty);
+    const delay=chooseCutDelay(difficulty);
+    if(delay!==null)due[id]=start+delay;
   }
   g.bot_cut={top:topCard,source,at:start,due};
 }
@@ -103,13 +113,14 @@ function botCutTick(r) {
     break;
   }
 }
-function nextTurn(g,idx){
+function nextTurn(r,g,idx){
   g.turn_idx=idx;g.turn_cards=[];g.turn_mode=null;g.turn_step=0;g.has_drawn=false;g.drawn_card=null;
   const now=clock();
   g.offline_since=null;
-  g.pending_draw_deadline=g.pending_draw>0?now+DRAW_REPLY_MS:null;
-  // Do not consume the 50-second turn clock during queued 5-second notifications.
-  g.turn_started_at=Math.max(now,g.visual_until||now);
+  // Debt starts immediately, instead of adding animation delay to the turn.
+  g.turn_started_at=g.pending_draw>0?now:Math.max(now,g.visual_until||now);
+  g.pending_draw_deadline=g.pending_draw>0
+    ?now+chooseDrawReplyDelay(canAnswerDebt(r,current(g))):null;
   g.bot_move=null; // The next bot turn draws its delay exactly once.
   g.turn_sword_bonus=0;
   g.beer_due=(g.beer_remaining||[]).includes(current(g)) ? now+BEER_DELAY_MS : null;
@@ -380,19 +391,19 @@ function continueSkips(r,actor,remaining,cursor,declined=[]){
     if(g.turn_order[idx]===actor)continue;
     const target=g.turn_order[idx];
     if(consumeShield(r,target,"skip")){
-      nextTurn(g,idx);
+      nextTurn(r,g,idx);
       g.skip_carry=remaining>1?{source:actor,remaining:remaining-1}:null;
       g.seq++;bump(r);return;
     }
     if(!seen.has(target)&&hasNegation(r,target)){
-      nextTurn(g,idx);
+      nextTurn(r,g,idx);
       g.skip_reaction={actor,target,cursor:idx,remaining,declined:[...seen],
         deadline:clock()+9000};
       g.seq++;bump(r);return;
     }
     remaining--;
   }
-  nextTurn(g,advance(idx,g.direction,1,n));
+  nextTurn(r,g,advance(idx,g.direction,1,n));
   g.seq++;bump(r);
 }
 function declineSkip(r,id){
@@ -420,7 +431,7 @@ function negateEffect(r,id,color){
     const sr=g.skip_reaction;g.skip_reaction=null;
     // Any unconsumed skips are applied after the defending player's turn.
     g.skip_carry=sr.remaining>1?{source:sr.actor,remaining:sr.remaining-1}:null;
-    nextTurn(g,g.turn_order.indexOf(id));
+    nextTurn(r,g,g.turn_order.indexOf(id));
   }
   if(debt){
     g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;g.pending_draw_deadline=null;clearSwordDebt(g);
@@ -450,7 +461,7 @@ function resolveDebt(r){
   }
   // Older snapshots may lack this field. Never use the hand or online state
   // to decide if a debt is paid before the deadline.
-  g.pending_draw_deadline??=clock()+DRAW_REPLY_MS;
+  g.pending_draw_deadline??=clock()+chooseDrawReplyDelay(canAnswerDebt(r,actor));
   if(clock()<g.pending_draw_deadline)return;
   const n=g.pending_draw,attacker=g.pending_source||actor;
   observePublic(r,actor,{kind:"forced_draw",color:g.current_color,n});
@@ -460,7 +471,7 @@ function resolveDebt(r){
   completePowerlessTurn(g,actor);
   g.last_action={type:"stack_take",by:actor,name:name(actor),n};
   effect(r,"penalty",attacker,null,null,{target:actor,target_name:name(actor),n});
-  g.seq++;nextTurn(g,advance(g.turn_idx,g.direction,1,g.turn_order.length));bump(r);
+  g.seq++;nextTurn(r,g,advance(g.turn_idx,g.direction,1,g.turn_order.length));bump(r);
 }
 function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fail("NINE_ACTIVE");
   if(g.vortex_queue)fail("VORTEX_RESOLVING");
@@ -482,7 +493,7 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
     else {if(!g.has_drawn)draw(r,actor,1);
       observePublic(r,actor,{kind:"pass",color:g.turn_start_color??g.current_color});
       g.last_action={type:automatic?"auto":"pass",by:actor,name:name(actor)};}
-    nextTurn(g,advance(g.turn_idx,g.direction,1,n));g.seq++;bump(r);return;
+    nextTurn(r,g,advance(g.turn_idx,g.direction,1,n));g.seq++;bump(r);return;
   }
   const inherited=g.skip_carry;
   let dir=g.direction,skips=0,added=0,hasFive=false;
@@ -534,7 +545,7 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
   if(skips&&cards.some(c=>value(c)==="S")){
     continueSkips(r,actor,skips,g.turn_idx);
   }else{
-    nextTurn(g,nextIndex);
+    nextTurn(r,g,nextIndex);
   }
   if(trailingNines && ready(r).nine && n>=3){const eligible=g.turn_order.filter(id=>id!==actor),start=clock();
     const botTimes={};
@@ -567,7 +578,7 @@ function play(r,id,card,color,targetId,options={}){
     if(debt && (!rules.stack || !canCounter(g,card)))fail("CUT_NOT_ALLOWED");
     if(series.length)finish(r,false,true);
     if(g.status!=="playing"||g.nine||(g.pending_draw && (!rules.stack || !canCounter(g,card))))fail("CUT_NOT_ALLOWED");
-    nextTurn(g,g.turn_order.indexOf(id));series=[];
+    nextTurn(r,g,g.turn_order.indexOf(id));series=[];
   }
   if(g.pending_draw && !series.length && (!rules.stack || !canCounter(g,card)))fail("MUST_COUNTER_OR_DRAW");
   if(!allowedDuringRestrictions(g,card,id))fail((g.lock_remaining||[]).includes(id)&&current(g)===id?"LOCK_COLOR_ONLY":"POWERLESS_NUMBER_ONLY");
@@ -784,7 +795,7 @@ function beerTick(r){
   if(g.beer_due===null||g.beer_due===undefined)g.beer_due=clock()+BEER_DELAY_MS;
   if(clock()<g.beer_due)return true; // All viewers see three seconds before the forced move.
   if(g.pending_draw){
-    g.pending_draw_deadline??=clock()+DRAW_REPLY_MS;
+    g.pending_draw_deadline??=clock()+chooseDrawReplyDelay(canAnswerDebt(r,current(g)));
     if(clock()<g.pending_draw_deadline)return true;
   }
   const actor=current(g),h=hand(r,actor);
@@ -937,7 +948,7 @@ function removeForTimeout(r,id){
     g.nine=null;g.pending_draw=0;g.pending_draw_deadline=null;clearSwordDebt(g);
   }else{
     const target=nextId===id?g.turn_order[0]:nextId;
-    nextTurn(g,Math.max(0,g.turn_order.indexOf(target)));
+    nextTurn(r,g,Math.max(0,g.turn_order.indexOf(target)));
     finishWhenOnlyBots(r);
   }
   g.last_action={type:"abandon",by:id,name:name(id),reason:"two_timeouts"};
@@ -1160,7 +1171,7 @@ export function proRpc(fn,args={}){
   }
   if(fn==="create_room"){
     const count=args.p_starting_cards===undefined?8:args.p_starting_cards;
-    if(!Number.isInteger(count)||count<2||count>20)fail("INVALID_STARTING_CARDS");
+    if(!Number.isInteger(count)||count<2||count>30)fail("INVALID_STARTING_CARDS");
     validateCardSettings(args.p_cards_enabled);
     const result=originalRpc(fn,args),r=find(result.code);
     r.rules=stateRules(args.p_rules);r.cards_enabled=normalizeCardsEnabled(args.p_cards_enabled);r.initial_cards=count;
@@ -1182,7 +1193,7 @@ export function proRpc(fn,args={}){
     if(r.host_id!==me.id)fail("NOT_HOST",403);
     if(r.status!=="waiting" || r.game?.status==="playing")fail("GAME_STARTED",409);
     const count=args.p_starting_cards;
-    if(!Number.isInteger(count)||count<2||count>20)fail("INVALID_STARTING_CARDS");
+    if(!Number.isInteger(count)||count<2||count>30)fail("INVALID_STARTING_CARDS");
     if(!args.p_rules||Object.keys(DEFAULT_RULES).some(k=>typeof args.p_rules[k]!=="boolean"))
       fail("INVALID_RULE_SETTINGS");
     validateCardSettings(args.p_cards_enabled);
