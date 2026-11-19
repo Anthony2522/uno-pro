@@ -22,6 +22,12 @@ function setup(rules) {
   const end=player=>{clearNotice();return call("end_turn",{p_token:player.token,p_code:code});};
   return {a,b,bot,code,room,g,setTurn,play,end,clearNotice};
 }
+// Advance a debt response window without sleeping in tests.
+function expireDebt(g){
+  assert.ok(g.pending_draw>0,"expected pending debt");
+  g.pending_draw_deadline=Date.now()-1;
+  proSweep();
+}
 test("criação, bots, privacidade e regras ativadas por padrão",()=>{
   const s=setup();
   const alice=call("get_room_state",{p_token:s.a.token,p_code:s.code});
@@ -60,7 +66,8 @@ test("rebater compra acumula e pessoa sem defesa compra automaticamente",()=>{
   room.hands.get(a.guest_id).cards=["bD","r1"];room.hands.get(b.guest_id).cards=["yD","g4"];
   room.hands.get(s.bot).cards=["r0","y8","b7"];
   s.play(a,"bD");s.end(a);assert.equal(g.pending_draw,2);
-  s.play(b,"yD");s.end(b);assert.equal(g.pending_draw,0);
+  s.play(b,"yD");s.end(b);assert.equal(g.pending_draw,4);
+  expireDebt(g);assert.equal(g.pending_draw,0);
   assert.equal(room.hands.get(s.bot).cards.length,7);
 });
 test("desafio do 9 com três jogadores penaliza último que apertou",()=>{
@@ -170,6 +177,8 @@ test("durante o contra-ataque de +4 não cobra o jogador antes de Terminar vez",
   assert.equal(g.turn_order[g.turn_idx],b.guest_id);
   assert.equal(g.pending_draw,4);
   s.end(b);
+  assert.equal(g.pending_draw,8);
+  expireDebt(g);
   assert.equal(g.pending_draw,0);
   assert.equal(room.hands.get(s.bot).cards.length,15);
 });
@@ -216,6 +225,8 @@ test("coringa +5 não pode ser rebatido com +4 nem +2",()=>{
   room.hands.get(b.guest_id).cards=["W4","yD","b1"];
   const before=room.hands.get(b.guest_id).cards.length;
   s.play(a,"W5","r");s.end(a);
+  assert.equal(room.hands.get(b.guest_id).cards.length,before);
+  expireDebt(g);
   assert.equal(room.hands.get(b.guest_id).cards.length,before+5);
   assert.equal(g.pending_draw,0);
   assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
@@ -247,6 +258,7 @@ test("timeout após rebater +4 finaliza a jogada sem cobrar o próprio jogador",
   proSweep();
   assert.equal(room.hands.get(b.guest_id).cards.length,countBefore);
   assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
+  expireDebt(g);
   assert.equal(room.hands.get(s.bot).cards.length,15);
 });
 
@@ -317,6 +329,7 @@ test("bloqueio avisa a vítima e penalidade informa quem comprou e quantas carta
   room.hands.get(a.guest_id).cards=["bD","r3","y6"];
   room.hands.get(b.guest_id).cards=["g1","r2","y3"];
   s.play(a,"bD");s.end(a);
+  expireDebt(g);
   const debt=g.effects.findLast(e=>e.type==="penalty");
   assert.equal(debt.target,b.guest_id);
   assert.equal(debt.target_name,"Bruno");
@@ -345,6 +358,7 @@ test("coringa +5 pode rebater +2/+4 e somente outro +5 pode rebater +5",()=>{
   g.bot_move.due=Date.now()-1;
   proSweep();
   assert.equal(room.hands.get(s.bot).cards.length<first,true);
+  expireDebt(g);
   assert.equal(g.pending_draw,0,"a dívida de 12 cartas é paga automaticamente pelo próximo jogador sem +5");
   assert.equal(room.hands.get(a.guest_id).cards.length,13);
 });
@@ -360,6 +374,7 @@ test("corte de W5 em batalha W5 só permite W5 idêntico",()=>{
   s.play(b,"W5","b");
   assert.equal(g.pending_draw,5,"a penalidade da primeira carta ainda não foi liquidada");
   s.end(b);
+  expireDebt(g);
   assert.equal(g.pending_draw,0,"se não houver um terceiro +5, o próximo compra 10 cartas");
 });
 
@@ -546,6 +561,7 @@ test("duas cartas +2 Volta: acumulam, invertem, voltam ao atacante",()=>{
   r.hands.get(a.guest_id).cards=["yD","r1"];
   call("play_card",{p_token:a.token,p_code:code,p_card:"yD"});
   call("end_turn",{p_token:a.token,p_code:code});
+  expireDebt(g);
   assert.equal(g.pending_draw,0);
   assert.equal(r.hands.get(b.guest_id).cards.length,8);
 });
@@ -604,6 +620,7 @@ test("penalidade após +2 Volta informa quem atacou, vítima e quantidade",()=>{
   room.hands.get(a.guest_id).cards=["bT","r2"];
   room.hands.get(s.bot).cards=["r1","y6","g8"];
   s.play(a,"bT");s.end(a);
+  expireDebt(g);
   const debt=g.effects.findLast(e=>e.type==="penalty");
   assert.equal(debt.by,a.guest_id);
   assert.equal(debt.target,s.bot);
@@ -660,6 +677,7 @@ test("+2 Volta em duas pessoas atua como +2, sem a inversão especial",()=>{
   call("play_card",{p_token:a.token,p_code:code,p_card:"bT"});
   call("end_turn",{p_token:a.token,p_code:code});
   assert.equal(g.direction,1);
+  expireDebt(g);
   assert.equal(r.hands.get(b.guest_id).cards.length,4);
   assert.equal(g.pending_draw,0);
 });
@@ -673,6 +691,7 @@ test("+4 pode receber rebatida de +2 Volta de outra cor; devolve a dívida",()=>
   assert.equal(g.pending_draw,4);
   s.play(b,"yT");s.end(b);
   assert.equal(g.direction,-1);
+  expireDebt(g);
   assert.equal(g.pending_draw,0);
   assert.equal(room.hands.get(a.guest_id).cards.length,7);
 });
@@ -1634,6 +1653,7 @@ test("Coringa +4 colocado sem cor aplica dívida apenas após resolver a cor",()
   assert.equal(g.pending_draw,0);
   call("resolve_wild_color",{p_token:a.token,p_code:s.code,p_color:"r"});
   s.end(a);
+  expireDebt(g);
   assert.equal(g.pending_draw,0,"a dívida foi aplicada e comprada automaticamente pelo próximo jogador sem contra-ataque");
   assert.ok(room.hands.get(b.guest_id).cards.length>=6);
 });
@@ -1664,7 +1684,7 @@ test("Cerveja respeita Escudo antes de sortear a carta da vez",()=>{
   room.hands.get(s.bot).cards=["g1","y2"];
   s.play(a,"bC");s.end(a);
   g.pending_draw=2;g.pending_source=a.guest_id;g.shields[b.guest_id]=1;
-  g.beer_due=Date.now()-1;proSweep();
+  g.beer_due=Date.now()-1;g.pending_draw_deadline=Date.now()-1;proSweep();
   assert.equal(g.shields[b.guest_id],undefined,"o escudo foi consumido");
   assert.equal(g.pending_draw,0,"dívida cancelada antes da escolha da Cerveja");
   assert.equal(g.discard_pile.at(-1),"b5");
@@ -1748,6 +1768,7 @@ test("Espada somada ao come continua na dívida após revides",()=>{
   s.play(a,"bD");s.end(a);
   assert.equal(g.pending_draw,5);
   s.play(b,"W4","r");s.end(b);
+  expireDebt(g);
   assert.equal(g.pending_draw,0,"bot sem counter compra depois do revide");
   assert.equal(room.hands.get(bot).cards.length,11,"bot comprou 2 + 3 + 4");
   assert.ok(g.effects.some(e=>e.type==="sword_strike"&&e.target===bot));
@@ -2197,4 +2218,61 @@ test("Cerveja, Barata, Espada e Metralhadora começam desligadas, mas podem ser 
     p_starting_cards:8,p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},
     p_cards_enabled:full});
   for(const key of ["C","A","E","M"])assert.equal(room.cards_enabled[key],true,key);
+});
+
+test("cobrança em cinco segundos não revela se o jogador tem como rebater",()=>{
+  for(const hasCounter of [false,true]){
+    const s=setup(),{room,g,a,b}=s;
+    s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+    room.hands.get(a.guest_id).cards=["W4","r1"];
+    room.hands.get(b.guest_id).cards=hasCounter?["yT","b8"]:["y8","b8"];
+    s.play(a,"W4","r");s.end(a);
+    assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+    assert.equal(g.pending_draw,4);
+    const before=room.hands.get(b.guest_id).cards.length;
+    assert.ok(g.pending_draw_deadline>Date.now()+4000);
+    proSweep();assert.equal(g.pending_draw,4);
+    assert.equal(room.hands.get(b.guest_id).cards.length,before);
+    const view=call("get_room_state",{p_token:a.token,p_code:s.code}).game;
+    assert.equal(view.pending_draw,4);
+    assert.ok(new Date(view.pending_draw_deadline).getTime()>Date.now());
+    expireDebt(g);
+    assert.equal(room.hands.get(b.guest_id).cards.length,before+4);
+    assert.equal(g.pending_draw,0);
+  }
+});
+test("+2 Volta rebate +4 e devolve seis cartas ao atacante",()=>{
+  const s=setup(),{room,g,a,b}=s;
+  s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","r1"];
+  room.hands.get(b.guest_id).cards=["yT","b8"];
+  room.hands.get(s.bot).cards=["g7","r1"];
+  s.play(a,"W4","g");s.end(a);
+  assert.equal(g.pending_draw,4);
+  s.play(b,"yT");s.end(b);
+  assert.equal(g.direction,-1);
+  assert.equal(g.pending_draw,6);
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  const before=room.hands.get(a.guest_id).cards.length;
+  proSweep();assert.equal(room.hands.get(a.guest_id).cards.length,before);
+  expireDebt(g);
+  assert.equal(room.hands.get(a.guest_id).cards.length,before+6);
+});
+test("+5 e regra sem empilhamento impedem resposta de +2 Volta ou +4",()=>{
+  for(const [card,rules,expected] of [
+    ["W5",{stack:true},5],["W4",{stack:false},4]
+  ]){
+    const s=setup(rules),{room,g,a,b}=s;
+    s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+    room.hands.get(a.guest_id).cards=[card,"r1"];
+    room.hands.get(b.guest_id).cards=["yT","W4","g7"];
+    s.play(a,card,"r");s.end(a);
+    assert.equal(g.pending_draw,expected);
+    assert.throws(()=>s.play(b,"yT"),/MUST_COUNTER_OR_DRAW/);
+    if(card==="W5")assert.throws(()=>s.play(b,"W4","g"),/MUST_COUNTER_OR_DRAW/);
+    const before=room.hands.get(b.guest_id).cards.length;
+    proSweep();assert.equal(room.hands.get(b.guest_id).cards.length,before);
+    expireDebt(g);
+    assert.equal(room.hands.get(b.guest_id).cards.length,before+expected);
+  }
 });
