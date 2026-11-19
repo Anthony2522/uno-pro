@@ -61,3 +61,14 @@ test("sandbox oferece trocas de mão, carta numérica única, especiais colorida
   assert.ok(selector.includes('["W4","+4"]'));
   assert.ok(selector.includes('["A","Barata"]'));
 });
+
+test("padrão offline e limite de 30 cartas permanecem sincronizados no formulário",()=>{
+  const create=read("src/components/uno/CreateRoomDialog.tsx");
+  const advanced=read("src/components/uno/AdvancedRoomSettingsFields.tsx");
+  const i18n=read("src/lib/uno/i18n.tsx");
+  assert.match(create,/setEasyBots\(offline\?0:1\)/);
+  assert.match(create,/setHardBots\(offline\?2:1\)/);
+  assert.match(advanced,/Array\.from\(\{length:29\},\(_,i\)=>i\+2\)/);
+  assert.match(advanced,/De 2 a 30 cartas; padrão de 8\./);
+  assert.match(i18n,/From 2 to 30 cards; default is 8\./);
+});
