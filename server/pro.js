@@ -874,13 +874,19 @@ function botTick(r){
   if(((g.powerless_remaining||[]).includes(id)||(g.lock_remaining||[]).includes(id))&&hasNegation(r,id)){
     negateEffect(r,id,colorForNegation());return;
   }
+  if(g.pending_draw>0&&canAnswerDebt(r,id)&&!g.turn_cards.length){
+    // A bot that can defend responds at about two seconds, never instantly.
+    if(!g.bot_move||g.bot_move.id!==id)
+      g.bot_move={id,due:Math.min(clock()+1500,(g.pending_draw_deadline??clock()+2000)-100),played:0};
+    if(clock()<g.bot_move.due)return;
+  }
   if(g.pending_draw>0&&hasNegation(r,id)&&!g.turn_cards.length&&
     (!rules.stack||!counter(r,id)||(!hard&&g.pending_draw>=5))){
     negateEffect(r,id,colorForNegation());return;
   }
   if(g.pending_draw && !rules.stack)return;
   if(!g.bot_move || g.bot_move.id!==id){
-    const delay=g.pending_draw?Math.min(4000,chooseBotMoveDelay(bot.difficulty)):chooseBotMoveDelay(bot.difficulty);
+    const delay=g.pending_draw?1500:chooseBotMoveDelay(bot.difficulty);
     g.bot_move={id,due:clock()+delay,played:0};
   }
   if(g.bot_move.acceptDebt)return;
@@ -1189,19 +1195,32 @@ export function proRpc(fn,args={}){
     return result;
   }
   if(fn==="leave_room"){
-    const {me,r}=guard(args);
-    if(r.game?.status==="playing"&&r.game.turn_order.includes(me.id)){
-      // Leaving the page detaches the UI, not the player's seat. In multiplayer,
-      // normal consecutive turn timeouts still enforce removal.
-      if(isSoloHumanBotMatch(r)){
-        r.game.solo_force_pause=true;
-        r.game.solo_paused_at??=clock();
-        r.game.solo_recovery_until??=clock()+SOLO_RECOVERY_MS;
-      }
-      bump(r,true);
-      return {ok:true,rejoinable:true};
+    const {me,r}=guard(args),g=r.game;
+    const wasCurrent=g?.status==="playing"&&g.turn_order.includes(me.id)&&current(g)===me.id;
+    if(wasCurrent){
+      // Leaving must not transfer a pending debt or unfinished combo.
+      g.pending_draw=0;g.pending_uncounterable=false;g.pending_source=null;
+      g.pending_draw_deadline=null;clearSwordDebt(g);
+      g.turn_cards=[];g.turn_mode=null;g.skip_carry=null;
+      if(g.vortex_queue?.actor===me.id)g.vortex_queue=null;
+      if(g.wild_pending_color===me.id)g.wild_pending_color=null;
+      if(g.detective_pending_color===me.id)g.detective_pending_color=null;
     }
-    return originalRpc(fn,args);
+    if(g?.skip_reaction?.target===me.id)g.skip_reaction=null;
+    if(g?.nine){
+      g.nine.eligible=g.nine.eligible.filter(id=>id!==me.id);
+      g.nine.pressed=g.nine.pressed.filter(id=>id!==me.id);
+      if(g.nine.botTimes)delete g.nine.botTimes[me.id];
+    }
+    const result=originalRpc(fn,args); // Actually remove the member and seat.
+    if(store.rooms.has(r.id)&&g?.status==="playing"){
+      if(g.bot_cut?.due)delete g.bot_cut.due[me.id];
+      if(wasCurrent&&!g.round_ends_at&&g.turn_order.length>=2)
+        nextTurn(r,g,g.turn_idx);
+      finishWhenOnlyBots(r);
+      bump(r,true);
+    }
+    return {...result,left:true};
   }
   if(fn==="create_room"){
     const count=args.p_starting_cards===undefined?8:args.p_starting_cards;
