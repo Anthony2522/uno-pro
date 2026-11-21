@@ -84,7 +84,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
       (game.pending_uncounterable?e==="W5":e==="W4"||e==="W5"||cardValue(e)==="D"||cardValue(e)==="T");
     if(!validKind)return false;
     if(game.powerless_remaining?.includes(me))return false;
-    if(game.lock_remaining?.includes(me)&&game.lock_color &&
+    // Lock applies on the player’s own turn, not to earlier jump-in chances.
+    if(myTurn&&game.lock_remaining?.includes(me)&&game.lock_color &&
        (isWild(c)||c[0]!==game.lock_color))return false;
     return game.legal_draw_counters===undefined||!myTurn||!pending||
       game.legal_draw_counters.includes(c);

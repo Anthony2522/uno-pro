@@ -96,6 +96,7 @@ test("resposta de compra respeita filtro privado do servidor e avisa a cor do Ca
   const server=read("server/pro.js");
   const dict=read("src/lib/uno/i18n.tsx");
   assert.match(source,/game\.legal_draw_counters\.includes\(c\)/);
+  assert.match(source,/myTurn&&game\.lock_remaining\?\.includes\(me\)/);
   assert.match(source,/game\.can_answer_draw===false/);
   assert.match(source,/Cadeado: só pode revidar com \+2 ou \+2 Volta/);
   assert.match(source,/Lock: counter only with/);
