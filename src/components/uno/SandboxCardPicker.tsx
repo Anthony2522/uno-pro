@@ -11,7 +11,7 @@ const COLORED=[
   ["V","Vórtice"],["C","Cerveja"],["A","Barata"],
 ] as const;
 const WILDS=[
-  ["W","Coringa"],["W4","+4"],["W5","+5"],["X","Detetive"],
+  ["W","Coringa"],["W4","+4"],["W5","+5"],["WD","Dobro"],["X","Detetive"],
   ["B","Bomba"],["N","Negação"],["P","Sem Poderes"],["M","Metralhadora"],["Q","Espelho"],
 ] as const;
 
@@ -22,7 +22,7 @@ export function SandboxCardPicker({disabled,onGrant}:{disabled:boolean;onGrant:(
     className="h-auto min-h-14 justify-start gap-2 rounded-xl px-2 py-2 text-left"
     disabled={disabled} onClick={()=>onGrant(kind)}>
     <StableCardPreview card={kind==="A"?"bA@00000000-0000-4000-8000-000000000001":
-      ["W","W4","W5","X","B","N","P","M","Q"].includes(kind)?kind:"b"+kind} width={32}/>
+      ["W","W4","W5","WD","X","B","N","P","M","Q"].includes(kind)?kind:"b"+kind} width={32}/>
     <span className="min-w-0 flex-1 text-xs font-bold">{tr([...COLORED,...WILDS].find(([k])=>k===kind)?.[1]??kind)}</span>
     <Plus className="size-3.5 shrink-0"/>
   </Button>;

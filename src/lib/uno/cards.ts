@@ -16,7 +16,7 @@ export function sameCardFace(a:string,b:string):boolean {
 }
 
 export function isWild(card: string): boolean {
-  return card === "W" || card === "W4" || card === "W5" || card === "X" || card === "B" || card === "N" || card === "P" || card === "M" || card === "Q";
+  return card === "W" || card === "W4" || card === "W5" || card === "WD" || card === "X" || card === "B" || card === "N" || card === "P" || card === "M" || card === "Q";
 }
 
 export function cardColor(card: string): CardColor | null {
@@ -40,6 +40,7 @@ export function cardLabel(card: string, mirrorAs?:string|null): string {
   if (card === "W") return "Coringa";
   if (card === "W4") return "Coringa +4";
   if (card === "W5") return "Coringa +5";
+  if (card === "WD") return "Coringa Dobro";
   if (card === "X") return "Coringa Detetive";
   if (card === "B") return "Coringa Bomba";
   if (card === "N") return "Coringa Negação";
@@ -71,6 +72,7 @@ export function sortHand(cards: string[]): string[] {
     if (c === "W") return 400;
     if (c === "W4") return 401;
     if (c === "W5") return 402;
+    if (c === "WD") return 402.5;
     if (c === "X") return 403;
     if (c === "B") return 404;
     if (c === "N") return 405;

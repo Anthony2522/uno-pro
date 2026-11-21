@@ -72,8 +72,11 @@ export const RULES:ManualEntry[]=[
     descPt:"Escolhe uma cor e adiciona quatro cartas à dívida. Pode ser rebatido com outra compra permitida.",
     descEn:"Chooses a color and adds four cards to the draw debt. It can be countered by another allowed draw card."},
   {key:"W5",group:"wild",pt:"Coringa +5",en:"Wild +5",card:"W5",
-    descPt:"Escolhe uma cor e adiciona cinco cartas à dívida. Só pode ser rebatido com outro +5.",
-    descEn:"Chooses a color and adds five cards to the debt. Only another +5 may counter it."},
+    descPt:"Escolhe uma cor e adiciona cinco cartas à dívida. Só pode ser rebatido com outro +5 ou Coringa Dobro.",
+    descEn:"Chooses a color and adds five cards to the debt. Only another +5 or Double Wild may counter it."},
+  {key:"WD",group:"wild",pt:"Coringa Dobro",en:"Double Wild",card:"WD",
+    descPt:"Uma carta por partida, habilitada por padrão. Pode rebater qualquer dívida de compra, inclusive +5: dobra o total acumulado e passa imediatamente após escolher a cor. Sem dívida, funciona como coringa comum.",
+    descEn:"One card per match, enabled by default. Counters any draw debt including +5, doubles the current total and automatically passes after a color is chosen. Without a debt, acts as a regular wild."},
   {key:"X",group:"wild",pt:"Coringa Detetive",en:"Detective Wild",card:"X",
     descPt:"Escolhe um adversário, vê sua mão por até dez segundos e depois seleciona uma cor. Você pode encerrar a inspeção antes.",
     descEn:"Choose an opponent, inspect their hand for up to ten seconds, then pick a color. You may end inspection early."},
@@ -93,7 +96,7 @@ export const RULES:ManualEntry[]=[
     descPt:"Copia a arte e os poderes do último coringa real jogado por qualquer pessoa, inclusive você. Sua borda branca e o brilho reflexivo permanecem. Antes do primeiro coringa, tem a aparência própria de Espelho e age como Coringa comum.",
     descEn:"Copies the last real wild card's artwork and effect, even if you played it yourself. Its reflective sheen and white glowing edge remain. Before the first wild, it shows its own Mirror design and acts as a regular Wild."}
 ];
-const MINI_ORDER=["W4","W5","X","B","N","P","M","Q","W","H","E","L","V","C","A","T","D","S","R"];
+const MINI_ORDER=["W4","W5","WD","X","B","N","P","M","Q","W","H","E","L","V","C","A","T","D","S","R"];
 export function rulesForHand(cards:readonly string[]){
   const values=new Set(cards.map(cardValue));
   return MINI_ORDER.filter(key=>values.has(key)).map(key=>RULES.find(r=>r.key===key)!).filter(Boolean);

@@ -81,7 +81,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const counterCard=(c:string)=>{
     const e=effectiveCard(c);
     const validKind=state.room.rules.stack &&
-      (game.pending_uncounterable?e==="W5":e==="W4"||e==="W5"||cardValue(e)==="D"||cardValue(e)==="T");
+      (e==="WD"||(game.pending_uncounterable?e==="W5":e==="W4"||e==="W5"||cardValue(e)==="D"||cardValue(e)==="T"));
     if(!validKind)return false;
     if(game.powerless_remaining?.includes(me))return false;
     // Lock applies on the player’s own turn, not to earlier jump-in chances.
@@ -321,8 +321,8 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
               <LockKeyhole className="size-4 shrink-0"/>
               {game.pending_uncounterable
                 ?(language==="en"
-                  ?`Lock (${lockReplyColor}): +5 requires another +5, but draw wilds are blocked. Use Negation if available.`
-                  :`Cadeado (${lockReplyColor}): +5 exige outro +5, mas coringas de compra estão proibidos. Use Negação, se tiver.`)
+                  ?`Lock (${lockReplyColor}): +5 requires another +5 or Double Wild, but all wilds are blocked. Use Negation if available.`
+                  :`Cadeado (${lockReplyColor}): +5 exige outro +5 ou Coringa Dobro, mas coringas estão proibidos. Use Negação, se tiver.`)
                 :(language==="en"
                   ?`Lock: counter only with ${lockReplyColor} +2 / +2 Reverse. No draw wilds.`
                   :`Cadeado: só pode revidar com +2 ou +2 Volta ${lockReplyColor}, sem coringas de compra.`)}
