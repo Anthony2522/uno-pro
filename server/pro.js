@@ -21,7 +21,7 @@ const validateCardSettings=input=>{
   if(input===undefined||input===null)return;
   if(typeof input!=="object"||Array.isArray(input)||
      Object.keys(input).some(k=>!CUSTOM_CARD_KEYS.includes(k))||
-     CUSTOM_CARD_KEYS.some(k=>typeof input[k]!=="boolean"))fail("INVALID_CARD_SETTINGS");
+     Object.values(input).some(value=>typeof value!=="boolean"))fail("INVALID_CARD_SETTINGS");
 };
 const stateRules = input => Object.fromEntries(Object.keys(DEFAULT_RULES).map(k => [k,typeof input?.[k] === "boolean" ? input[k] : true]));
 const fail = (message, status=400) => {throw new RpcError(message,status)};

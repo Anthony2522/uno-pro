@@ -103,10 +103,10 @@ test("passagem automática após um minuto, mesmo com jogador online",()=>{
   assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
 
-test("baralho de 232 cartas inclui as quatro Baratas, Escudo, Negação e Espelho",()=>{
+test("baralho de 233 cartas inclui Baratas, Espelho e um Coringa Dobro",()=>{
   const deck=newDeck(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true])));
-  assert.equal(deck.length,232);
-  for(const c of ["N","P","M","Q"])assert.equal(deck.filter(x=>x===c).length,1);
+  assert.equal(deck.length,233);
+  for(const c of ["N","P","M","Q","WD"])assert.equal(deck.filter(x=>x===c).length,1);
   assert.equal(deck.filter(c=>c==="B").length,1);
   assert.equal(deck.filter(c=>c==="X").length,1);
   for(const col of ["r","y","g","b"])
@@ -2036,15 +2036,16 @@ test("Somente o humano de uma partida contra bots pode exportar o salvamento com
 
 test("seleções de cartas retiram só as inventadas e mantêm o baralho essencial",()=>{
   const allDisabled=Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,false]));
-  assert.deepEqual(CUSTOM_CARD_KEYS,["T","H","E","L","V","C","A","W5","X","B","N","P","M","Q"]);
+  assert.deepEqual(CUSTOM_CARD_KEYS,["T","H","E","L","V","C","A","W5","WD","X","B","N","P","M","Q"]);
   const deck=newDeck(normalizeCardsEnabled(allDisabled));
   assert.equal(deck.length,176,"números, Volta, Bloqueio, +2, Coringa e +4 permanecem");
   assert.ok(["rR","yS","bD","W","W4"].every(card=>deck.includes(card)));
-  assert.ok(deck.every(card=>!isRoach(card)&&!["T","H","E","L","V","C"].includes(card.slice(1))&&!["W5","X","B","N","P","M","Q"].includes(card)));
+  assert.ok(deck.every(card=>!isRoach(card)&&!["T","H","E","L","V","C"].includes(card.slice(1))&&!["W5","WD","X","B","N","P","M","Q"].includes(card)));
   const defaultDeck=newDeck();
-  assert.equal(defaultDeck.length,215,"quatro tipos especiais começam desabilitados");
+  assert.equal(defaultDeck.length,216,"quatro tipos especiais começam desabilitados");
   assert.ok(!defaultDeck.some(c=>isRoach(c)||c==="M"||["C","E"].includes(c.slice(1))));
   assert.equal(defaultDeck.filter(c=>c==="Q").length,1);
+  assert.equal(defaultDeck.filter(c=>c==="WD").length,1);
 });
 test("sala online aplica escolha de cartas na distribuição, compras e revanche",()=>{
   const host=call("register_guest",{p_nickname:"Cartas opcionais"});
@@ -2242,7 +2243,7 @@ test("Cerveja, Barata, Espada e Metralhadora começam desligadas, mas podem ser 
   for(const key of CUSTOM_CARD_KEYS.filter(k=>!["C","A","E","M"].includes(k)))
     assert.equal(defaults[key],true,key);
   const full=normalizeCardsEnabled({C:true,A:true,E:true,M:true});
-  assert.equal(newDeck(full).length,232);
+  assert.equal(newDeck(full).length,233);
   const owner=call("register_guest",{p_nickname:"Padrão cartas"});
   const {code}=call("create_room",{p_token:owner.token,p_name:"Padrões atuais",p_max_players:3});
   const room=store.roomsByCode.get(code);
