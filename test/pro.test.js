@@ -1986,6 +1986,9 @@ test("O servidor reiniciado recupera identidades, Google vinculado e mãos da me
   store.guestsById.get(a.guest_id).google_sub="verified-google-sub";
   g.last_wild="W4";
   room.hands.get(a.guest_id).cards=["Q","r4"];
+  // A random initial deal might also contain Q in another hand, which would
+  // make this serialization check flaky. Keep the fixture deterministic.
+  room.hands.get(b.guest_id).cards=room.hands.get(b.guest_id).cards.filter(c=>c!=="Q");
   const snapshot=JSON.parse(JSON.stringify(serializeState()));
   const guestCount=store.guestsById.size;
   // Simulate new process by clearing the in-memory registries and hydrating.
