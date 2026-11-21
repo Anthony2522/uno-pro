@@ -200,8 +200,8 @@ const GROUPS:{id:Group;pt:string;en:string}[]=[
 ];
 export function HowToPlayDialog({trigger,roomRules,roomCards}:{
   trigger?:ReactNode;
-  roomRules?:RuleSettings;
-  roomCards?:Partial<CardSettings>;
+  roomRules?:RuleSettings|undefined;
+  roomCards?:Partial<CardSettings>|undefined;
 }){
   const {language}=useLanguage(),en=language==="en";
   const entries=roomRules&&roomCards?rulesForRoom(roomRules,roomCards):RULES;
