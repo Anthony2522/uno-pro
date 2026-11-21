@@ -235,7 +235,7 @@ function RoomPage() {
 
   return (
     <div className={playing ? "flex h-dvh min-h-0 flex-col overflow-hidden" : "flex min-h-dvh flex-col"}>
-      <AppHeader>
+      <AppHeader manualRules={state.room.rules} manualCards={state.room.cards_enabled}>
         <div className="mr-1 hidden min-w-0 flex-col items-end text-right md:flex">
           <span className="max-w-[14rem] truncate text-sm font-semibold">{state.room.name}</span>
           <span className="font-display text-xs tracking-widest text-cyan">{state.room.code}{g && playing ? ` · ${language==="en"?"round":"rodada"} ${g.round}` : ""}</span>
