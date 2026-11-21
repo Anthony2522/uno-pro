@@ -160,7 +160,7 @@ function RoomPage() {
   const g = state.game;
   const playing = state.room.status === "playing" && g?.status === "playing";
   const visibleEffects=playing?(g?.effects||[]).filter(e=>
-    !["shield_defense","roach","reverse","color_wave"].includes(e.type) &&
+    !["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"].includes(e.type) &&
     effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
   // Always play the server event on every client, including the recipient and
   // the final play of a round. Use its event ID and timestamp for synchronization.
@@ -279,7 +279,7 @@ function RoomPage() {
                 e.type==="negation"?"Negação: efeito anulado":
                 e.type==="uno"?language==="en"?`${e.name} called UNO!`:`${e.name} gritou UNO!`:
                 e.type==="cut"?language==="en"?`${e.name} jumped in against ${e.target_name??"a player"}`:`${e.name} cortou ${e.target_name??"um jogador"}`:
-                e.type==="catch"?language==="en"?`${e.target_name??"Player"} caught without UNO!`:`${e.target_name??"Jogador"} denunciado!`:
+                e.type==="catch"?language==="en"?`${e.name} reported ${e.target_name??"a player"} for not calling UNO!`:`${e.name} denunciou ${e.target_name??"um jogador"}`:
                 e.name}
               </p>
               {e.type==="machinegun" && !!e.revealed?.length && (
