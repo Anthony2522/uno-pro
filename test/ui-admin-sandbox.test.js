@@ -84,7 +84,7 @@ test("indicador fixo da direção permanece; avisos temporários de Volta e cor 
   assert.match(board,/Clockwise/);
   assert.match(board,/Counterclockwise/);
   assert.match(board,/game\.direction===1/);
-  assert.match(route,/\["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"\]\.includes\(e\.type\)/);
+  assert.match(route,/\["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost","double"\]\.includes\(e\.type\)/);
   assert.match(route,/event\.type==="reverse"\|\|event\.type==="color_wave"/);
   assert.doesNotMatch(route,/Nova cor escolhida/);
   assert.doesNotMatch(route,/Repeat2/);
@@ -127,7 +127,7 @@ test("avisos 6, 8, 12 e 13 não aparecem abaixo dos adversários; denúncia indi
   const route=read("src/routes/sala.$code.tsx");
   const engine=read("server/pro.js");
   const hidden=["shield_armed","roach_end","sword_armed","sword_boost"];
-  assert.match(route,/\["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"\]\.includes\(e\.type\)/);
+  assert.match(route,/\["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost","double"\]\.includes\(e\.type\)/);
   assert.match(route,/e\.type==="catch"\?language==="en"\?/);
   assert.match(route,/\$\{e\.name\} denunciou \$\{e\.target_name\?\?"um jogador"\}/);
   assert.match(route,/\$\{e\.name\} reported \$\{e\.target_name\?\?"a player"\}/);
@@ -152,7 +152,7 @@ test("carta Dobro aparece na arte, nas configurações, manual e Sandbox",()=>{
   assert.match(card,/if\(v==="WD"\)/);
   assert.match(card,/>×2</);
   assert.match(board,/e==="WD"/);
-  assert.match(route,/e\.type==="double"\?3000:5000/);
+  assert.match(route,/e\.type==="double"\?3000:e\.type==="shield_defense"\?3300:5000/);
   assert.match(route,/e\.name\} dobrou e passou para o próximo/);
   assert.match(manual,/key:"WD",group:"wild"/);
   assert.match(sandbox,/\["WD","Dobro"\]/);
