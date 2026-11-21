@@ -138,3 +138,32 @@ test("avisos 6, 8, 12 e 13 não aparecem abaixo dos adversários; denúncia indi
   assert.match(route,/const shieldDefenses=/);
   assert.match(route,/const roachTransfers=/);
 });
+
+
+test("carta Dobro aparece na arte, nas configurações, manual e Sandbox",()=>{
+  const settings=read("src/lib/uno/cardSettings.ts");
+  const card=read("src/components/uno/UnoCard.tsx");
+  const board=read("src/components/uno/GameTable.tsx");
+  const route=read("src/routes/sala.$code.tsx");
+  const manual=read("src/components/uno/HowToPlayDialog.tsx");
+  const sandbox=read("src/components/uno/SandboxCardPicker.tsx");
+  assert.match(settings,/key:"WD",name:"Coringa Dobro",count:1/);
+  assert.match(settings,/W5:true,WD:true/);
+  assert.match(card,/if\(v==="WD"\)/);
+  assert.match(card,/>×2</);
+  assert.match(board,/e==="WD"/);
+  assert.match(route,/e\.type==="double"\?3000:5000/);
+  assert.match(route,/e\.name\} dobrou e passou para o próximo/);
+  assert.match(manual,/key:"WD",group:"wild"/);
+  assert.match(sandbox,/\["WD","Dobro"\]/);
+});
+test("clicar na tela dispensa avisos temporários, sem remover os efeitos do servidor",()=>{
+  const page=read("src/routes/sala.$code.tsx");
+  const engine=read("server/pro.js");
+  assert.match(page,/window\.addEventListener\("pointerdown",onPress,true\)/);
+  assert.match(page,/window\.removeEventListener\("pointerdown",onPress,true\)/);
+  assert.match(page,/setDismissedEffects\(prev=>new Set\(\[\.\.\.prev,\.\.\.dismissableIds\]\)\)/);
+  assert.match(page,/toast\.dismiss\(\)/);
+  assert.match(page,/!dismissedEffects\.has\(effectId/);
+  assert.match(engine,/durationMs=kind==="double"\?3000:5000/);
+});

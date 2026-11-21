@@ -2543,3 +2543,147 @@ test("Sem Poderes e +5 ignoram comes incompatíveis, mas Negação é resposta v
     assert.ok(valid?ms>49000:ms>=3700&&ms<=7000);
   }
 });
+
+
+test("Coringa Dobro habilitado por padrão e desativável em configurações",()=>{
+  const config=normalizeCardsEnabled();
+  assert.equal(config.WD,true);
+  assert.equal(newDeck(config).filter(c=>c==="WD").length,1);
+  const disabled=normalizeCardsEnabled({WD:false});
+  assert.equal(newDeck(disabled).filter(c=>c==="WD").length,0);
+  const user=call("register_guest",{p_nickname:"Ativa dobro"});
+  const {code}=call("create_room",{p_token:user.token,p_name:"Dobro opcional",p_max_players:2,p_cards_enabled:disabled});
+  assert.equal(call("get_room_state",{p_token:user.token,p_code:code}).room.cards_enabled.WD,false);
+  const after=normalizeCardsEnabled({WD:true});
+  call("update_room_settings",{p_token:user.token,p_code:code,p_starting_cards:8,
+    p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},p_cards_enabled:after});
+  assert.equal(call("get_room_state",{p_token:user.token,p_code:code}).room.cards_enabled.WD,true);
+  // Old rooms lacking this new field should inherit the enabled default.
+  const legacy={...after};delete legacy.WD;
+  assert.doesNotThrow(()=>call("update_room_settings",{p_token:user.token,p_code:code,
+    p_starting_cards:8,p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack:true},p_cards_enabled:legacy}));
+  assert.equal(call("get_room_state",{p_token:user.token,p_code:code}).room.cards_enabled.WD,true);
+});
+
+test("um só Coringa Dobro em uma sala grande com reposição de múltiplos baralhos",()=>{
+  const a=call("register_guest",{p_nickname:"Baralho Grande"});
+  const {code}=call("create_room",{p_token:a.token,p_name:"Vinte jogadores",p_max_players:20,p_starting_cards:30});
+  for(let i=0;i<19;i++)call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
+  call("start_game",{p_token:a.token,p_code:code});
+  const r=store.roomsByCode.get(code),g=r.game;
+  const cards=[...g.draw_pile,...g.discard_pile,...[...r.hands.values()].flatMap(h=>h.cards)];
+  assert.equal(cards.filter(c=>c==="WD").length,1);
+});
+
+test("Coringa Dobro dobra de +2, +4 e +5; cor é escolhida antes de passar",()=>{
+  for(const [attack,amount] of [["bD",2],["W4",4],["W5",5]]){
+    const s=setup(),{g,room,a,b,bot}=s;
+    s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+    room.hands.get(a.guest_id).cards=[attack,"r3"];
+    room.hands.get(b.guest_id).cards=["WD","r8"];
+    room.hands.get(bot).cards=["g4","b1"];
+    s.play(a,attack,attack==="bD"?undefined:"r");
+    s.end(a);
+    assert.equal(g.pending_draw,amount);
+    assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+    const bState=call("get_room_state",{p_token:b.token,p_code:s.code}).game;
+    assert.equal(bState.can_answer_draw,true);
+    assert.deepEqual(bState.legal_draw_counters,["WD"]);
+    assert.ok(g.pending_draw_deadline-Date.now()>49000);
+    const result=s.play(b,"WD");
+    assert.equal(result.pending_color,true);
+    assert.equal(g.pending_draw,amount,"a dívida não dobra antes da escolha de cor");
+    assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+    call("resolve_wild_color",{p_token:b.token,p_code:s.code,p_color:"g"});
+    assert.equal(g.pending_draw,amount*2);
+    assert.equal(g.turn_order[g.turn_idx],bot,"passa a vez imediatamente");
+    assert.equal(g.pending_source,b.guest_id);
+    assert.equal(g.current_color,"g");
+    assert.equal(g.pending_uncounterable,attack==="W5");
+    const doubles=g.effects.filter(e=>e.type==="double");
+    assert.equal(doubles.length,1);
+    assert.equal(doubles[0].name,"Bruno");
+    assert.equal(doubles[0].n,amount*2);
+    assert.equal(g.discard_pile.at(-1),"WD");
+  }
+});
+
+test("Coringa Dobro sobre dívida acumulada dobra o saldo, mesmo com +5",()=>{
+  for(const [owed,uncounterable] of [[4,false],[7,false],[13,true]]){
+    const s=setup(),{g,room,a,b,bot}=s;
+    g.turn_idx=g.turn_order.indexOf(b.guest_id);
+    g.turn_cards=[];g.discard_pile=["bD"];g.current_color="b";
+    g.pending_draw=owed;g.pending_uncounterable=uncounterable;
+    g.pending_source=a.guest_id;g.pending_draw_deadline=Date.now()+50000;
+    room.hands.get(b.guest_id).cards=["WD","r7"];
+    room.hands.get(bot).cards=["r1","g3"];
+    const r=call("play_card",{p_token:b.token,p_code:s.code,p_card:"WD",p_color:"r"});
+    assert.equal(r.doubled,true);
+    assert.equal(g.pending_draw,owed*2);
+    assert.equal(g.pending_uncounterable,uncounterable);
+    assert.equal(g.turn_order[g.turn_idx],bot);
+  }
+});
+
+test("Espelho imita Coringa Dobro e dobra a dívida seguinte sem duplicar a carta física",()=>{
+  const s=setup(),{g,room,a,b,bot}=s;
+  g.turn_idx=g.turn_order.indexOf(b.guest_id);
+  g.discard_pile=["WD"];g.current_color="g";
+  g.pending_draw=8;g.pending_source=a.guest_id;g.pending_draw_deadline=Date.now()+50000;
+  g.last_wild="WD";
+  room.hands.get(b.guest_id).cards=["Q","g3"];
+  room.hands.get(bot).cards=["y7","r1"];
+  const reply=s.play(b,"Q","b");
+  assert.equal(reply.doubled,true);
+  assert.equal(g.pending_draw,16);
+  assert.equal(g.turn_order[g.turn_idx],bot);
+  assert.equal(g.discard_pile.at(-1),"Q");
+  assert.equal(g.mirror_played_as,"WD");
+  assert.ok(g.effects.some(e=>e.type==="double"&&e.n===16));
+});
+
+test("Cadeado e empilhamento desativado impedem dobrar; Negação permanece válida",()=>{
+  for(const [stack,lock,canAnswer] of [[false,false,false],[true,true,false],[true,false,true]]){
+    const s=setup({stack,repeat:true,sequence:true,nine:true,cut:true}),{room,g,a,b}=s;
+    g.turn_idx=g.turn_order.indexOf(b.guest_id);g.turn_cards=[];
+    g.pending_draw=4;g.pending_source=a.guest_id;g.pending_draw_deadline=Date.now()+50000;
+    g.pending_uncounterable=false;g.discard_pile=["W4"];g.current_color="b";
+    room.hands.get(b.guest_id).cards=["WD","g6"];
+    if(lock){g.lock_remaining=[b.guest_id];g.lock_color="b";}
+    const view=call("get_room_state",{p_token:b.token,p_code:s.code}).game;
+    assert.equal(view.can_answer_draw,canAnswer);
+    assert.deepEqual(view.legal_draw_counters,canAnswer?["WD"]:[]);
+    if(!stack)assert.throws(()=>s.play(b,"WD","g"),/MUST_COUNTER_OR_DRAW/);
+    else if(lock)assert.throws(()=>s.play(b,"WD","g"),/LOCK_COLOR_ONLY/);
+    else assert.equal(s.play(b,"WD","g").doubled,true);
+  }
+});
+
+test("Coringa Dobro pode mudar a cor sem dívida, sem multiplicar ou pular a vez",()=>{
+  const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["WD","r7"];
+  s.play(a,"WD");
+  assert.equal(g.wild_pending_color,a.guest_id);
+  call("resolve_wild_color",{p_token:a.token,p_code:s.code,p_color:"y"});
+  assert.equal(g.pending_draw,0);
+  assert.equal(g.current_color,"y");
+  assert.equal(g.turn_order[g.turn_idx],a.guest_id);
+  assert.equal(g.effects.filter(e=>e.type==="double").length,0);
+  s.end(a);
+  assert.equal(g.pending_draw,0);
+});
+
+test("Coringa Dobro descartado não renasce em baralho infinito",()=>{
+  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+  g.draw_pile=[];g.discard_pile=["b1","WD"];g.current_color="b";
+  for(const h of room.hands.values())h.cards=h.cards.filter(c=>c!=="WD");
+  room.hands.get(a.guest_id).cards=["r3","y7"];
+  call("draw_card",{p_token:a.token,p_code:s.code});
+  assert.equal(g.draw_pile.includes("WD"),false);
+  g.draw_pile=[];
+  room.hands.get(b.guest_id).cards=["WD","g1"];
+  g.turn_idx=g.turn_order.indexOf(a.guest_id);g.turn_cards=[];g.has_drawn=false;
+  call("draw_card",{p_token:a.token,p_code:s.code});
+  assert.equal(g.draw_pile.includes("WD"),false);
+});
