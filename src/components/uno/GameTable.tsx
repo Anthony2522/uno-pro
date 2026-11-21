@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BookOpen, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole, Bot } from "lucide-react";
+import { BookOpen, Eye, Hand, Loader2, Megaphone, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
@@ -54,8 +54,9 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   useEffect(()=>{const t=setInterval(()=>setClock(Date.now()),350);return()=>clearInterval(t);},[]);
   useEffect(()=>()=>{for(const timer of motionTimers.current.values())clearTimeout(timer);},[]);
   const byId = useMemo(() => new Map(state.members.map((m) => [m.id, m])), [state.members]);
-  const reactingToSkip=!!game.skip_reaction && game.skip_reaction.target===me;
-  const myTurn = game.current_player === me && !game.skip_reaction;
+  const roundEnding=!!game.round_ends_at;
+  const reactingToSkip=!!game.skip_reaction && game.skip_reaction.target===me && !roundEnding;
+  const myTurn = game.current_player === me && !game.skip_reaction && !roundEnding;
   const forcedByBeer = myTurn && !!game.beer_remaining?.includes(me);
   const lockedColor = myTurn && game.lock_remaining?.includes(me) ? game.lock_color : null;
   const current = game.current_player ? byId.get(game.current_player) : undefined;
@@ -154,6 +155,9 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const normalDeadline=new Date(game.turn_started_at).getTime()+50000;
   const deadline=game.offline_deadline_at ? Math.min(normalDeadline,new Date(game.offline_deadline_at).getTime()) : normalDeadline;
   const remaining=Math.min(50,Math.max(0,Math.ceil((deadline-clock)/1000)));
+  const hasNoDrawResponse=pending>0&&!!game.pending_draw_deadline&&
+    new Date(game.pending_draw_deadline).getTime()-new Date(game.turn_started_at).getTime()<10000;
+  const revealRemaining=game.round_ends_at?Math.max(0,Math.ceil((new Date(game.round_ends_at).getTime()-clock)/1000)):0;
   const debtRemaining=pending>0&&game.pending_draw_deadline
     ?Math.max(0,Math.ceil((new Date(game.pending_draw_deadline).getTime()-clock)/1000)):remaining;
   const nineRemaining=nine?Math.max(0,Math.ceil((new Date(nine.deadline).getTime()-clock)/1000)):0;
@@ -203,13 +207,14 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   }
 
   return (
-    <main className="uno-game mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col overflow-hidden px-2 sm:px-6">
+    <main className={cn("uno-game mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col overflow-hidden px-2 sm:px-6",roundEnding&&"pointer-events-none")}>
       {state.room.sandbox&&<div className="relative z-30 mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-400/45 bg-violet-500/15 px-3 py-2 text-xs">
         <p className="font-bold text-violet-100">SANDBOX · Você controla {byId.get(me)?.nickname??"Jogador"}.
           <span className="ml-1 font-normal">Toque no status do outro jogador para trocar de mão.</span>
         </p>
         <div className="flex items-center gap-2">{actions.sandboxToggleBot&&<Button variant="glass" size="sm" disabled={busy} onClick={actions.sandboxToggleBot} title="Alternar bot difícil no outro jogador" aria-label="Alternar bot difícil no outro jogador"><Bot className="size-4"/> {state.members.some(p=>p.bot)?"Desativar bot":"Bot difícil"}</Button>}{actions.sandboxGrant&&<SandboxCardPicker disabled={busy} onGrant={actions.sandboxGrant}/>}</div>
       </div>}
+      {roundEnding&&<p role="status" className="mx-auto mb-2 w-fit rounded-xl border border-warning/50 bg-navy/95 px-4 py-2 text-center text-xs font-bold text-warning shadow-glow sm:text-sm">{language==="en"?`Final card on the table · Match ends in ${revealRemaining}s`:`Última carta na mesa · Partida termina em ${revealRemaining}s`}</p>}
       {/* Opponents */}
       <section aria-label="Adversários" className="uno-opponents no-scrollbar -mx-2 flex shrink-0 gap-2 overflow-x-auto px-2 pb-1 pt-1 sm:justify-center">
         {opponents.map((p) => {
@@ -292,7 +297,7 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         )}
         {myTurn && !forcedByBeer && !!pending && played.length===0 && !nine && (
           <div role="alert" className="uno-debt-panel relative z-20 max-w-md rounded-2xl border border-warning/40 bg-navy/95 p-4 text-center shadow-glow">
-            <p className="font-display font-bold">{language==="en"?`Draw ${pending} cards or counter?`:`Você quer comprar ${pending} cartas ou rebater?`}</p>
+            <p className="font-display font-bold">{hasNoDrawResponse?tr("Você não tem como revidar"):(language==="en"?`Draw ${pending} cards or counter?`:`Você quer comprar ${pending} cartas ou rebater?`)}</p>
             <p className="mt-1 text-sm text-warning">{language==="en"
               ?`Automatic draw in ${debtRemaining}s if you do not counter.`
               :`Compra automática em ${debtRemaining}s se você não revidar.`}</p>
@@ -359,10 +364,6 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
         <div className="uno-table-status relative z-10 flex flex-wrap items-center justify-center gap-2 text-sm">
           <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1.5">
             <span className={cn("size-3 rounded-full", DOT[game.current_color])} aria-hidden /> Cor: <strong>{COLOR_NAMES[game.current_color as CardColor]}</strong>
-          </span>
-          <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1.5">
-            {game.direction === 1 ? <RotateCw className="size-4 animate-spin-slow text-cyan" /> : <RotateCcw className="size-4 animate-spin-slow text-cyan [animation-direction:reverse]" />}
-            {game.direction === 1 ? "Sentido horário" : "Sentido anti-horário"}
           </span>
         </div>
 
