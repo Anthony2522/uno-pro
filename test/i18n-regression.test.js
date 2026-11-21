@@ -7,11 +7,11 @@ import {BOT_NAMES} from "../server/botNames.js";
 const read=(file)=>readFileSync(new URL("../"+file,import.meta.url),"utf8");
 
 test("README reflects the current deck and fixed bot name list",()=>{
-  assert.equal(newDeck().length,215);
+  assert.equal(newDeck().length,216);
   assert.equal(BOT_NAMES.length,32);
   const readme=read("README.md");
-  assert.match(readme,/215 cartas/);
-  assert.match(readme,/232 cartas/);
+  assert.match(readme,/216 cartas/);
+  assert.match(readme,/233 cartas/);
   assert.match(readme,/32 nomes engraçados/);
   assert.doesNotMatch(readme,/191 cartas|100 nomes engraçados/);
 });

@@ -41,6 +41,12 @@ function Symbol({ card, corner }: { card: string; corner?: boolean }) {
       {!corner&&<span className="mt-[3cqw] whitespace-nowrap font-display text-[12.5cqw] font-black not-italic tracking-[-.04em]">DETETIVE</span>}
     </span>
   );
+  if(v==="WD")return (
+    <span className="flex w-[88cqw] flex-col items-center justify-center leading-none">
+      <span className={corner?"text-[15cqw]":"text-[43cqw]"}>×2</span>
+      {!corner&&<span className="mt-[2cqw] text-[13cqw] font-black not-italic tracking-tight">DOBRO</span>}
+    </span>
+  );
   if(v==="B")return (
     <span className="flex w-[85cqw] flex-col items-center justify-center leading-none">
       <Bomb className={corner?"size-[18cqw]":"size-[45cqw]"} strokeWidth={3}/>

@@ -20,7 +20,7 @@ function PreviewSymbol({card}:{card:string}):ReactNode{
   if(v==="T")return <span style={{display:"flex",alignItems:"center",flexDirection:"column",lineHeight:1}}><Repeat2 width={25} height={23} strokeWidth={3}/><span style={{fontSize:18,fontWeight:900}}>+2</span></span>;
   const Icon=icons[v];
   if(Icon)return <Icon width={29} height={29} strokeWidth={2.7}/>;
-  const text=v==="D"?"+2":v==="W4"?"+4":v==="W5"?"+5":v==="W"?"✦":v;
+  const text=v==="D"?"+2":v==="W4"?"+4":v==="W5"?"+5":v==="WD"?"×2":v==="W"?"✦":v;
   return <span style={{fontSize:text.length>1?23:31,fontWeight:900,lineHeight:1,fontFamily:"system-ui,sans-serif"}}>{text}</span>;
 }
 
@@ -47,6 +47,6 @@ export function StableCardPreview({card,width=54}:{card:string;width?:number}){
       <PreviewSymbol card={card}/>
     </div>
     <div aria-hidden="true" style={{position:"absolute",top:2,left:3,color:"#fff",fontWeight:900,fontSize:11,lineHeight:1,
-      textShadow:"0 1px 2px rgba(0,0,0,.9)"}}>{["D","W4","W5"].includes(v)?v==="D"?"+2":v==="W4"?"+4":"+5":/^\d$/.test(v)?v:""}</div>
+      textShadow:"0 1px 2px rgba(0,0,0,.9)"}}>{["D","W4","W5","WD"].includes(v)?v==="D"?"+2":v==="W4"?"+4":v==="W5"?"+5":"×2":/^\d$/.test(v)?v:""}</div>
   </div>;
 }

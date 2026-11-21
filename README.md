@@ -44,6 +44,8 @@ Nas configurações avançadas, a **quantidade de cartas iniciais** é a primeir
 - Bloqueios consecutivos mostram avisos acumulativos com os nomes dos jogadores pulados.
 - Coringa Detetive exibe cartas maiores, com identificação legível, apenas ao jogador autorizado pelo prazo de dez segundos.
 - Coringa Bomba: uma cópia no baralho, cada adversário compra duas cartas sem perder a vez.
+- **Coringa Dobro:** um único exemplar físico por partida, habilitado nas Configurações avançadas por padrão. Rebater com ele dobra a dívida de compra acumulada (+4 vira +8, +5 vira +10), inclusive após um +5, e passa automaticamente a vez após escolher a cor. Fora de uma batalha de compra funciona como coringa de mudança de cor. Cadeado e Sem Poderes impedem seu uso no turno afetado; o Espelho pode copiar seu poder.
+- **Notificações:** a mensagem grande “Fulano dobrou e passou para o próximo!” dura 3 segundos. Qualquer aviso temporário pode ser dispensado ao tocar ou clicar na tela, sem bloquear o restante do jogo.
 - Desconexão não força o avanço imediato: enquanto o participante está offline, há até trinta segundos de tolerância, limitada também pelo relógio normal de cinquenta segundos. Reconectar não reinicia o tempo gasto. **Sair voluntariamente da sala** remove imediatamente o jogador da partida e libera sua vaga.
 
 ## Configurações antes da partida e efeitos por sequência
@@ -67,7 +69,7 @@ Para reproduzir os torneios: `node scripts/bot-benchmark.mjs --games=600` (bot d
 
 ## Novas regras e cartas (novembro de 2026)
 
-- O baralho padrão tem **215 cartas**, com Cerveja, Barata, Espada e Coringa Metralhadora inicialmente desativadas nas novas salas. Elas continuam disponíveis nas Configurações avançadas. Ao habilitar todas as cartas opcionais, o baralho completo possui **232 cartas**.
+- O baralho padrão tem **216 cartas**, com Cerveja, Barata, Espada e Coringa Metralhadora inicialmente desativadas nas novas salas. Elas continuam disponíveis nas Configurações avançadas. Ao habilitar todas as cartas opcionais, o baralho completo possui **233 cartas**.
 - **Negação**: cancela +2, +4 ou +5 acumulados, um Bloqueio direcionado ao usuário ou a proibição do Sem Poderes. O portador escolhe uma nova cor e **gasta a vez**, passando a jogada ao próximo participante; uma decisão de bloqueio expira após nove segundos sem resposta.
 - **Sem Poderes**: impede cartas especiais na próxima vez, permitindo apenas números, salvo se o portador usar Negação.
 - **Metralhadora**: substitui uma carta especial de cada adversário por uma carta numérica, privilegiando coringas, depois compras, depois Bloqueio/Volta. Nenhum jogador perde a vez por isso.

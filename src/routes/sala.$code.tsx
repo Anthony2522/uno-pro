@@ -44,7 +44,25 @@ function RoomPage() {
   const [busy, setBusy] = useState(false);
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
   const [effectsClock,setEffectsClock] = useState(Date.now());
+  const [dismissedEffects,setDismissedEffects] = useState<Set<string>>(()=>new Set());
   const lastEffectId = useRef<number|null>(null);
+  const effectId=(round:number,id:number)=>`${code}:${round}:${id}`;
+  // Clicking anywhere dismisses currently displayed banners, the large Double
+  // Wild notice and Sonner toasts, without preventing the underlying action.
+  const dismissableIds=(state?.game?.effects||[])
+    .filter(e=>(e.type==="shield_defense"||!["roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"].includes(e.type))&&
+      effectsClock>=e.show_at&&effectsClock<e.show_at+(e.type==="double"?3000:e.type==="shield_defense"?3300:5000))
+    .map(e=>effectId(state?.game?.round??0,e.id))
+    .filter(id=>!dismissedEffects.has(id));
+  const dismissKey=dismissableIds.join("|");
+  useEffect(()=>{
+    const onPress=()=>{
+      if(dismissableIds.length)setDismissedEffects(prev=>new Set([...prev,...dismissableIds]));
+      toast.dismiss();
+    };
+    window.addEventListener("pointerdown",onPress,true);
+    return ()=>window.removeEventListener("pointerdown",onPress,true);
+  },[dismissKey]);
   const queuedNoticeShown=useRef(false);
   useEffect(()=>{
     if(!state)return;
@@ -89,7 +107,7 @@ function RoomPage() {
     if(events.length)lastEffectId.current=events.at(-1)?.id??0;
     for(const event of next){
       if(event.type==="roach"||event.type==="reverse"||event.type==="color_wave")continue; // No extra reverse or color-choice announcement sound.
-      sfx(event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
+      sfx(event.type==="double"?"draw4":event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
     }
   },[state?.game?.effects,state?.game?.round]);
 
@@ -160,12 +178,18 @@ function RoomPage() {
   const g = state.game;
   const playing = state.room.status === "playing" && g?.status === "playing";
   const visibleEffects=playing?(g?.effects||[]).filter(e=>
-    !["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"].includes(e.type) &&
+    !["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost","double"].includes(e.type) &&
+    !dismissedEffects.has(effectId(g?.round??0,e.id)) &&
     effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
+  const doubleEffects=playing?(g?.effects||[]).filter(e=>e.type==="double"&&
+    !dismissedEffects.has(effectId(g?.round??0,e.id)) &&
+    effectsClock>=e.show_at&&effectsClock<e.show_at+3000).slice(-1):[];
   // Always play the server event on every client, including the recipient and
   // the final play of a round. Use its event ID and timestamp for synchronization.
   const roachTransfers=(g?.effects||[]).filter(e=>e.type==="roach"&&effectsClock>=e.show_at&&effectsClock<e.show_at+ROACH_TOTAL_MS);
-  const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+3300):[];
+  const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&
+    !dismissedEffects.has(effectId(g?.round??0,e.id))&&
+    effectsClock>=e.show_at&&effectsClock<e.show_at+3300):[];
   const isHost = state.room.host_id === state.me;
   const finished = g?.status === "finished";
   const winner = finished && g.winner_id ? state.members.find((m) => m.id === g.winner_id) : undefined;
@@ -227,6 +251,20 @@ function RoomPage() {
         </p>
       )}
 
+      {doubleEffects.map(e=>(
+        <div key={effectId(g?.round??0,e.id)} role="status" aria-live="assertive"
+          className="pointer-events-none fixed inset-0 z-[76] flex items-center justify-center px-4">
+          <div className="w-full max-w-2xl animate-pop rounded-3xl border-2 border-cyan/70 bg-navy/95 px-6 py-8 text-center shadow-glow-cyan sm:px-10 sm:py-12">
+            <div className="font-display text-6xl font-black leading-none text-cyan sm:text-8xl">×2</div>
+            <p className="mt-4 font-display text-2xl font-black leading-snug text-foreground sm:text-4xl">
+              {language==="en"?`${e.name} doubled and passed to the next player!`:`${e.name} dobrou e passou para o próximo!`}
+            </p>
+            <p className="mt-3 font-display text-lg font-bold text-warning sm:text-2xl">
+              {language==="en"?"Current draw debt":"Dívida atual"}: +{e.n}
+            </p>
+          </div>
+        </div>
+      ))}
       {visibleEffects.length>0&&(
         <div className="pointer-events-none fixed inset-x-0 top-[11rem] sm:top-[12rem] z-[54] mx-auto flex w-full max-w-lg flex-col gap-2 px-3" role="status" aria-live="polite">
           {visibleEffects.map(e=>(
@@ -297,7 +335,9 @@ function RoomPage() {
           ))}
         </div>
       )}
-      {playing && (g?.effects||[]).some(e=>e.type==="sword_strike"&&effectsClock>=e.show_at&&effectsClock<e.show_at+2400) && (
+      {playing && (g?.effects||[]).some(e=>e.type==="sword_strike"&&
+        !dismissedEffects.has(effectId(g?.round??0,e.id))&&
+        effectsClock>=e.show_at&&effectsClock<e.show_at+2400) && (
         <div className="uno-sword-attack pointer-events-none fixed inset-0 z-[77] flex items-center justify-center overflow-hidden" role="status" aria-live="polite">
           <div className="uno-sword-burst" aria-hidden />
           <Sword className="uno-sword-blade h-[min(42vw,220px)] w-[min(42vw,220px)] text-amber-200 drop-shadow-[0_0_25px_rgba(255,195,50,0.95)]" strokeWidth={2.4} aria-hidden />

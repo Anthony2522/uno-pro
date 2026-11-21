@@ -9,7 +9,8 @@ export const CUSTOM_COLOR_CARDS=[
   {key:"A",name:"Barata",count:4,description:"1 por cor. Cria uma cópia aleatória; cada cadeia passa uma só vez por jogador."},
 ] as const;
 export const CUSTOM_WILD_CARDS=[
-  {key:"W5",name:"Coringa +5",count:2,description:"Só outro +5 pode rebater."},
+  {key:"W5",name:"Coringa +5",count:2,description:"Só outro +5 ou Coringa Dobro pode rebater."},
+  {key:"WD",name:"Coringa Dobro",count:1,description:"Rebate qualquer dívida de compra e dobra seu saldo, passando ao próximo jogador."},
   {key:"X",name:"Coringa Detetive",count:1,description:"Revela temporariamente a mão de um rival."},
   {key:"B",name:"Coringa Bomba",count:1,description:"Cada adversário compra duas cartas."},
   {key:"N",name:"Coringa Negação",count:1,description:"Anula um efeito contra você."},
@@ -21,7 +22,7 @@ export type CustomCardKey=typeof CUSTOM_COLOR_CARDS[number]["key"]|typeof CUSTOM
 export type CardSettings=Record<CustomCardKey,boolean>;
 export const DEFAULT_CARD_SETTINGS:CardSettings={
   T:true,H:true,E:false,L:true,V:true,C:false,A:false,
-  W5:true,X:true,B:true,N:true,P:true,M:false,Q:true
+  W5:true,WD:true,X:true,B:true,N:true,P:true,M:false,Q:true
 };
 export function enabledCardSettings(changes?:Partial<CardSettings>):CardSettings{
   return {...DEFAULT_CARD_SETTINGS,...changes};

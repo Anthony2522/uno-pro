@@ -250,7 +250,7 @@ export function startLocalSandbox(nickname:string){
   return room.code as string;
 }
 const SANDBOX_COLOR_CARDS=new Set(["R","S","D","T","H","E","L","V","C","A"]);
-const SANDBOX_WILDS=new Set(["W","W4","W5","X","B","N","P","M","Q"]);
+const SANDBOX_WILDS=new Set(["W","W4","W5","WD","X","B","N","P","M","Q"]);
 const SANDBOX_COLORS=["r","b","g","y"];
 function sandboxGrant(kind:string){
   if(!active||active.source!=="sandbox")throw Error("SANDBOX_ONLY");

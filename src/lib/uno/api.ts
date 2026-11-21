@@ -83,7 +83,7 @@ export type GameState = {
   my_hand: string[];
   pending_uncounterable: boolean;
   action_locked_until?: string | null;
-  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"|"catch"|"color_wave"|"bomb"|"negation"|"powerless"|"machinegun"|"shield_armed"|"shield_defense"|"vortex"|"beer"|"beer_forced"|"lock"|"sword_armed"|"sword_boost"|"sword_strike"|"roach"|"roach_end"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; reason?: "nine"|"skip"|"draw"|"powerless"|"bomb"|"detective"|"lock"; revealed?:Array<{target:string;target_name:string;card:string}>; targets?:string[]; target_names?:string[]; target?:string; target_name?:string; n?:number; copy_color?:string; chain_id?:string; remaining?:number }>;
+  effects: Array<{ id: number; type: "reverse"|"skip"|"draw2"|"draw4"|"draw5"|"wild"|"uno"|"cut"|"penalty"|"catch"|"color_wave"|"double"|"bomb"|"negation"|"powerless"|"machinegun"|"shield_armed"|"shield_defense"|"vortex"|"beer"|"beer_forced"|"lock"|"sword_armed"|"sword_boost"|"sword_strike"|"roach"|"roach_end"; by: string; name: string; card: string|null; color: string|null; at: number; show_at: number; reason?: "nine"|"skip"|"draw"|"powerless"|"bomb"|"detective"|"lock"; revealed?:Array<{target:string;target_name:string;card:string}>; targets?:string[]; target_names?:string[]; target?:string; target_name?:string; n?:number; copy_color?:string; chain_id?:string; remaining?:number }>;
   last_draw: { card: string; nonce: number; at: string } | null;
   turn_cards: string[];
   pending_draw: number;

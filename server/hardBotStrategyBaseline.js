@@ -3,13 +3,13 @@
 // published turn order, the discard, optional rules and public observations.
 // Neither this module nor its callers pass opponents' hidden card identities.
 const COLORS=["b","y","g","r"];
-const WILDS=new Set(["W","W4","W5","X","B","N","P","M"]);
+const WILDS=new Set(["W","W4","W5","WD","X","B","N","P","M"]);
 const number=c=>/^[0-9]$/.test(value(c));
 const value=c=>WILDS.has(c)?c:c.slice(1);
 const wild=c=>WILDS.has(c);
 const drawValue=c=>c==="W5"?5:c==="W4"?4:c?.slice(1)==="D"||c?.slice(1)==="T"?2:0;
 const attack=c=>drawValue(c)>0;
-const canCounter=(c,uncounterable)=>uncounterable?c==="W5":attack(c);
+const canCounter=(c,uncounterable)=>c==="WD"||(uncounterable?c==="W5":attack(c));
 const advance=(idx,dir,steps,n)=>(idx+dir*steps%n+n*100)%n;
 const playable=(c,top,color)=>wild(c)||c[0]===color||(!wild(top)&&value(c)===value(top));
 const sum=(a)=>a.reduce((x,y)=>x+y,0);
@@ -197,7 +197,7 @@ function enumerate(context) {
     if(nodes++>=maxNodes)return;
     if(plan.length){
       plans.push([...plan]);
-      if(plan.length>=maxDepth)return;
+      if(plan.includes("WD")||plan.length>=maxDepth)return;
     }
     for(const c of keys){
       if(!counts.get(c))continue;

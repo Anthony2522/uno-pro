@@ -21,7 +21,7 @@ const validateCardSettings=input=>{
   if(input===undefined||input===null)return;
   if(typeof input!=="object"||Array.isArray(input)||
      Object.keys(input).some(k=>!CUSTOM_CARD_KEYS.includes(k))||
-     CUSTOM_CARD_KEYS.some(k=>typeof input[k]!=="boolean"))fail("INVALID_CARD_SETTINGS");
+     Object.values(input).some(value=>typeof value!=="boolean"))fail("INVALID_CARD_SETTINGS");
 };
 const stateRules = input => Object.fromEntries(Object.keys(DEFAULT_RULES).map(k => [k,typeof input?.[k] === "boolean" ? input[k] : true]));
 const fail = (message, status=400) => {throw new RpcError(message,status)};
@@ -39,7 +39,7 @@ export function chooseCutDelay(difficulty, random=Math.random) {
 }
 const weight = c => c==="W5" ? 5 : c==="W4" ? 4 : c?.slice(1)==="D" || c?.slice(1)==="T" ? 2 : 0;
 const value = c => isRoach(c)?"A":wild(c) ? c : c.slice(1);
-const wild = c => c==="W"||c==="W4"||c==="W5"||c==="X"||c==="B"||c==="N"||c==="P"||c==="M"||c==="Q";
+const wild = c => c==="W"||c==="W4"||c==="W5"||c==="WD"||c==="X"||c==="B"||c==="N"||c==="P"||c==="M"||c==="Q";
 // The Mirror is one physical card. Its current effect follows the most recent REAL wild.
 const reflected=(g,c)=>c==="Q"?(g.last_wild||"W"):c;
 // The chain UUID identifies *copies*, not the card face. Two Baratas of the
@@ -72,15 +72,18 @@ function hand(room,id){const h=room.hands.get(id);if(!h)fail("NOT_MEMBER",403);r
 function draw(room,id,n){const g=room.game,h=hand(room,id),got=[];
   for(let k=0;k<n;k++){if(!g.draw_pile.length){
     g.draw_pile=newDeck(room.cards_enabled);
-    // The Mirror is unique even if the infinite draw pile is regenerated.
-    if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
-      g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
+    // The Mirror and Double Wild each have only one physical copy.
+    for(const unique of ["Q","WD"]){
+      if(g.discard_pile.includes(unique)||[...room.hands.values()].some(h=>h.cards.includes(unique)))
+        g.draw_pile=g.draw_pile.filter(c=>c!==unique);
+    }
   }
     const card=g.draw_pile.shift();if(card)got.push(card);}
   h.cards.push(...got);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;return got;}
 function shuffle(a){const b=[...a];for(let k=b.length-1;k>0;k--){const j=crypto.randomInt(k+1);[b[k],b[j]]=[b[j],b[k]];}return b;}
 // A +5 is always stackable only by another +5. It can also answer +2/+4.
-const canCounter=(g,c)=>g.pending_uncounterable ? reflected(g,c)==="W5" : (isDraw(reflected(g,c))||reflected(g,c)==="W5");
+const canCounter=(g,c)=>reflected(g,c)==="WD"||
+  (g.pending_uncounterable?reflected(g,c)==="W5":(isDraw(reflected(g,c))||reflected(g,c)==="W5"));
 const counter=(r,id)=>hand(r,id).cards.some(c=>canCounter(r.game,c));
 // Share a single server-authoritative predicate between reply time and UI hints.
 function legalDrawCounters(r,id){
@@ -240,11 +243,12 @@ function passRoach(r,actor,card){
 }
 function effect(r,kind,by,card,color,details={}){
   const g=r.game,now=clock();
-  // Related events share a five-second window, never a sequential queue.
+  // Double Wild shows a large 3-second announcement; others keep their 5s.
+  const durationMs=kind==="double"?3000:5000;
   const show_at=now;
   if(now>=(g.visual_until||0)){
-    if(g.status==="playing")g.turn_started_at=(g.turn_started_at??now)+5000;
-    g.visual_until=now+5000;
+    if(g.status==="playing")g.turn_started_at=(g.turn_started_at??now)+durationMs;
+    g.visual_until=now+durationMs;
   }
   const event={id:++g.event_seq,type:kind,by,name:name(by),card:card||null,color:color||null,at:now,show_at,...details};
   g.effects.push(event);if(g.effects.length>64)g.effects.shift();
@@ -300,7 +304,7 @@ function emitTurnEffect(r,actor,cards,finalDirection){
     effect(r,"reverse",actor,topCard,g.current_color,{n:reverses,direction:finalDirection});
   }else if(cards.some(c=>value(c)==="H")){
     effect(r,"shield_armed",actor,topCard,g.current_color,{target:actor,target_name:name(actor),n:g.shields?.[actor]||0});
-  }else if(cards.some(wild)){
+  }else if(cards.some(wild)&&!cards.some(c=>c==="WD")){
     effect(r,"color_wave",actor,topCard,g.current_color);
   }
 }
@@ -500,19 +504,26 @@ function finish(r,automatic=false,deferDebt=false){const g=game(r);if(g.nine)fai
     nextTurn(r,g,advance(g.turn_idx,g.direction,1,n));g.seq++;bump(r);return;
   }
   const inherited=g.skip_carry;
-  let dir=g.direction,skips=0,added=0,hasFive=false;
+  let dir=g.direction,skips=0,added=0,hasFive=false,doubles=0;
   g.skip_carry=null;
   for(const card of cards){const v=value(card);
     if(v==="R"){if(n===2)skips++;else dir*=-1;}
     else if(v==="S")skips++;
     else if(v==="T"){if(n>2)dir*=-1;added+=2;}
+    else if(card==="WD")doubles++;
     else if(isDraw(card)||card==="W5"){added+=weight(card);if(card==="W5")hasFive=true;}
   }
-  if(g.pending_draw && !added)fail("MUST_COUNTER_OR_DRAW");
+  if(g.pending_draw && !added && !doubles)fail("MUST_COUNTER_OR_DRAW");
   const nines=cards.slice().reverse().findIndex(c=>value(c)!=="9");
   const trailingNines=nines<0?cards.length:nines;
   g.direction=dir;g.pending_draw+=added;
-  if(added>0){
+  // Add the entire existing balance once per Double Wild (4 -> 8, 7 -> 14).
+  // Mirror may copy its effect without creating a second physical Double Wild.
+  if(doubles && g.pending_draw>0){
+    g.pending_draw*=2**doubles;
+    effect(r,"double",actor,"WD",g.current_color,{n:g.pending_draw});
+  }
+  if(added>0||doubles>0){
     g.pending_source=actor;
     if(g.turn_sword_bonus){
       g.pending_draw+=g.turn_sword_bonus;
@@ -572,7 +583,7 @@ function play(r,id,card,color,targetId,options={}){
   if(g.skip_reaction && !cutting)fail("SKIP_DECISION_PENDING");
   // No cooldown for initial plays or cuts while an announcement is shown.
   if(g.nine)fail("NINE_ACTIVE");
-  if(!h.cards.includes(card)||!((/^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M|Q)$/).test(card)||isRoach(card)))fail("CARD_NOT_IN_HAND");
+  if(!h.cards.includes(card)||!((/^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|WD|X|B|N|P|M|Q)$/).test(card)||isRoach(card)))fail("CARD_NOT_IN_HAND");
   const effective=reflected(g,card);
   const cutVictim=cutting?current(g):null;
   if(cutting){
@@ -674,6 +685,9 @@ function play(r,id,card,color,targetId,options={}){
     return finishEmptyHand(r,id);
   }
   if(value(card)==="V"){finish(r);return {ok:true,vortex:true,pulled:0};}
+  if(effective==="WD"&&g.pending_draw>0){
+    finish(r);return {ok:true,doubled:true};
+  }
   // In duels, Reverse returns to the same player immediately.
   if(g.turn_order.length===2&&card[1]==="R"&&g.turn_cards.length===1&&
      !g.pending_draw&&!cutting)finish(r);
@@ -721,6 +735,9 @@ function resolveWildColor(r,id,color){
   g.last_action={type:"wild_color",by:id,name:name(id),color};
   g.seq++;bump(r);
   if(hand(r,id).cards.length===0)return finishEmptyHand(r,id);
+  if(g.pending_draw>0&&g.turn_cards?.at(-1)==="WD"){
+    finish(r);return {ok:true,doubled:true};
+  }
   return {ok:true};
 }
 function settleRound(r){

@@ -28,10 +28,10 @@ function match(n){
   return {players,room,g,code,prepare,play};
 }
 
-test("Barata: há exatamente uma original por cor, quatro cadeias distintas e 232 cartas",()=>{
+test("Barata: há exatamente uma original por cor, quatro cadeias distintas e 233 cartas",()=>{
   const allEnabled=Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true]));
   const first=newDeck(allEnabled),second=newDeck(allEnabled);
-  assert.equal(first.length,232);
+  assert.equal(first.length,233);
   for(const color of ["r","y","g","b"]){
     const originals=first.filter(c=>isRoach(c)&&c[0]===color);
     assert.equal(originals.length,1,color);
@@ -148,10 +148,10 @@ test("histórico da Barata sobrevive ao salvamento e à restauração do servido
 });
 test("baralho configurado sem Barata nunca a introduz, inclusive ao renovar",()=>{
   const deck=newDeck({A:false});
-  assert.equal(deck.length,228);
+  assert.equal(deck.length,229);
   assert.equal(deck.some(isRoach),false);
   const fresh=newDeck(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true])));
-  assert.equal(fresh.length,232);
+  assert.equal(fresh.length,233);
 });
 
 test("duas Baratas de cadeias distintas podem ser jogadas na sequência de repetidas",()=>{
