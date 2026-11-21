@@ -50,8 +50,8 @@ function RoomPage() {
   // Clicking anywhere dismisses currently displayed banners, the large Double
   // Wild notice and Sonner toasts, without preventing the underlying action.
   const dismissableIds=(state?.game?.effects||[])
-    .filter(e=>!["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"].includes(e.type)&&
-      effectsClock>=e.show_at&&effectsClock<e.show_at+(e.type==="double"?3000:5000))
+    .filter(e=>(e.type==="shield_defense"||!["roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"].includes(e.type))&&
+      effectsClock>=e.show_at&&effectsClock<e.show_at+(e.type==="double"?3000:e.type==="shield_defense"?3300:5000))
     .map(e=>effectId(state?.game?.round??0,e.id))
     .filter(id=>!dismissedEffects.has(id));
   const dismissKey=dismissableIds.join("|");
@@ -187,7 +187,9 @@ function RoomPage() {
   // Always play the server event on every client, including the recipient and
   // the final play of a round. Use its event ID and timestamp for synchronization.
   const roachTransfers=(g?.effects||[]).filter(e=>e.type==="roach"&&effectsClock>=e.show_at&&effectsClock<e.show_at+ROACH_TOTAL_MS);
-  const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&effectsClock>=e.show_at&&effectsClock<e.show_at+3300):[];
+  const shieldDefenses=playing?(g?.effects||[]).filter(e=>e.type==="shield_defense"&&
+    !dismissedEffects.has(effectId(g?.round??0,e.id))&&
+    effectsClock>=e.show_at&&effectsClock<e.show_at+3300):[];
   const isHost = state.room.host_id === state.me;
   const finished = g?.status === "finished";
   const winner = finished && g.winner_id ? state.members.find((m) => m.id === g.winner_id) : undefined;
@@ -333,7 +335,9 @@ function RoomPage() {
           ))}
         </div>
       )}
-      {playing && (g?.effects||[]).some(e=>e.type==="sword_strike"&&effectsClock>=e.show_at&&effectsClock<e.show_at+2400) && (
+      {playing && (g?.effects||[]).some(e=>e.type==="sword_strike"&&
+        !dismissedEffects.has(effectId(g?.round??0,e.id))&&
+        effectsClock>=e.show_at&&effectsClock<e.show_at+2400) && (
         <div className="uno-sword-attack pointer-events-none fixed inset-0 z-[77] flex items-center justify-center overflow-hidden" role="status" aria-live="polite">
           <div className="uno-sword-burst" aria-hidden />
           <Sword className="uno-sword-blade h-[min(42vw,220px)] w-[min(42vw,220px)] text-amber-200 drop-shadow-[0_0_25px_rgba(255,195,50,0.95)]" strokeWidth={2.4} aria-hidden />
