@@ -2565,14 +2565,17 @@ test("Coringa Dobro habilitado por padrão e desativável em configurações",()
   assert.equal(call("get_room_state",{p_token:user.token,p_code:code}).room.cards_enabled.WD,true);
 });
 
-test("um só Coringa Dobro em uma sala grande com reposição de múltiplos baralhos",()=>{
+test("um Coringa Dobro por baralho; distribuição de 600 cartas permite vários na partida",()=>{
   const a=call("register_guest",{p_nickname:"Baralho Grande"});
   const {code}=call("create_room",{p_token:a.token,p_name:"Vinte jogadores",p_max_players:20,p_starting_cards:30});
   for(let i=0;i<19;i++)call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
   call("start_game",{p_token:a.token,p_code:code});
   const r=store.roomsByCode.get(code),g=r.game;
   const cards=[...g.draw_pile,...g.discard_pile,...[...r.hands.values()].flatMap(h=>h.cards)];
-  assert.equal(cards.filter(c=>c==="WD").length,1);
+  const doubles=cards.filter(c=>c==="WD").length;
+  // 600 dealt cards require 2 full decks and part of a third.
+  assert.ok(doubles>=2&&doubles<=3,`esperado 2 ou 3 exemplares de baralhos distintos, encontrados ${doubles}`);
+  assert.equal(newDeck(room.cards_enabled).filter(c=>c==="WD").length,1);
 });
 
 test("Coringa Dobro dobra de +2, +4 e +5; cor é escolhida antes de passar",()=>{
@@ -2674,16 +2677,40 @@ test("Coringa Dobro pode mudar a cor sem dívida, sem multiplicar ou pular a vez
   assert.equal(g.pending_draw,0);
 });
 
-test("Coringa Dobro descartado não renasce em baralho infinito",()=>{
-  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
-  g.draw_pile=[];g.discard_pile=["b1","WD"];g.current_color="b";
-  for(const h of room.hands.values())h.cards=h.cards.filter(c=>c!=="WD");
-  room.hands.get(a.guest_id).cards=["r3","y7"];
+test("reabastecimento gera exatamente um novo Coringa Dobro mesmo se outro estiver descartado",()=>{
+  const setupRoom=()=>{
+    const match=setup(),{g,room,a}=match;
+    match.setTurn(a.guest_id);
+    g.draw_pile=[];
+    g.discard_pile=["b1","WD"];g.current_color="b";
+    for(const h of room.hands.values())h.cards=h.cards.filter(c=>c!=="WD");
+    room.hands.get(a.guest_id).cards=["r3","y7"];
+    return match;
+  };
+  const s=setupRoom(),{g,room,a}=s;
+  const firstCount=()=>[...g.draw_pile,...g.discard_pile,
+    ...[...room.hands.values()].flatMap(h=>h.cards)].filter(c=>c==="WD").length;
+  assert.equal(firstCount(),1,"um Dobro antigo no descarte");
   call("draw_card",{p_token:a.token,p_code:s.code});
-  assert.equal(g.draw_pile.includes("WD"),false);
+  assert.equal(firstCount(),2,"novo baralho introduziu outro exemplar, sem apagar o antigo");
+  // A second refill adds a third, regardless of whether the earlier one was drawn.
   g.draw_pile=[];
-  room.hands.get(b.guest_id).cards=["WD","g1"];
-  g.turn_idx=g.turn_order.indexOf(a.guest_id);g.turn_cards=[];g.has_drawn=false;
+  s.setTurn(a.guest_id);g.discard_pile=["b1","WD"];g.current_color="b";
   call("draw_card",{p_token:a.token,p_code:s.code});
-  assert.equal(g.draw_pile.includes("WD"),false);
+  assert.equal(firstCount(),3,"terceiro baralho deve criar terceiro Dobro");
 });
+test("novo baralho pode trazer Coringa Dobro quando outro está na mão; desativado não retorna",()=>{
+  for(const enabled of [true,false]){
+    const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+    room.cards_enabled.WD=enabled;
+    g.draw_pile=[];g.discard_pile=["b1"];g.current_color="b";
+    for(const h of room.hands.values())h.cards=h.cards.filter(c=>c!=="WD");
+    room.hands.get(a.guest_id).cards=["r3","y7"];
+    room.hands.get(b.guest_id).cards=["WD","g2"]; // original is held by another player
+    call("draw_card",{p_token:a.token,p_code:s.code});
+    const count=[...g.draw_pile,...g.discard_pile,...[...room.hands.values()].flatMap(h=>h.cards)]
+      .filter(c=>c==="WD").length;
+    assert.equal(count,enabled?2:1,`reposição ${enabled?"habilitada":"desabilitada"}`);
+  }
+});
+
