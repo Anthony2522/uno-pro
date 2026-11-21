@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Ban, Bomb, Loader2, Repeat2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword, WifiOff } from "lucide-react";
+import { AlertTriangle, Ban, Bomb, Loader2, Scissors, Megaphone, Shield, ShieldAlert, ShieldOff, ZapOff, Crosshair, Beer, LockKeyhole, Sword, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/uno/AppHeader";
 import { GameTable, type GameActions } from "@/components/uno/GameTable";
@@ -88,8 +88,8 @@ function RoomPage() {
     const next=events.filter(e=>e.id>(lastEffectId.current??0));
     if(events.length)lastEffectId.current=events.at(-1)?.id??0;
     for(const event of next){
-      if(event.type==="roach")continue; // The illustrated flight owns the arrival/sound cues.
-      sfx(event.type==="color_wave"||event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
+      if(event.type==="roach"||event.type==="reverse"||event.type==="color_wave")continue; // No extra reverse or color-choice announcement sound.
+      sfx(event.type==="vortex"?"wild":event.type==="beer"||event.type==="beer_forced"||event.type==="lock"||event.type==="sword_armed"||event.type==="roach_end"?"play":event.type==="sword_boost"?"draw4":event.type);
     }
   },[state?.game?.effects,state?.game?.round]);
 
@@ -159,7 +159,9 @@ function RoomPage() {
 
   const g = state.game;
   const playing = state.room.status === "playing" && g?.status === "playing";
-  const visibleEffects=playing?(g?.effects||[]).filter(e=>e.type!=="shield_defense"&&e.type!=="roach"&&effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
+  const visibleEffects=playing?(g?.effects||[]).filter(e=>
+    !["shield_defense","roach","reverse","color_wave"].includes(e.type) &&
+    effectsClock>=e.show_at&&effectsClock<e.show_at+5000).slice(-3):[];
   // Always play the server event on every client, including the recipient and
   // the final play of a round. Use its event ID and timestamp for synchronization.
   const roachTransfers=(g?.effects||[]).filter(e=>e.type==="roach"&&effectsClock>=e.show_at&&effectsClock<e.show_at+ROACH_TOTAL_MS);
@@ -232,7 +234,6 @@ function RoomPage() {
               className={"glass-strong flex min-h-12 flex-wrap items-center gap-3 rounded-2xl border border-cyan/40 bg-navy/95 px-3 py-2 text-sm shadow-glow animate-pop uno-notice-"+e.type}>
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand/25 text-cyan">
                 {e.type==="skip"?<Ban className="size-6"/>:
-                 e.type==="reverse"?<Repeat2 className="size-6"/>:
                  e.type==="bomb"?<Bomb className="size-6"/>:
                  e.type==="negation"?<ShieldOff className="size-6"/>:
                  e.type==="powerless"?<ZapOff className="size-6"/>:
@@ -257,9 +258,6 @@ function RoomPage() {
                 e.type==="penalty"?e.reason==="nine"?
                   `${e.target_name??(language==="en"?"Player":"Jogador")} +${e.n} · ${language==="en"?"9 rule":"Regra do 9"}`:
                   language==="en"?`${e.target_name??"Player"} drew ${e.n??2} cards`:`${e.target_name??"Jogador"} comprou ${e.n??2} cartas`:
-                e.type==="color_wave"?"Nova cor escolhida":
-                e.type==="reverse"?
-                  `${e.name}: ${e.n??1} ${language==="en"?"Reverse(s)":"Volta(s)"}`:
                 e.type==="bomb"?"Bomba: adversários sem Escudo compraram +2":
                 e.type==="machinegun"?"Metralhadora: cartas especiais reveladas e devolvidas ao baralho":
                  e.type==="shield_armed"?language==="en"?`${e.name} activated Shield`:`${e.name} ativou Escudo`:

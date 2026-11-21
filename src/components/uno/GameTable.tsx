@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BookOpen, Eye, Hand, Loader2, Megaphone, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole, Bot } from "lucide-react";
+import { BookOpen, Eye, Hand, Loader2, Megaphone, RotateCcw, RotateCw, Shield, ShieldAlert, SkipForward, WifiOff, Sword, LockKeyhole, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
@@ -389,7 +389,13 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
         <div className="uno-table-status relative z-10 flex flex-wrap items-center justify-center gap-2 text-sm">
           <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1.5">
-            <span className={cn("size-3 rounded-full", DOT[game.current_color])} aria-hidden /> Cor: <strong>{COLOR_NAMES[game.current_color as CardColor]}</strong>
+            <span className={cn("size-3 rounded-full", DOT[game.current_color])} aria-hidden /> {language==="en"?"Color:":"Cor:"} <strong>{language==="en"?({r:"Red",y:"Yellow",g:"Green",b:"Blue"} as Record<string,string>)[game.current_color]:COLOR_NAMES[game.current_color as CardColor]}</strong>
+          </span>
+          <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1.5" aria-label={game.direction===1?(language==="en"?"Clockwise":"Sentido horário"):(language==="en"?"Counterclockwise":"Sentido anti-horário")}>
+            {game.direction===1
+              ?<RotateCw className="size-4 shrink-0 text-cyan" aria-hidden/>
+              :<RotateCcw className="size-4 shrink-0 text-cyan" aria-hidden/>}
+            {game.direction===1?(language==="en"?"Clockwise":"Sentido horário"):(language==="en"?"Counterclockwise":"Sentido anti-horário")}
           </span>
         </div>
 

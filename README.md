@@ -52,7 +52,7 @@ O anfitrião pode abrir **Configurações avançadas** também na sala de espera
 
 O **Desuno** só pode ser acionado por participantes ainda ativos: vencedores e observadores não podem denunciar. A partida termina automaticamente quando somente bots continuam na disputa; se um humano foi o primeiro colocado, ele permanece em primeiro e um bot com menos cartas ocupa o segundo lugar para encerrar a classificação.
 
-Animações especiais de cartas (bloqueios, voltas, mudança de cor, Bomba) são agregadas e reproduzidas **uma vez ao terminar a jogada**, exceto se a carta final já completar as colocações exigidas: nesse caso, nenhuma habilidade dessa carta é executada e sua imagem permanece na mesa por cinco segundos. As animações individuais de cada carta viajando ao descarte continuam acontecendo ao jogá-las.
+Os avisos temporários de habilidades (como Bloqueio e Bomba) são agregados e reproduzidos **uma vez ao terminar a jogada**. **Volta, +2 Volta e mudança de cor não exibem notificações temporárias**; a mesa mantém visíveis os indicadores fixos de sentido (horário ou anti-horário) e cor atual. Se a última carta completar as colocações exigidas, nenhuma habilidade dessa carta é executada e sua imagem permanece na mesa por cinco segundos. As animações individuais das cartas viajando ao descarte continuam acontecendo ao jogá-las.
 
 ## Inteligência difícil (nova política)
 

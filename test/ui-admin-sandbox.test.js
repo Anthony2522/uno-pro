@@ -73,10 +73,25 @@ test("padrão offline e limite de 30 cartas permanecem sincronizados no formulá
   assert.match(i18n,/From 2 to 30 cards; default is 8\./);
 });
 
-test("não há indicador de sentido e avisos descem abaixo dos status",()=>{
+test("indicador fixo da direção permanece; avisos temporários de Volta e cor são ocultados",()=>{
   const board=read("src/components/uno/GameTable.tsx");
   const route=read("src/routes/sala.$code.tsx");
-  assert.doesNotMatch(board,/Sentido horário|Sentido anti-horário/);
+  const describe=read("src/lib/uno/describe.ts");
+  const server=read("server/pro.js");
+  for(const icon of ["RotateCw","RotateCcw"])assert.ok(board.includes(icon),icon);
+  assert.match(board,/Sentido horário/);
+  assert.match(board,/Sentido anti-horário/);
+  assert.match(board,/Clockwise/);
+  assert.match(board,/Counterclockwise/);
+  assert.match(board,/game\.direction===1/);
+  assert.match(route,/\["shield_defense","roach","reverse","color_wave"\]\.includes\(e\.type\)/);
+  assert.match(route,/event\.type==="reverse"\|\|event\.type==="color_wave"/);
+  assert.doesNotMatch(route,/Nova cor escolhida/);
+  assert.doesNotMatch(route,/Repeat2/);
+  assert.doesNotMatch(describe,/sentido invertido/);
+  // Gameplay/server events continue unchanged; only presentation is suppressed.
+  assert.match(server,/effect\(r,"reverse"/);
+  assert.match(server,/effect\(r,"color_wave"/);
   assert.match(route,/top-\[11rem\] sm:top-\[12rem\]/);
 });
 test("mensagem de impossibilidade de revide e congelamento final têm versões em inglês",()=>{
