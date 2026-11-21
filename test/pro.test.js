@@ -2575,7 +2575,7 @@ test("um Coringa Dobro por baralho; distribuição de 600 cartas permite vários
   const doubles=cards.filter(c=>c==="WD").length;
   // 600 dealt cards require 2 full decks and part of a third.
   assert.ok(doubles>=2&&doubles<=3,`esperado 2 ou 3 exemplares de baralhos distintos, encontrados ${doubles}`);
-  assert.equal(newDeck(room.cards_enabled).filter(c=>c==="WD").length,1);
+  assert.equal(newDeck(r.cards_enabled).filter(c=>c==="WD").length,1);
 });
 
 test("Coringa Dobro dobra de +2, +4 e +5; cor é escolhida antes de passar",()=>{
@@ -2693,9 +2693,11 @@ test("reabastecimento gera exatamente um novo Coringa Dobro mesmo se outro estiv
   assert.equal(firstCount(),1,"um Dobro antigo no descarte");
   call("draw_card",{p_token:a.token,p_code:s.code});
   assert.equal(firstCount(),2,"novo baralho introduziu outro exemplar, sem apagar o antigo");
-  // A second refill adds a third, regardless of whether the earlier one was drawn.
+  // Preserve all previously generated doubles before forcing the next refill.
+  // This mimics their being played or kept, instead of deleting the prior pile.
+  g.discard_pile.push(...g.draw_pile.filter(c=>c==="WD"));
   g.draw_pile=[];
-  s.setTurn(a.guest_id);g.discard_pile=["b1","WD"];g.current_color="b";
+  s.setTurn(a.guest_id);g.current_color="b";
   call("draw_card",{p_token:a.token,p_code:s.code});
   assert.equal(firstCount(),3,"terceiro baralho deve criar terceiro Dobro");
 });
