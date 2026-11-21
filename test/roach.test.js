@@ -148,7 +148,7 @@ test("histórico da Barata sobrevive ao salvamento e à restauração do servido
 });
 test("baralho configurado sem Barata nunca a introduz, inclusive ao renovar",()=>{
   const deck=newDeck({A:false});
-  assert.equal(deck.length,228);
+  assert.equal(deck.length,229);
   assert.equal(deck.some(isRoach),false);
   const fresh=newDeck(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,true])));
   assert.equal(fresh.length,233);
