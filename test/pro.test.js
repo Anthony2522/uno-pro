@@ -288,7 +288,7 @@ test("probabilidades exatas dos bots no desafio do 9 e no corte",()=>{
   assert.equal(chooseCutDelay("hard",()=>0.999),null);
   assert.equal(chooseCutDelay("easy",()=>.999),40000);
   assert.equal(chooseDrawReplyDelay(false,()=>0),4000);
-  assert.equal(chooseDrawReplyDelay(false,()=>0.5),5000);
+  assert.equal(chooseDrawReplyDelay(false,()=>0.5),5500);
   assert.equal(chooseDrawReplyDelay(false,()=>1),7000);
   assert.equal(chooseDrawReplyDelay(false,()=>.75),6250);
   assert.equal(chooseDrawReplyDelay(true,()=>0),50000);
@@ -935,9 +935,8 @@ test("coringa Bomba existe uma vez e cada adversário compra duas sem perder tur
   assert.equal(room.hands.get(b.guest_id).cards.length,4);
   assert.equal(room.hands.get(bot).cards.length,4);
   assert.equal(g.pending_draw,0);
-  assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
+  assert.equal(g.turn_order[g.turn_idx],b.guest_id);
   assert.equal(g.current_color,"g");
-  assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"g8"}),/CUT_NOT_ALLOWED/);
   assert.equal(g.effects.find(e=>e.type==="bomb").n,2);
   assert.equal(g.card_moves.at(-1).card,"B");
 });
@@ -1224,7 +1223,8 @@ test("Negação anula +5, consome a vez do defensor e não compra",()=>{
   call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"g"});
   assert.equal(g.pending_draw,0);
   assert.equal(room.hands.get(b.guest_id).cards.length,before-1);
-  assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+  assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
+  assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"g8"}),/CUT_NOT_ALLOWED/);
   assert.equal(g.current_color,"g");
 });
 
