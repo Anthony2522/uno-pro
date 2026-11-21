@@ -112,7 +112,7 @@ function botCutTick(r) {
       const cuttingCard=hand(r,id).cards.find(card=>sameCardFace(card,w.top));
       if(!cuttingCard)continue;
       play(r,id,cuttingCard,color);
-      if(g.status==="playing" && current(g)===id && !g.vortex_queue) finish(r);
+      if(g.status==="playing" && !g.round_ends_at && current(g)===id && !g.vortex_queue) finish(r);
     } catch (e) { if(!(e instanceof RpcError))throw e; }
     break;
   }
@@ -444,7 +444,7 @@ function negateEffect(r,id,color){
   if(locked){g.lock_remaining=[];g.lock_target=null;g.lock_color=null;}
   const result=play(r,id,reactionCard,color,undefined,{defensiveNegation:true});
   // A defensive Negation spends this player's full turn.
-  effect(r,"negation",id,"N",color,{reason:cause});
+  if(!g.round_ends_at)effect(r,"negation",id,"N",color,{reason:cause});
   if(g.status==="playing"&&!g.round_ends_at&&current(g)===id&&g.turn_cards?.length)finish(r);
   g.seq++;bump(r);
   return result;
@@ -750,7 +750,11 @@ function finishEmptyHand(r,id){
     g.bot_cut=null;g.bot_move=null;g.skip_reaction=null;g.skip_carry=null;
     g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1,win:true};
     g.pending_draw=0;g.pending_draw_deadline=null;clearSwordDebt(g);g.nine=null;
-    bump(r,true);return {ok:true,won:true,ending:true};
+    if(process.env.UNO_SELF_PLAY==="1"&&g.self_play_benchmark===true){
+      // Virtual-time benchmark: finalize immediately; real games always show 5s.
+      settleRound(r);
+    }else bump(r,true);
+    return {ok:true,won:true,ending:true};
   }
   finish(r,false,true);
   const target=current(g);
@@ -813,7 +817,7 @@ function hardBotTick(r,id,h){
   const card=turn.plan.shift();
   if(!h.cards.includes(card))throw new Error("INVALID_HARD_BOT_PLAN");
   play(r,id,card,wild(card)?turn.color:undefined,reflected(g,card)==="X"?turn.target:undefined);
-  if(g.status!=="playing"||current(g)!==id||!g.turn_cards?.length||g.vortex_queue)return;
+  if(g.status!=="playing"||g.round_ends_at||current(g)!==id||!g.turn_cards?.length||g.vortex_queue)return;
   if(turn.plan.length===0){finish(r);return;}
   turn.due=clock()+2000;
 }
@@ -854,7 +858,7 @@ function beerTick(r){
       const others=g.turn_order.filter(id=>id!==actor);
       const targetId=reflected(g,chosen)==="X"?others[crypto.randomInt(others.length)]:undefined;
       play(r,actor,chosen,color,targetId);
-      if(g.status==="playing"&&current(g)===actor&&g.turn_cards?.length&&!g.vortex_queue)finish(r);
+      if(g.status==="playing"&&!g.round_ends_at&&current(g)===actor&&g.turn_cards?.length&&!g.vortex_queue)finish(r);
     }else{
       // No legal card: accept a pending draw penalty or pass after drawing once.
       finish(r,true);
@@ -864,7 +868,7 @@ function beerTick(r){
 }
 function botTick(r){
   const g=r.game;
-  if(!g || g.status!=="playing" || g.nine || g.skip_reaction || g.detective_pending_color || !isBot(current(g)))return;
+  if(!g || g.status!=="playing" || g.round_ends_at || g.nine || g.skip_reaction || g.detective_pending_color || !isBot(current(g)))return;
   const id=current(g),h=hand(r,id),bot=store.guestsById.get(id),rules=ready(r);
   const hard=bot.difficulty==="hard";
   const colorForNegation=()=>{
@@ -931,7 +935,7 @@ function botTick(r){
   const target=reflected(g,pick)==="X"?g.turn_order.filter(p=>p!==id)
     .sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length)[0]:undefined;
   play(r,id,pick,chooseColor(),target);
-  if(g.status!=="playing" || current(g)!==id||!g.turn_cards?.length||g.vortex_queue)return;
+  if(g.status!=="playing" || g.round_ends_at || current(g)!==id||!g.turn_cards?.length||g.vortex_queue)return;
   g.bot_move={id,due:clock()+(hard?2000:5000),played:(g.bot_move?.played||0)+1};
   // Keep the turn open for an additional card only when a valid combo exists.
   const series=g.turn_cards,first=series[0],prev=series.at(-1);
@@ -948,7 +952,7 @@ function botTick(r){
 // unattended bot-only tournament. Keep any already-earned human placement.
 function finishWhenOnlyBots(r){
   const g=r.game;
-  if(!g||g.status!=="playing"||!g.turn_order.length||g.turn_order.some(id=>!isBot(id))||
+  if(!g||g.status!=="playing"||g.round_ends_at||!g.turn_order.length||g.turn_order.some(id=>!isBot(id))||
      (process.env.UNO_SELF_PLAY==="1"&&g.self_play_benchmark===true))return false;
   g.placements??=[];
   const ranking=g.turn_order.slice().sort((a,b)=>hand(r,a).cards.length-hand(r,b).cards.length);
@@ -1061,6 +1065,7 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     }
     botUnoAndCatchTick(r);
     botCutTick(r);
+    if(g.round_ends_at)continue;
     if(g.nine||g.skip_reaction)continue; // A jump-in or skip response is pending.
     if(beerTick(r))continue;
     if(g.pending_draw && isBot(current(g)) &&
