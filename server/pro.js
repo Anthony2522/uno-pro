@@ -72,11 +72,10 @@ function hand(room,id){const h=room.hands.get(id);if(!h)fail("NOT_MEMBER",403);r
 function draw(room,id,n){const g=room.game,h=hand(room,id),got=[];
   for(let k=0;k<n;k++){if(!g.draw_pile.length){
     g.draw_pile=newDeck(room.cards_enabled);
-    // The Mirror and Double Wild each have only one physical copy.
-    for(const unique of ["Q","WD"]){
-      if(g.discard_pile.includes(unique)||[...room.hands.values()].some(h=>h.cards.includes(unique)))
-        g.draw_pile=g.draw_pile.filter(c=>c!==unique);
-    }
+    // Mirror remains unique to the match. Double Wild is one per new deck:
+    // a refill can introduce another even if one was already played or held.
+    if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
+      g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
   }
     const card=g.draw_pile.shift();if(card)got.push(card);}
   h.cards.push(...got);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;return got;}
