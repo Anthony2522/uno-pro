@@ -86,13 +86,21 @@ function runMatch(seed){
   function safe(fn,params){
     try{return call(fn,params);}
     catch(e){
-      if(["ANNOUNCEMENT_WAIT","NINE_ACTIVE","CATCH_NOT_ALLOWED","NOT_YOUR_TURN"].includes(e.code))return null;
+      if(["ANNOUNCEMENT_WAIT","NINE_ACTIVE","CATCH_NOT_ALLOWED","NOT_YOUR_TURN","ROUND_ENDING"].includes(e.code))return null;
       errors++;if(errors<=2)throw e;
       return null;
     }
   }
   for(let k=0;k<2500&&g.status==="playing";k++){
     fakeNow+=2200;
+    // Skip forward through the visual five-second final-card reveal. The
+    // benchmark runs with a virtual clock, not wall-clock time.
+    if(g.round_ends_at){
+      fakeNow=Math.max(fakeNow,g.round_ends_at);
+      proSweep();
+      if(g.status!=="playing")break;
+      continue;
+    }
     store.guestsById.get(human.guest_id).last_seen=fakeNow;
     const id=g.turn_order[g.turn_idx];
     if(id!==lastId){turns++;lastId=id;}
@@ -111,7 +119,7 @@ function runMatch(seed){
         if(choices.length && random()<.75){
           const c=choices[Math.floor(random()*choices.length)];
           safe("play_card",{p_token:human.token,p_code:code,p_card:c,p_color:colorChoice(h.cards.filter(x=>x!==c)),p_target_id:c==="X"?hardId:undefined});
-          if(g.status==="playing"&&g.turn_order[g.turn_idx]===id)safe("end_turn",{p_token:human.token,p_code:code});
+          if(g.status==="playing"&&!g.round_ends_at&&g.turn_order[g.turn_idx]===id)safe("end_turn",{p_token:human.token,p_code:code});
         }else safe("accept_draw",{p_token:human.token,p_code:code});
       } else if(!g.turn_cards.length){
         let choices=h.cards.filter(c=>canPlay(c,g)&&(!g.powerless_target||/^[rygb][0-9]$/.test(c)));
@@ -125,8 +133,8 @@ function runMatch(seed){
           const others=g.turn_order.filter(x=>x!==id);
           const target=c==="X"?others[Math.floor(random()*others.length)]:undefined;
           const res=safe("play_card",{p_token:human.token,p_code:code,p_card:c,p_color:colorChoice(h.cards.filter(x=>x!==c)),p_target_id:target});
-          if(res&&g.status==="playing"&&g.turn_order[g.turn_idx]===id)safe("end_turn",{p_token:human.token,p_code:code});
-        } else if(g.status==="playing"&&g.turn_order[g.turn_idx]===id)safe("end_turn",{p_token:human.token,p_code:code});
+          if(res&&g.status==="playing"&&!g.round_ends_at&&g.turn_order[g.turn_idx]===id)safe("end_turn",{p_token:human.token,p_code:code});
+        } else if(g.status==="playing"&&!g.round_ends_at&&g.turn_order[g.turn_idx]===id)safe("end_turn",{p_token:human.token,p_code:code});
       }
     }
     proSweep();
