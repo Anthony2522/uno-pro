@@ -2424,3 +2424,121 @@ test("partida sem resposta varia de 4 a 7s; bots com +2 respondem em 2s",()=>{
   const fast=G.pending_draw_deadline-Date.now();
   assert.ok(fast>1800&&fast<=2000,fast);
 });
+
+test("matriz de 24 combinações: Cadeado, +2, +2 Volta, +4, +5, Negação e empilhamento",()=>{
+  const cases=[
+    ["bD","bD","b",true,true],["bD","bT","b",true,true],
+    ["bD","rD","b",true,false],["bD","yT","b",true,false],
+    ["bD","W4","b",true,false],["bD","W5","b",true,false],
+    ["bD","rD","r",true,true],["bD","bT","r",true,false],
+    ["bT","bD","b",true,true],["bT","bT","b",true,true],
+    ["bT","W5","b",true,false],["W4","bD","b",true,true],
+    ["W4","bT","b",true,true],["W4","rD","b",true,false],
+    ["W4","W4","b",true,false],["W4","W5","b",true,false],
+    ["W5","bD","b",true,false],["W5","bT","b",true,false],
+    ["W5","W5","b",true,false],["W5","N","b",true,true],
+    ["W4","bD",null,false,false],["W4","N",null,false,true],
+    ["W5","W5",null,true,true],["W5","W4",null,true,false],
+  ];
+  for(const [attack,defense,lockColor,stack,canAnswer] of cases){
+    const a=call("register_guest",{p_nickname:"Atacante"}),b=call("register_guest",{p_nickname:"Defensor"});
+    const code=call("create_room",{p_token:a.token,p_name:"Matriz defesa",p_max_players:2,
+      p_rules:{repeat:true,sequence:true,nine:true,cut:true,stack}}).code;
+    call("join_room",{p_token:b.token,p_code:code});
+    call("start_game",{p_token:a.token,p_code:code});
+    const room=store.roomsByCode.get(code),g=room.game;
+    g.turn_order=[a.guest_id,b.guest_id];g.turn_idx=0;g.direction=1;
+    g.discard_pile=["b3"];g.current_color="b";
+    room.hands.get(a.guest_id).cards=[attack,"r3"];
+    room.hands.get(b.guest_id).cards=[defense,"g8"];
+    if(lockColor){g.lock_remaining=[b.guest_id];g.lock_color=lockColor;}
+    call("play_card",{p_token:a.token,p_code:code,p_card:attack,...(attack.startsWith("W")?{p_color:"r"}:{})});
+    call("end_turn",{p_token:a.token,p_code:code});
+    const label=JSON.stringify({attack,defense,lockColor,stack});
+    assert.ok(g.pending_draw>0,label);
+    assert.equal(g.turn_order[g.turn_idx],b.guest_id,label);
+    const own=call("get_room_state",{p_token:b.token,p_code:code}).game;
+    const outsider=call("get_room_state",{p_token:a.token,p_code:code}).game;
+    assert.equal(own.can_answer_draw,canAnswer,label);
+    assert.equal(own.legal_draw_counters.includes(defense),canAnswer&&defense!=="N",label);
+    assert.deepEqual(outsider.legal_draw_counters,[],"não revelar defesa de adversário");
+    const delay=g.pending_draw_deadline-Date.now();
+    assert.ok(canAnswer?delay>49000&&delay<=50000:delay>3700&&delay<=7000,
+      label+" prazo "+delay);
+    const before=room.hands.get(b.guest_id).cards.length;
+    if(defense==="N"&&canAnswer){
+      call("negate_effect",{p_token:b.token,p_code:code,p_color:"g"});
+      assert.equal(g.pending_draw,0,label);
+      assert.equal(room.hands.get(b.guest_id).cards.length,before-1,label);
+    }else if(canAnswer){
+      call("play_card",{p_token:b.token,p_code:code,p_card:defense,
+        ...(defense.startsWith("W")?{p_color:"g"}:{})});
+      assert.equal(room.hands.get(b.guest_id).cards.length,before-1,label);
+      call("end_turn",{p_token:b.token,p_code:code});
+      assert.ok(g.pending_draw>=4,label);
+    }else{
+      assert.throws(()=>call("play_card",{p_token:b.token,p_code:code,p_card:defense,
+        ...(defense.startsWith("W")?{p_color:"g"}:{})}),/MUST_COUNTER_OR_DRAW|LOCK_COLOR_ONLY/,label);
+      assert.equal(room.hands.get(b.guest_id).cards.length,before,label);
+      g.pending_draw_deadline=Date.now()-1;
+      proSweep();
+      assert.equal(g.pending_draw,0,label);
+      assert.ok(room.hands.get(b.guest_id).cards.length>before,label);
+    }
+  }
+});
+
+test("Cadeado aplicado em jogada real preserva 50 segundos apenas para +2 da cor",()=>{
+  const [a,c,b]=["Aplicador","Intermediário","Defensor"].map(p_nickname=>call("register_guest",{p_nickname}));
+  const code=call("create_room",{p_token:a.token,p_name:"Cadeado em cadeia",p_max_players:3}).code;
+  call("join_room",{p_token:c.token,p_code:code});
+  call("join_room",{p_token:b.token,p_code:code});
+  call("start_game",{p_token:a.token,p_code:code});
+  const room=store.roomsByCode.get(code),g=room.game;
+  g.turn_order=[a.guest_id,c.guest_id,b.guest_id];g.turn_idx=0;g.direction=1;
+  g.discard_pile=["b4"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["bL","g1"];
+  room.hands.get(c.guest_id).cards=["bD","rD","g8"];
+  room.hands.get(b.guest_id).cards=["bT","W4","rD","g2"];
+  call("play_card",{p_token:a.token,p_code:code,p_card:"bL"});
+  call("end_turn",{p_token:a.token,p_code:code});
+  assert.deepEqual(g.lock_remaining,[c.guest_id,b.guest_id]);
+  call("play_card",{p_token:c.token,p_code:code,p_card:"bD"});
+  call("end_turn",{p_token:c.token,p_code:code});
+  assert.equal(g.pending_draw,2);
+  assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+  const view=call("get_room_state",{p_token:b.token,p_code:code}).game;
+  assert.deepEqual(view.legal_draw_counters,["bT"]);
+  assert.equal(view.can_answer_draw,true);
+  assert.ok(g.pending_draw_deadline-Date.now()>49000);
+  assert.throws(()=>call("play_card",{p_token:b.token,p_code:code,p_card:"rD"}),/LOCK_COLOR_ONLY/);
+  assert.throws(()=>call("play_card",{p_token:b.token,p_code:code,p_card:"W4",p_color:"b"}),/LOCK_COLOR_ONLY/);
+  assert.equal(g.pending_draw,2);
+  call("play_card",{p_token:b.token,p_code:code,p_card:"bT"});
+  call("end_turn",{p_token:b.token,p_code:code});
+  assert.equal(g.pending_draw,4);
+  assert.equal(g.direction,-1);
+  assert.equal(g.lock_color,null,"o cadeado terminou para o último afetado");
+  assert.equal(g.turn_order[g.turn_idx],c.guest_id);
+  assert.deepEqual(call("get_room_state",{p_token:c.token,p_code:code}).game.legal_draw_counters,["rD"]);
+});
+
+test("Sem Poderes e +5 ignoram comes incompatíveis, mas Negação é resposta válida",()=>{
+  for(const [attack,defense,powerless,stack,valid] of [
+    ["W4","bD",true,true,false],["W4","N",true,true,true],
+    ["W4","W4",true,true,false],["W5","bT",false,true,false],
+    ["W5","W5",false,true,true],["bD","bT",false,false,false],
+    ["bD","N",false,false,true],
+  ]){
+    const s=setup({repeat:true,sequence:true,nine:true,cut:true,stack}),{room,g,a,b}=s;
+    s.setTurn(a.guest_id);g.discard_pile=["b3"];g.current_color="b";
+    room.hands.get(a.guest_id).cards=[attack,"r3"];
+    room.hands.get(b.guest_id).cards=[defense,"g8"];
+    if(powerless)g.powerless_remaining=[b.guest_id];
+    s.play(a,attack,"r");s.end(a);
+    const state=call("get_room_state",{p_token:b.token,p_code:s.code}).game;
+    assert.equal(state.can_answer_draw,valid,JSON.stringify({attack,defense,powerless,stack}));
+    const ms=g.pending_draw_deadline-Date.now();
+    assert.ok(valid?ms>49000:ms>=3700&&ms<=7000);
+  }
+});
