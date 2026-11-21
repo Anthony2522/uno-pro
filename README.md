@@ -44,8 +44,9 @@ Nas configurações avançadas, a **quantidade de cartas iniciais** é a primeir
 - Bloqueios consecutivos mostram avisos acumulativos com os nomes dos jogadores pulados.
 - Coringa Detetive exibe cartas maiores, com identificação legível, apenas ao jogador autorizado pelo prazo de dez segundos.
 - Coringa Bomba: uma cópia no baralho, cada adversário compra duas cartas sem perder a vez.
-- **Coringa Dobro:** um único exemplar físico por partida, habilitado nas Configurações avançadas por padrão. Rebater com ele dobra a dívida de compra acumulada (+4 vira +8, +5 vira +10), inclusive após um +5, e passa automaticamente a vez após escolher a cor. Fora de uma batalha de compra funciona como coringa de mudança de cor. Cadeado e Sem Poderes impedem seu uso no turno afetado; o Espelho pode copiar seu poder.
+- **Coringa Dobro:** um exemplar físico por baralho (outros podem entrar quando o baralho for reabastecido), habilitado nas Configurações avançadas por padrão. Rebater com ele dobra a dívida de compra acumulada (+4 vira +8, +5 vira +10), inclusive após um +5, e passa automaticamente a vez após escolher a cor. Fora de uma batalha de compra funciona como coringa de mudança de cor. Cadeado e Sem Poderes impedem seu uso no turno afetado; o Espelho pode copiar seu poder.
 - **Notificações:** a mensagem grande “Fulano dobrou e passou para o próximo!” dura 3 segundos. Qualquer aviso temporário pode ser dispensado ao tocar ou clicar na tela, sem bloquear o restante do jogo.
+- **Manual:** na tela inicial, permanece completo. Dentro de uma sala (antes, durante e após a rodada), apresenta somente as regras opcionais ativadas e as cartas habilitadas nas configurações da sala; explica compras conforme a opção de rebater dívidas. Atualiza automaticamente quando o anfitrião altera essas opções.
 - Desconexão não força o avanço imediato: enquanto o participante está offline, há até trinta segundos de tolerância, limitada também pelo relógio normal de cinquenta segundos. Reconectar não reinicia o tempo gasto. **Sair voluntariamente da sala** remove imediatamente o jogador da partida e libera sua vaga.
 
 ## Configurações antes da partida e efeitos por sequência

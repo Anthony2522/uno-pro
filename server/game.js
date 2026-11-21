@@ -91,7 +91,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 232 cards (including one Mirror Wild and four independent Roach cards). */
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 233 cards with all optional cards enabled (including one Mirror and one Double Wild PER FRESH DECK, plus four independent Roach cards). */
 export const CUSTOM_CARD_KEYS=Object.freeze(["T","H","E","L","V","C","A","W5","WD","X","B","N","P","M","Q"]);
 // Cerveja, Barata, Espada and Coringa Metralhadora are opt-in for new rooms.
 const DISABLED_BY_DEFAULT=new Set(["C","A","E","M"]);
@@ -163,11 +163,10 @@ function draw(room, gid, n) {
     if (g.draw_pile.length === 0) {
       // Endless fresh deck; keep discard history so the visible top card never changes.
       g.draw_pile = newDeck(room.cards_enabled);
-      // One physical Mirror and one Double Wild, even during infinite refills.
-      for(const unique of ["Q","WD"]){
-        if(g.discard_pile.includes(unique)||[...room.hands.values()].some(h=>h.cards.includes(unique)))
-          g.draw_pile=g.draw_pile.filter(c=>c!==unique);
-      }
+      // Mirror remains unique to the match. Double Wild has one copy in
+      // EACH new deck, so refilling may add another to the current match.
+      if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
+        g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
     }
     drawn.push(g.draw_pile.shift());
   }
@@ -511,11 +510,9 @@ const handlers = {
       for (let i=0;i<(r.initial_cards??8);i++) {
         if(!dp.length) {
           dp=newDeck(r.cards_enabled);
-          // Preserve both unique wilds when dealing more than one deck.
-          for(const unique of ["Q","WD"]){
-            if(cards.includes(unique)||[...r.hands.values()].some(h=>h.cards.includes(unique)))
-              dp=dp.filter(c=>c!==unique);
-          }
+          // Keep Mirror unique; each additional deck may include its own WD.
+          if(cards.includes("Q")||[...r.hands.values()].some(h=>h.cards.includes("Q")))
+            dp=dp.filter(c=>c!=="Q");
         }
         cards.push(dp.shift());
       }

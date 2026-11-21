@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Logo } from "./Logo";
 import { HowToPlayDialog } from "./HowToPlayDialog";
+import type {RuleSettings} from "@/lib/uno/api";
+import type {CardSettings} from "@/lib/uno/cardSettings";
 import {FirstVisitManualHint} from "./FirstVisitManualHint";
 import { NicknameForm } from "./NicknameForm";
 import { PlayerAvatar } from "./PlayerAvatar";
@@ -14,7 +16,11 @@ import { useMuted } from "@/lib/uno/useMuted";
 import { useLanguage } from "@/lib/uno/i18n";
 import { Input } from "@/components/ui/input";
 
-export function AppHeader({ children }: { children?: React.ReactNode }) {
+export function AppHeader({ children, manualRules, manualCards }: {
+  children?: React.ReactNode;
+  manualRules?: RuleSettings;
+  manualCards?: Partial<CardSettings>;
+}) {
   const { guest, rename, isDev, activateDev } = useReadyGuest();
   const { language, toggleLanguage } = useLanguage();
   const [devKey,setDevKey]=useState("");
@@ -35,7 +41,7 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
           title={language==="pt"?"English":"Português"}>
           <span className="text-2xl" aria-hidden>{language==="pt"?"🇺🇸":"🇧🇷"}</span>
         </Button>
-        <span data-manual-trigger className="inline-flex shrink-0"><HowToPlayDialog /></span>
+        <span data-manual-trigger className="inline-flex shrink-0"><HowToPlayDialog roomRules={manualRules} roomCards={manualCards} /></span>
         <Button variant="glass" size="iconLg" onClick={toggleMuted} aria-label={muted ? "Ativar sons" : "Desativar sons"} aria-pressed={!muted}>
           {muted ? <VolumeX /> : <Volume2 />}
         </Button>

@@ -6,6 +6,8 @@ import type {LucideIcon} from "lucide-react";
 import {StableCardPreview} from "./StableCardPreview";
 import {cardValue} from "@/lib/uno/cards";
 import {useLanguage} from "@/lib/uno/i18n";
+import type {RuleSettings} from "@/lib/uno/api";
+import {DEFAULT_CARD_SETTINGS,type CardSettings,type CustomCardKey} from "@/lib/uno/cardSettings";
 
 type Group="basics"|"colored"|"wild";
 export type ManualEntry={
@@ -75,8 +77,8 @@ export const RULES:ManualEntry[]=[
     descPt:"Escolhe uma cor e adiciona cinco cartas à dívida. Só pode ser rebatido com outro +5 ou Coringa Dobro.",
     descEn:"Chooses a color and adds five cards to the debt. Only another +5 or Double Wild may counter it."},
   {key:"WD",group:"wild",pt:"Coringa Dobro",en:"Double Wild",card:"WD",
-    descPt:"Uma carta por partida, habilitada por padrão. Pode rebater qualquer dívida de compra, inclusive +5: dobra o total acumulado e passa imediatamente após escolher a cor. Sem dívida, funciona como coringa comum.",
-    descEn:"One card per match, enabled by default. Counters any draw debt including +5, doubles the current total and automatically passes after a color is chosen. Without a debt, acts as a regular wild."},
+    descPt:"Uma carta por baralho, habilitada por padrão. Novas cópias podem surgir após o reabastecimento. Pode rebater qualquer dívida de compra, inclusive +5: dobra o total acumulado e passa imediatamente após escolher a cor. Sem dívida, funciona como coringa comum.",
+    descEn:"One card per deck, enabled by default. More copies may appear when the deck refills. Counters any draw debt including +5, doubles the current total and automatically passes after a color is chosen. Without a debt, acts as a regular wild."},
   {key:"X",group:"wild",pt:"Coringa Detetive",en:"Detective Wild",card:"X",
     descPt:"Escolhe um adversário, vê sua mão por até dez segundos e depois seleciona uma cor. Você pode encerrar a inspeção antes.",
     descEn:"Choose an opponent, inspect their hand for up to ten seconds, then pick a color. You may end inspection early."},
@@ -96,6 +98,77 @@ export const RULES:ManualEntry[]=[
     descPt:"Copia a arte e os poderes do último coringa real jogado por qualquer pessoa, inclusive você. Sua borda branca e o brilho reflexivo permanecem. Antes do primeiro coringa, tem a aparência própria de Espelho e age como Coringa comum.",
     descEn:"Copies the last real wild card's artwork and effect, even if you played it yourself. Its reflective sheen and white glowing edge remain. Before the first wild, it shows its own Mirror design and acts as a regular Wild."}
 ];
+/** Room manual: show only enabled optional rules and available card types.
+ * The home page continues using the complete RULES list unfiltered. */
+export function rulesForRoom(roomRules:RuleSettings,roomCards:Partial<CardSettings>):ManualEntry[]{
+  const enabled={...DEFAULT_CARD_SETTINGS,...roomCards};
+  const optionalBasics:Record<string,keyof RuleSettings>={
+    nine:"nine",cut:"cut",repeat:"repeat",sequence:"sequence"
+  };
+  const permanentCards=new Set(["R","S","D","W","W4"]);
+  return RULES.filter(entry=>{
+    if(entry.group==="basics"){
+      const rule=optionalBasics[entry.key];
+      return !rule||roomRules[rule]===true;
+    }
+    if(permanentCards.has(entry.key))return true;
+    return enabled[entry.key as CustomCardKey]===true;
+  }).map(entry=>{
+    // The buy-a-card rule is always in force, but debt stacking is optional.
+    if(entry.key==="draws"){
+      if(!roomRules.stack)return {...entry,pt:"Compras",en:"Drawing cards",
+        descPt:"Se não tiver uma carta válida, compre uma. Se ela puder ser jogada, você pode usá-la. Dívidas de compra não podem ser rebatidas ou acumuladas nesta sala; o jogador atingido compra as cartas e passa.",
+        descEn:"If you have no playable card, draw one. If it is playable, you may use it. Draw debts cannot be countered or stacked in this room; the affected player draws and passes."};
+      const extraPt=[
+        enabled.W5?(enabled.WD?"O +5 só pode ser rebatido com outro +5 ou Coringa Dobro.":"O +5 só pode ser rebatido com outro +5."):null,
+        enabled.WD?"O Coringa Dobro dobra o total acumulado da dívida.":null
+      ].filter(Boolean).join(" ");
+      const extraEn=[
+        enabled.W5?(enabled.WD?"+5 can only be countered by another +5 or Double Wild.":"+5 can only be countered by another +5."):null,
+        enabled.WD?"Double Wild doubles the entire accumulated debt.":null
+      ].filter(Boolean).join(" ");
+      return {...entry,
+        descPt:`Se não tiver carta válida, compre uma; se for possível, jogue-a. As dívidas de compra podem ser rebatidas por cartas permitidas, somando o saldo. ${extraPt} Você também pode aceitar a dívida e passar.`,
+        descEn:`If you have no playable card, draw one; you may play it if valid. Draw debts can be countered by permitted cards, stacking the balance. ${extraEn} You may also accept the debt and pass.`};
+    }
+    if(entry.key==="D"&&!roomRules.stack)return {...entry,
+      descPt:"Obriga o próximo jogador a comprar duas cartas. Nesta sala, não é possível rebater.",
+      descEn:"Forces the next player to draw two cards. Countering is disabled in this room."};
+    if(entry.key==="T"&&!roomRules.stack)return {...entry,
+      descPt:"Acrescenta duas cartas à compra obrigatória e inverte o sentido. Nesta sala, não é possível rebater.",
+      descEn:"Adds two cards to the mandatory draw and reverses direction. Countering is disabled in this room."};
+    if(entry.key==="W4"&&!roomRules.stack)return {...entry,
+      descPt:"Escolhe uma cor e obriga o próximo jogador a comprar quatro cartas. Nesta sala, não é possível rebater.",
+      descEn:"Chooses a color and forces the next player to draw four cards. Countering is disabled in this room."};
+    if(entry.key==="W5"){
+      if(!roomRules.stack)return {...entry,
+        descPt:"Escolhe uma cor e obriga o próximo jogador a comprar cinco cartas. Nesta sala, não é possível rebater.",
+        descEn:"Chooses a color and forces the next player to draw five cards. Countering is disabled in this room."};
+      if(!enabled.WD)return {...entry,
+        descPt:"Escolhe uma cor e adiciona cinco cartas à dívida. Só pode ser rebatido com outro +5.",
+        descEn:"Chooses a color and adds five cards to the debt. Only another +5 can counter it."};
+    }
+    if(entry.key==="WD"&&!roomRules.stack)return {...entry,
+      descPt:"Uma por baralho, podendo aparecer novamente após reabastecimentos. Com rebatidas desativadas nesta sala, funciona apenas como coringa comum para escolher a cor.",
+      descEn:"One per deck; more may appear after refills. With countering disabled in this room, it works only as a regular wild to choose the color."};
+    if(entry.key==="E"&&!roomRules.stack)return {...entry,
+      descPt:"Ativa uma carga ofensiva não acumulativa: seu próximo ataque de compra acrescenta +3 à dívida. O golpe é exibido quando a dívida é paga. Rebatidas estão desativadas.",
+      descEn:"Activates a non-stacking offensive charge: your next draw attack adds +3 to the debt. The strike appears when the debt is paid. Countering is disabled."};
+    if(entry.key==="L"&&!enabled.N)return {...entry,
+      descPt:"Na próxima vez de cada adversário, só é possível jogar cartas da cor do Cadeado, nunca coringas.",
+      descEn:"On each opponent's next turn, only cards matching the Lock's color are allowed, never wilds."};
+    if(entry.key==="P"&&!enabled.N)return {...entry,
+      descPt:"Na próxima vez, cada adversário só pode jogar cartas numéricas.",
+      descEn:"On their next turn, each opponent can only play number cards."};
+    if(entry.key==="N")return {...entry,
+      descPt:`Cancela um Bloqueio ou uma dívida de compra${enabled.L?" ou a restrição de Cadeado":""}${enabled.P?" ou Sem Poderes":""}. Se a restrição for global, cancela para todos.`,
+      descEn:`Cancels a Skip or draw debt${enabled.L?", a Lock restriction":""}${enabled.P?", or Powerless":""}. Global restrictions are canceled for everyone.`};
+    if(entry.key==="H"&&(!enabled.B||!enabled.X))return {...entry,
+      descPt:`Protege uma vez contra Bloqueio ou compras${enabled.B?", Bomba":""}${enabled.X?" ou Detetive":""}. Não acumula: duas cartas Escudo ainda concedem só uma proteção.`,
+      descEn:`Protects once against Skip or draw penalties${enabled.B?", Bomb":""}${enabled.X?", or Detective":""}. Does not stack: multiple Shields still give only one protection.`};
+    return entry;
+  });
+}
 const MINI_ORDER=["W4","W5","WD","X","B","N","P","M","Q","W","H","E","L","V","C","A","T","D","S","R"];
 export function rulesForHand(cards:readonly string[]){
   const values=new Set(cards.map(cardValue));
@@ -125,8 +198,13 @@ const GROUPS:{id:Group;pt:string;en:string}[]=[
   {id:"colored",pt:"Cartas especiais coloridas",en:"Colored special cards"},
   {id:"wild",pt:"Coringas",en:"Wild cards"}
 ];
-export function HowToPlayDialog({trigger}:{trigger?:ReactNode}){
+export function HowToPlayDialog({trigger,roomRules,roomCards}:{
+  trigger?:ReactNode;
+  roomRules?:RuleSettings|undefined;
+  roomCards?:Partial<CardSettings>|undefined;
+}){
   const {language}=useLanguage(),en=language==="en";
+  const entries=roomRules&&roomCards?rulesForRoom(roomRules,roomCards):RULES;
   return <Dialog>
     <DialogTrigger asChild>{trigger??<Button variant="glass" size="sm" className="h-10 rounded-xl">
       <BookOpen className="size-5"/>{en?"How to play":"Como jogar"}
@@ -134,12 +212,15 @@ export function HowToPlayDialog({trigger}:{trigger?:ReactNode}){
     <DialogContent className="glass-strong flex max-h-[88dvh] flex-col overflow-hidden rounded-3xl border-glass-border sm:max-w-xl">
       <DialogHeader className="shrink-0">
         <DialogTitle className="font-display text-2xl">{en?"UNO Pro rulebook":"Manual de regras"}</DialogTitle>
-        <DialogDescription>{en?"First learn the basic rules, then browse each special card.":"Primeiro as regras, depois cada carta especial, por categoria."}</DialogDescription>
+        <DialogDescription>{roomRules&&roomCards
+          ?(en?"Only the rules and cards enabled for this room.":"Somente regras e cartas habilitadas nesta sala.")
+          :(en?"First learn the basic rules, then browse each special card.":"Primeiro as regras, depois cada carta especial, por categoria.")}
+        </DialogDescription>
       </DialogHeader>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain pr-2">
-        {GROUPS.map(group=><section key={group.id}>
+        {GROUPS.filter(group=>entries.some(r=>r.group===group.id)).map(group=><section key={group.id}>
           <h3 className="sticky top-0 z-10 mb-2 rounded-xl bg-navy px-3 py-2 font-display text-base font-bold text-cyan">{en?group.en:group.pt}</h3>
-          <RuleRows entries={RULES.filter(r=>r.group===group.id)} numbered={group.id==="basics"}/>
+          <RuleRows entries={entries.filter(r=>r.group===group.id)} numbered={group.id==="basics"}/>
         </section>)}
       </div>
     </DialogContent>
