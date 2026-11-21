@@ -91,7 +91,7 @@ export function shuffle(arr) {
   return a;
 }
 
-/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 232 cards (including one Mirror Wild and four independent Roach cards). */
+/** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 233 cards with all optional cards enabled (including one Mirror and one Double Wild PER FRESH DECK, plus four independent Roach cards). */
 export const CUSTOM_CARD_KEYS=Object.freeze(["T","H","E","L","V","C","A","W5","WD","X","B","N","P","M","Q"]);
 // Cerveja, Barata, Espada and Coringa Metralhadora are opt-in for new rooms.
 const DISABLED_BY_DEFAULT=new Set(["C","A","E","M"]);

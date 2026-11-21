@@ -80,7 +80,7 @@ function draw(room,id,n){const g=room.game,h=hand(room,id),got=[];
     const card=g.draw_pile.shift();if(card)got.push(card);}
   h.cards.push(...got);h.uno_called=false;h.uno_since=null;h.bot_uno_plan=null;return got;}
 function shuffle(a){const b=[...a];for(let k=b.length-1;k>0;k--){const j=crypto.randomInt(k+1);[b[k],b[j]]=[b[j],b[k]];}return b;}
-// A +5 is always stackable only by another +5. It can also answer +2/+4.
+// A +5 may be answered by another +5 or Double Wild; +5 can answer +2/+4.
 const canCounter=(g,c)=>reflected(g,c)==="WD"||
   (g.pending_uncounterable?reflected(g,c)==="W5":(isDraw(reflected(g,c))||reflected(g,c)==="W5"));
 const counter=(r,id)=>hand(r,id).cards.some(c=>canCounter(r.game,c));
