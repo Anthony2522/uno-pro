@@ -84,7 +84,7 @@ test("indicador fixo da direção permanece; avisos temporários de Volta e cor 
   assert.match(board,/Clockwise/);
   assert.match(board,/Counterclockwise/);
   assert.match(board,/game\.direction===1/);
-  assert.match(route,/\["shield_defense","roach","reverse","color_wave"\]\.includes\(e\.type\)/);
+  assert.match(route,/\["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"\]\.includes\(e\.type\)/);
   assert.match(route,/event\.type==="reverse"\|\|event\.type==="color_wave"/);
   assert.doesNotMatch(route,/Nova cor escolhida/);
   assert.doesNotMatch(route,/Repeat2/);
