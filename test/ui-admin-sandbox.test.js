@@ -122,3 +122,19 @@ test("resposta de compra respeita filtro privado do servidor e avisa a cor do Ca
   assert.match(source,/\+5 requires another \+5, but draw wilds are blocked/);
   assert.match(dict,/Você não tem como revidar/);
 });
+
+test("avisos 6, 8, 12 e 13 não aparecem abaixo dos adversários; denúncia indica autor e alvo",()=>{
+  const route=read("src/routes/sala.$code.tsx");
+  const engine=read("server/pro.js");
+  const hidden=["shield_armed","roach_end","sword_armed","sword_boost"];
+  assert.match(route,/\["shield_defense","roach","reverse","color_wave","shield_armed","roach_end","sword_armed","sword_boost"\]\.includes\(e\.type\)/);
+  assert.match(route,/e\.type==="catch"\?language==="en"\?/);
+  assert.match(route,/\$\{e\.name\} denunciou \$\{e\.target_name\?\?"um jogador"\}/);
+  assert.match(route,/\$\{e\.name\} reported \$\{e\.target_name\?\?"a player"\}/);
+  assert.doesNotMatch(route,/denunciado!/);
+  // Hiding a banner must not disable card mechanics or the special animations.
+  for(const kind of hidden)assert.ok(engine.includes('effect(r,"'+kind+'"'),kind);
+  assert.match(route,/e\.type==="sword_strike"/);
+  assert.match(route,/const shieldDefenses=/);
+  assert.match(route,/const roachTransfers=/);
+});
