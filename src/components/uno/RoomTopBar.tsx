@@ -75,6 +75,7 @@ export function ConnectionBanner({ show }: { show: boolean }) {
 }
 
 export function LeaveButton({ onConfirm, inGame }: { onConfirm: () => void; inGame: boolean }) {
+  const {language}=useLanguage();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -86,7 +87,7 @@ export function LeaveButton({ onConfirm, inGame }: { onConfirm: () => void; inGa
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Sair da sala?</AlertDialogTitle>
             <AlertDialogDescription>
-              {inGame ? "Você poderá voltar a esta partida pela tela inicial, enquanto sua vaga estiver preservada." : "Você pode voltar depois pelo mesmo link, se ainda houver vaga."}
+              {inGame ? (language==="en"?"Leaving removes you from this match and frees your seat for others.":"Ao sair, você deixará a partida e sua vaga ficará disponível para outros jogadores.") : (language==="en"?"You can return using the same link if a seat is available.":"Você pode voltar depois pelo mesmo link, se ainda houver vaga.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

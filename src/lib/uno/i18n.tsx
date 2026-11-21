@@ -2,6 +2,8 @@ import {createContext,useContext,useEffect,useMemo,useRef,useState,type ReactNod
 import {localizeBotNames} from "./botNames";
 export type Language="pt"|"en";
 const dictionary:Record<string,string>={
+  "Você não tem como revidar": "You have no way to counter",
+  "A rodada já terminou. Aguarde a exibição da última carta.": "The round has ended. Wait for the final card display.",
   "Carta adicionada à sua mão!": "Card added to your hand!",
   "Manual de regras": "Rulebook",
   "Espectador": "Spectator",
