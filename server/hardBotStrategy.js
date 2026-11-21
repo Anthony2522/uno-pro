@@ -11,7 +11,7 @@ export const HARD_AI_WEIGHTS=Object.freeze({
   shieldValue:1, swordValue:1, lockValue:1, restrictionsValue:1,
 });
 const COLORS=["b","y","g","r"];
-const WILDS=new Set(["W","W4","W5","X","B","N","P","M","Q"]);
+const WILDS=new Set(["W","W4","W5","WD","X","B","N","P","M","Q"]);
 // Q is physically a wild even before another one is played. Its *effect*
 // changes with the latest real wild, without revealing an opponent's hand.
 const resolved=(card,mirrorAs="W")=>card==="Q"?(mirrorAs||"W"):card;
@@ -20,7 +20,8 @@ const number=(c,mirrorAs="W")=>/^[0-9]$/.test(value(c,mirrorAs));
 const wild=c=>WILDS.has(c);
 const drawValue=(c,mirrorAs="W")=>{const e=resolved(c,mirrorAs);return e==="W5"?5:e==="W4"?4:e?.slice(1)==="D"||e?.slice(1)==="T"?2:0;};
 const attack=(c,mirrorAs="W")=>drawValue(c,mirrorAs)>0;
-const canCounter=(c,uncounterable,mirrorAs="W")=>uncounterable?resolved(c,mirrorAs)==="W5":attack(c,mirrorAs);
+const canCounter=(c,uncounterable,mirrorAs="W")=>resolved(c,mirrorAs)==="WD"||
+  (uncounterable?resolved(c,mirrorAs)==="W5":attack(c,mirrorAs));
 const advance=(idx,dir,steps,n)=>(idx+dir*steps%n+n*100)%n;
 const playable=(c,top,color)=>wild(c)||c[0]===color||(!wild(top)&&value(c)===value(top));
 const sum=(a)=>a.reduce((x,y)=>x+y,0);
@@ -118,6 +119,7 @@ function evaluate(plan,color,context,remaining) {
     if(value(c,mirrorAs)==="R"){reverses++;if(n===2)skips++;}
     if(value(c,mirrorAs)==="T"&&n>2)reverses++;
     owed+=drawValue(c,mirrorAs);
+    if(resolved(c,mirrorAs)==="WD"&&owed>0)owed*=2;
     if(resolved(c,mirrorAs)==="B")hasBomb=true;
   }
   const {nextIndex,skipped}=nextSeat(order,turnIndex,direction,skips,reverses);
@@ -254,7 +256,7 @@ function enumerate(context) {
       plans.push([...plan]);
       // A Vortex immediately starts a server-controlled pull. There can be no
       // additional manual cards in that plan, even another differently colored Vortex.
-      if(plan.some(card=>value(card,mirrorAs)==="V")||plan.length>=maxDepth)return;
+      if(plan.some(card=>value(card,mirrorAs)==="V"||resolved(card,mirrorAs)==="WD")||plan.length>=maxDepth)return;
     }
     for(const c of keys){
       if(!counts.get(c))continue;
