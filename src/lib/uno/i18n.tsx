@@ -3,7 +3,6 @@ import {localizeBotNames} from "./botNames";
 export type Language="pt"|"en";
 const dictionary:Record<string,string>={
   "Você não tem como revidar": "You have no way to counter",
-  "Cadeado: só pode revidar com cartas de compra da cor exigida, sem coringas. Use Negação para cancelar o Cadeado.": "Lock: counter only with draw cards of the required color, no wilds. Use Negation to cancel the Lock.",
   "A rodada já terminou. Aguarde a exibição da última carta.": "The round has ended. Wait for the final card display.",
   "Carta adicionada à sua mão!": "Card added to your hand!",
   "Manual de regras": "Rulebook",

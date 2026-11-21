@@ -102,5 +102,7 @@ test("resposta de compra respeita filtro privado do servidor e avisa a cor do Ca
   assert.match(source,/hand\.some\(c=>counterCard\(c\)&&cardValue\(c\)==="T"\)/);
   assert.match(api,/legal_draw_counters\?: string\[\]/);
   assert.match(server,/viewingDebt\?legalDrawCounters\(r,result\.me\):\[\]/);
-  assert.match(dict,/Lock: counter only with draw cards of the required color/);
+  assert.match(source,/\+5 exige outro \+5, mas coringas de compra estão proibidos/);
+  assert.match(source,/\+5 requires another \+5, but draw wilds are blocked/);
+  assert.match(dict,/Você não tem como revidar/);
 });

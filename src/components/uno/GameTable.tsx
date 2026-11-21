@@ -318,9 +318,13 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
               :`Compra automática em ${debtRemaining}s se você não revidar.`}</p>
             {lockedDebtColor&&<p className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-warning/35 bg-warning/10 px-2 py-2 text-xs font-bold text-warning">
               <LockKeyhole className="size-4 shrink-0"/>
-              {language==="en"
-                ?`Lock: counter only with ${lockReplyColor} +2 / +2 Reverse. No draw wilds.`
-                :`Cadeado: só pode revidar com +2 ou +2 Volta ${lockReplyColor}, sem coringas de compra.`}
+              {game.pending_uncounterable
+                ?(language==="en"
+                  ?`Lock (${lockReplyColor}): +5 requires another +5, but draw wilds are blocked. Use Negation if available.`
+                  :`Cadeado (${lockReplyColor}): +5 exige outro +5, mas coringas de compra estão proibidos. Use Negação, se tiver.`)
+                :(language==="en"
+                  ?`Lock: counter only with ${lockReplyColor} +2 / +2 Reverse. No draw wilds.`
+                  :`Cadeado: só pode revidar com +2 ou +2 Volta ${lockReplyColor}, sem coringas de compra.`)}
             </p>}
             {hand.some(counterCard)&&<p className="mt-1 text-sm text-cyan">{language==="en"?"Counter":"Revidar"} → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong>
               {!game.pending_uncounterable && hand.some(c=>counterCard(c)&&cardValue(c)==="T") && game.turn_order.length>2 && <> · +2 Volta → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)-game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong></>}
