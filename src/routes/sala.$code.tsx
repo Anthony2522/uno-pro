@@ -226,7 +226,7 @@ function RoomPage() {
       )}
 
       {visibleEffects.length>0&&(
-        <div className="pointer-events-none fixed inset-x-0 top-[4.5rem] z-[54] mx-auto flex w-full max-w-lg flex-col gap-2 px-3" role="status" aria-live="polite">
+        <div className="pointer-events-none fixed inset-x-0 top-[11rem] sm:top-[12rem] z-[54] mx-auto flex w-full max-w-lg flex-col gap-2 px-3" role="status" aria-live="polite">
           {visibleEffects.map(e=>(
             <div key={e.id}
               className={"glass-strong flex min-h-12 flex-wrap items-center gap-3 rounded-2xl border border-cyan/40 bg-navy/95 px-3 py-2 text-sm shadow-glow animate-pop uno-notice-"+e.type}>

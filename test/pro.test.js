@@ -28,6 +28,11 @@ function expireDebt(g){
   g.pending_draw_deadline=Date.now()-1;
   proSweep();
 }
+function expireRound(g){
+  assert.ok(g.round_ends_at,"round should be showing its last card");
+  g.round_ends_at=Date.now()-1;
+  proSweep();
+}
 test("criação, bots, privacidade e regras ativadas por padrão",()=>{
   const s=setup();
   const alice=call("get_room_state",{p_token:s.a.token,p_code:s.code});
@@ -283,10 +288,13 @@ test("probabilidades exatas dos bots no desafio do 9 e no corte",()=>{
   assert.equal(chooseCutDelay("hard",()=>0.999),null);
   assert.equal(chooseCutDelay("easy",()=>.999),40000);
   assert.equal(chooseDrawReplyDelay(false,()=>0),4000);
-  assert.equal(chooseDrawReplyDelay(false,()=>0.5),5000);
-  assert.equal(chooseDrawReplyDelay(false,()=>1),6000);
+  assert.equal(chooseDrawReplyDelay(false,()=>0.5),5500);
+  assert.equal(chooseDrawReplyDelay(false,()=>1),7000);
+  assert.equal(chooseDrawReplyDelay(false,()=>.75),6250);
   assert.equal(chooseDrawReplyDelay(true,()=>0),50000);
   assert.equal(chooseDrawReplyDelay(true,()=>1),50000);
+  assert.equal(chooseDrawReplyDelay(true,()=>0,true),2000);
+  assert.equal(chooseDrawReplyDelay(false,()=>1,true),7000);
 });
 
 test("bot só responde ao 9 depois do seu tempo sorteado",()=>{
@@ -726,6 +734,11 @@ test("a primeira colocação continua a partida até o segundo chegar",()=>{
   assert.equal(g.turn_order.includes(a.guest_id),false);
   room.hands.get(b.guest_id).cards=["b4"];
   call("play_card",{p_token:b.token,p_code:code,p_card:"b4"});
+  assert.equal(g.status,"playing");
+  assert.ok(g.round_ends_at>Date.now());
+  assert.equal(room.status,"playing");
+  assert.throws(()=>call("end_turn",{p_token:d.token,p_code:code}),/ROUND_ENDING/);
+  expireRound(g);
   assert.equal(g.status,"finished");
   assert.equal(room.status,"waiting");
   assert.equal(g.winner_id,a.guest_id);
@@ -743,6 +756,9 @@ test("em duelo, o segundo lugar é decidido automaticamente ao vencer o primeiro
   g.turn_idx=0;g.direction=1;g.discard_pile=["g1"];g.current_color="g";
   r.hands.get(a.guest_id).cards=["g1"];
   call("play_card",{p_token:a.token,p_code:code,p_card:"g1"});
+  assert.equal(g.status,"playing");
+  assert.ok(g.round_ends_at>Date.now());
+  expireRound(g);
   assert.equal(g.status,"finished");
   assert.equal(g.placements[0].id,a.guest_id);
   assert.equal(g.placements[1].id,b.guest_id);
@@ -1006,7 +1022,7 @@ test("um vencedor não pode usar Desuno nem aparece como autorizado na interface
   assert.equal(h.cards.length,1);
 });
 
-test("se um humano vencer contra dois bots, partida encerra imediatamente",()=>{
+test("se um humano vencer contra dois bots, mostra a carta final por cinco segundos",()=>{
   const a=call("register_guest",{p_nickname:"HeroBots"});
   const code=call("create_room",{p_token:a.token,p_name:"Humano contra bots",p_max_players:4}).code;
   const b=call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
@@ -1017,6 +1033,9 @@ test("se um humano vencer contra dois bots, partida encerra imediatamente",()=>{
   room.hands.get(a.guest_id).cards=["b4"];
   splay();
   function splay(){call("play_card",{p_token:a.token,p_code:code,p_card:"b4"})}
+  assert.equal(g.status,"playing");
+  assert.ok(g.round_ends_at>Date.now());
+  expireRound(g);
   assert.equal(g.status,"finished");
   assert.equal(room.status,"waiting");
   assert.equal(g.winner_id,a.guest_id);
@@ -1024,7 +1043,7 @@ test("se um humano vencer contra dois bots, partida encerra imediatamente",()=>{
   assert.equal(g.placements.length,2);
 });
 
-test("sair da partida solo não expulsa e dá cinco minutos para retornar",()=>{
+test("sair voluntariamente da partida solo libera a vaga e não mantém retorno",()=>{
   const a=call("register_guest",{p_nickname:"Saiu"});
   const code=call("create_room",{p_token:a.token,p_name:"Só robôs",p_max_players:4}).code;
   call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
@@ -1032,15 +1051,9 @@ test("sair da partida solo não expulsa e dá cinco minutos para retornar",()=>{
   call("start_game",{p_token:a.token,p_code:code});
   const r=store.roomsByCode.get(code);
   call("leave_room",{p_token:a.token,p_code:code});
-  assert.equal(r.game.status,"playing");
-  assert.equal(r.status,"playing");
-  assert.ok(r.game.solo_recovery_until>Date.now()+295000);
-  assert.ok(r.members.some(m=>m.guest_id===a.guest_id));
-  assert.equal(call("list_rejoinable_rooms",{p_token:a.token}).some(v=>v.code===code),true);
-  call("join_room",{p_token:a.token,p_code:code});
-  assert.equal(r.game.solo_force_pause,false);
-  proSweep();
-  assert.equal(r.game.solo_recovery_until,null);
+  assert.equal(r.game.status,"finished");
+  assert.ok(!r.members.some(m=>m.guest_id===a.guest_id));
+  assert.equal(call("list_rejoinable_rooms",{p_token:a.token}).some(v=>v.code===code),false);
 });
 
 test("o anfitrião edita regras e cartas antes da primeira partida e após uma rodada",()=>{
@@ -1198,7 +1211,7 @@ test("quantidade configurada é reduzida a N-1 dos jogadores que entraram",()=>{
   assert.equal(r.game.winners_target,1);
 });
 
-test("Negação anula +5 e inicia o turno do defensor sem comprar",()=>{
+test("Negação anula +5, consome a vez do defensor e não compra",()=>{
   const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
   g.discard_pile=["b6"];g.current_color="b";
   room.hands.get(a.guest_id).cards=["W5","b2"];
@@ -1210,7 +1223,8 @@ test("Negação anula +5 e inicia o turno do defensor sem comprar",()=>{
   call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"g"});
   assert.equal(g.pending_draw,0);
   assert.equal(room.hands.get(b.guest_id).cards.length,before-1);
-  assert.equal(g.turn_order[g.turn_idx],b.guest_id);
+  assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
+  assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"g8"}),/CUT_NOT_ALLOWED/);
   assert.equal(g.current_color,"g");
 });
 
@@ -1225,8 +1239,9 @@ test("Negação oferece escolha real antes de um bloqueio acontecer",()=>{
   assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"g3"}),/SKIP_DECISION_PENDING/);
   call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"g"});
   assert.equal(g.skip_reaction,null);
-  assert.equal(g.turn_order[g.turn_idx],b.guest_id);
-  assert.equal(g.turn_cards.length,0,"reação não consome a jogada normal");
+  assert.equal(g.turn_order[g.turn_idx],bot);
+  assert.equal(g.turn_cards.length,0,"a Negação consumiu o turno");
+  assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"g3"}),/CUT_NOT_ALLOWED/);
 });
 
 test("aceitar bloqueio avança a vez sem gastar a Negação",()=>{
@@ -1263,7 +1278,7 @@ test("Negação cancela o efeito Sem Poderes",()=>{
   s.play(a,"P","r");s.end(a);
   call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"r"});
   assert.equal(g.powerless_target,null);
-  assert.equal(g.turn_cards.length,0,"reação não consome a jogada normal");
+  assert.notEqual(g.turn_order[g.turn_idx],b.guest_id,"a Negação consome o turno");
 });
 
 test("Metralhadora troca um especial de cada adversário por número sem mudar a mão",()=>{
@@ -1298,13 +1313,14 @@ test("duas passagens completas por tempo removem jogador, mas uma não",()=>{
 });
 
 
-test("Negação mantém a possibilidade de jogar normalmente depois de anular a compra",()=>{
+test("Negação impede jogar outra carta depois de anular a compra",()=>{
   const s=setup(),{room,g,a,b}=s;s.setTurn(b.guest_id);
   g.discard_pile=["W4"];g.current_color="r";g.pending_draw=4;g.pending_source=a.guest_id;
   room.hands.get(b.guest_id).cards=["N","g2","r8"];
   call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"g"});
-  call("play_card",{p_token:b.token,p_code:s.code,p_card:"g2"});
-  assert.equal(g.turn_cards[0],"g2");
+  assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
+  assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"g2"}),/CUT_NOT_ALLOWED/);
+  assert.equal(g.discard_pile.at(-1),"N");
   assert.equal(g.pending_draw,0);
 });
 test("todos os avisos privados de autopass são visíveis apenas ao próprio jogador",()=>{
@@ -1382,6 +1398,9 @@ test("3 vencedores configurados jogam até obter três colocações, sem encerra
     call("play_card",{p_token:player.token,p_code:code,p_card:"g1"});
     if(player!==c)assert.equal(g.status,"playing");
   }
+  assert.equal(g.status,"playing");
+  assert.ok(g.round_ends_at>Date.now());
+  expireRound(g);
   assert.equal(g.status,"finished");
   assert.deepEqual(g.placements.map(x=>x.rank),[1,2,3]);
   assert.equal(g.winner_id,a.guest_id);
@@ -1410,9 +1429,8 @@ test("Negação no primeiro de três bloqueios preserva os demais sem bloquear o
   s.end(a);
   assert.equal(g.skip_reaction.target,b.guest_id);
   call("negate_effect",{p_token:b.token,p_code:s.code,p_color:"g"});
-  assert.equal(g.skip_carry.remaining,2);
-  call("end_turn",{p_token:b.token,p_code:s.code});
-  // The two remaining skip tokens affect C and B, never A (original caster).
+  assert.throws(()=>call("end_turn",{p_token:b.token,p_code:s.code}),/NOT_YOUR_TURN/);
+  // The remaining skip tokens are applied immediately when Negação ends B's turn.
   assert.equal(g.turn_order[g.turn_idx],bot);
   assert.equal(g.skip_reaction,null);
   assert.equal(g.skip_carry,null);
@@ -1723,7 +1741,7 @@ test("Cadeado restringe cada rival à cor e não permite coringas",()=>{
   assert.equal(g.lock_color,"b");
   assert.equal(call("get_room_state",{p_token:a.token,p_code:s.code}).game.lock_color,"b");
 });
-test("Negação cancela Cadeado de todos e permite jogar normalmente",()=>{
+test("Negação cancela Cadeado de todos, mas consome o próprio turno",()=>{
   const s=setup(),{room,g,a,b}=s;
   s.setTurn(a.guest_id);g.discard_pile=["g7"];g.current_color="g";
   room.hands.get(a.guest_id).cards=["gL","r9"];
@@ -1734,8 +1752,9 @@ test("Negação cancela Cadeado de todos e permite jogar normalmente",()=>{
   assert.deepEqual(g.lock_remaining,[]);
   assert.equal(g.lock_color,null);
   assert.equal(g.lock_target,null);
-  s.play(b,"r3");s.end(b);
-  assert.equal(g.discard_pile.at(-1),"r3");
+  assert.notEqual(g.turn_order[g.turn_idx],b.guest_id);
+  assert.throws(()=>s.play(b,"r3"),/CUT_NOT_ALLOWED/);
+  assert.equal(g.discard_pile.at(-1),"N");
 });
 test("Espada não acumula e adiciona exatamente +3 ao próximo come",()=>{
   const s=setup(),{room,g,a,b}=s;
@@ -1895,26 +1914,20 @@ test("Espelho pode funcionar como Negação para cancelar compra",()=>{
   assert.equal(g.pending_draw,0);
   assert.equal(room.hands.get(a.guest_id).cards.includes("Q"),false);
   assert.equal(g.discard_pile.at(-1),"Q");
-  assert.equal(g.effects.at(-1).type,"negation");
+  assert.ok(g.effects.some(e=>e.type==="negation"));
+  assert.notEqual(g.turn_order[g.turn_idx],a.guest_id);
 });
-test("Multijogador pode voltar ao sair, mas não depois de expulso por inatividade",()=>{
-  const s=setup(),{g,room,a}=s;s.setTurn(a.guest_id);
-  call("leave_room",{p_token:a.token,p_code:s.code});
+test("sair voluntariamente do multiplayer remove imediatamente o participante e libera a vez",()=>{
+  const s=setup(),{g,room,a,b}=s;s.setTurn(a.guest_id);
+  g.pending_draw=4;g.pending_source=b.guest_id;
+  const left=call("leave_room",{p_token:a.token,p_code:s.code});
+  assert.equal(left.left,true);
   assert.equal(g.status,"playing");
-  assert.ok(room.members.some(m=>m.guest_id===a.guest_id));
-  assert.ok(call("list_rejoinable_rooms",{p_token:a.token}).some(r=>r.code===s.code&&!r.solo));
-  call("join_room",{p_token:a.token,p_code:s.code});
-  assert.ok(room.members.some(m=>m.guest_id===a.guest_id));
-  // Auto-draw is a legitimate game action and cancels inactivity. Ensure a
-  // matching card is available so this test measures ONLY consecutive timeouts.
-  g.current_color="r";g.discard_pile=["r6"];
-  room.hands.get(a.guest_id).cards=["r1","b4"];
-  g.turn_started_at=Date.now()-60000;
-  proSweep();
-  s.setTurn(a.guest_id);g.turn_started_at=Date.now()-60000;
-  proSweep();
+  assert.equal(g.pending_draw,0,"a dívida não passa para outro jogador");
   assert.ok(!room.members.some(m=>m.guest_id===a.guest_id));
+  assert.ok(!g.turn_order.includes(a.guest_id));
   assert.ok(!call("list_rejoinable_rooms",{p_token:a.token}).some(r=>r.code===s.code));
+  assert.ok([b.guest_id,s.bot].includes(g.turn_order[g.turn_idx]));
 });
 test("Partida solo recuperável desaparece após cinco minutos",()=>{
   const a=call("register_guest",{p_nickname:"PrazoSolo"});
@@ -1922,7 +1935,9 @@ test("Partida solo recuperável desaparece após cinco minutos",()=>{
   call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"easy"});
   call("start_game",{p_token:a.token,p_code:code});
   const r=store.roomsByCode.get(code);
-  call("leave_room",{p_token:a.token,p_code:code});
+  // Closing the page / disconnecting is different from explicit Leave.
+  r.game.solo_force_pause=true;
+  proSweep();
   const available=call("list_rejoinable_rooms",{p_token:a.token});
   assert.ok(available.some(v=>v.code===code&&v.solo&&v.recovery_until));
   r.game.solo_recovery_until=Date.now()-1;
@@ -1961,7 +1976,7 @@ test("Retorno de sala privada não revela partidas de outros jogadores",()=>{
   call("add_bot",{p_token:a.token,p_code:code,p_difficulty:"hard"});
   call("start_game",{p_token:a.token,p_code:code});
   call("leave_room",{p_token:a.token,p_code:code});
-  assert.ok(call("list_rejoinable_rooms",{p_token:a.token}).some(x=>x.code===code));
+  assert.ok(!call("list_rejoinable_rooms",{p_token:a.token}).some(x=>x.code===code));
   assert.ok(!call("list_rejoinable_rooms",{p_token:outsider.token}).some(x=>x.code===code));
   assert.ok(!call("list_public_rooms",{}).some(x=>x.code===code));
 });
@@ -1971,6 +1986,9 @@ test("O servidor reiniciado recupera identidades, Google vinculado e mãos da me
   store.guestsById.get(a.guest_id).google_sub="verified-google-sub";
   g.last_wild="W4";
   room.hands.get(a.guest_id).cards=["Q","r4"];
+  // A random initial deal might also contain Q in another hand, which would
+  // make this serialization check flaky. Keep the fixture deterministic.
+  room.hands.get(b.guest_id).cards=room.hands.get(b.guest_id).cards.filter(c=>c!=="Q");
   const snapshot=JSON.parse(JSON.stringify(serializeState()));
   const guestCount=store.guestsById.size;
   // Simulate new process by clearing the in-memory registries and hydrating.
@@ -2246,7 +2264,7 @@ test("dívida recebe 4–6s sem defesa e 50s com resposta válida",()=>{
     assert.equal(g.pending_draw,4);
     const before=room.hands.get(b.guest_id).cards.length;
     const ms=g.pending_draw_deadline-Date.now();
-    assert.ok(hasCounter ? ms>49000&&ms<=50000 : ms>3800&&ms<=6000,
+    assert.ok(hasCounter ? ms>49000&&ms<=50000 : ms>3800&&ms<=7000,
       `wrong response time: ${ms}ms; counter=${hasCounter}`);
     proSweep();assert.equal(g.pending_draw,4);
     assert.equal(room.hands.get(b.guest_id).cards.length,before);
@@ -2326,7 +2344,7 @@ test("+5 só abre o turno completo se houver +5 ou Negação que possa defendê-
     room.hands.get(b.guest_id).cards=cards;
     s.play(a,"W5","r");s.end(a);
     const delay=g.pending_draw_deadline-Date.now();
-    assert.ok(long ? delay>49000 : delay>=3800&&delay<=6000,JSON.stringify({cards,delay}));
+    assert.ok(long ? delay>49000 : delay>=3800&&delay<=7000,JSON.stringify({cards,delay}));
   }
 });
 
@@ -2345,4 +2363,64 @@ test("30 cartas iniciais aceitas em criação e edição; 31 rejeitadas",()=>{
   call("start_game",{p_token:owner.token,p_code:code});
   assert.equal(r.hands.get(owner.guest_id).cards.length,30);
   assert.equal(r.hands.get(guest.guest_id).cards.length,30);
+});
+
+test("fim de rodada congela a mesa por 5s e não ativa o efeito da última carta",()=>{
+  for(const [last,color] of [["bD",null],["bT",null],["bS",null],["bR",null],["bH",null],["bE",null],["B","g"],["M","r"],["W5","r"]]){
+    const s=setup(),{room,g,a,b,bot}=s;
+    s.setTurn(a.guest_id);g.winners_target=1;g.discard_pile=["b3"];g.current_color="b";
+    room.hands.get(a.guest_id).cards=[last];
+    room.hands.get(b.guest_id).cards=["y2","g3"];
+    room.hands.get(bot).cards=["r2","g8"];
+    const dir=g.direction,otherHand=[...room.hands.get(b.guest_id).cards];
+    const eventCount=g.effects.length;
+    call("play_card",{p_token:a.token,p_code:s.code,p_card:last,...(color?{p_color:color}:{})});
+    assert.equal(g.discard_pile.at(-1),last);
+    assert.equal(g.status,"playing");
+    assert.ok(g.round_ends_at>Date.now()+4000);
+    assert.equal(g.pending_draw,0);
+    assert.equal(g.direction,dir,"última carta não inverte");
+    assert.equal(g.effects.length,eventCount,"última carta não emite efeitos");
+    assert.deepEqual(room.hands.get(b.guest_id).cards,otherHand,"última carta não causa compras");
+    assert.throws(()=>call("play_card",{p_token:b.token,p_code:s.code,p_card:"y2"}),/ROUND_ENDING/);
+    assert.throws(()=>call("call_uno",{p_token:b.token,p_code:s.code}),/ROUND_ENDING/);
+    proSweep();assert.equal(g.status,"playing");
+    expireRound(g);
+    assert.equal(g.status,"finished");
+    assert.equal(room.status,"waiting");
+    assert.equal(g.winner_id,a.guest_id);
+  }
+});
+test("último Detetive só escolhe a cor, sem inspecionar; não ativa poder",()=>{
+  const s=setup(),{room,g,a,b}=s;s.setTurn(a.guest_id);
+  g.winners_target=1;g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["X"];
+  room.hands.get(b.guest_id).cards=["y4","r7"];
+  call("play_card",{p_token:a.token,p_code:s.code,p_card:"X",p_target_id:b.guest_id});
+  assert.equal(g.detective,null);
+  assert.equal(g.detective_pending_color,a.guest_id);
+  call("resolve_detective",{p_token:a.token,p_code:s.code,p_color:"g"});
+  assert.ok(g.round_ends_at);
+  assert.equal(g.detective,null);
+  assert.equal(g.current_color,"g");
+});
+test("partida sem resposta varia de 4 a 7s; bots com +2 respondem em 2s",()=>{
+  const s=setup(),{g,room,a,b,bot}=s;s.setTurn(a.guest_id);
+  g.discard_pile=["b3"];g.current_color="b";
+  room.hands.get(a.guest_id).cards=["W4","r3"];
+  room.hands.get(b.guest_id).cards=["g7","y8"];
+  s.play(a,"W4","r");s.end(a);
+  const short=g.pending_draw_deadline-Date.now();
+  assert.ok(short>=3800&&short<=7000,short);
+  // Separate scenario, a hard bot has a legal defensive response.
+  const t=setup(),G=t.g,R=t.room;t.setTurn(t.a.guest_id);
+  G.discard_pile=["b3"];G.current_color="b";
+  R.hands.get(t.a.guest_id).cards=["W4","r3"];
+  R.hands.get(t.b.guest_id).cards=["y2","g8"];
+  R.hands.get(t.bot).cards=["gT","b8"];
+  G.turn_order=[t.a.guest_id,t.bot,t.b.guest_id];G.turn_idx=0;G.direction=1;
+  t.play(t.a,"W4","r");t.end(t.a);
+  assert.equal(G.turn_order[G.turn_idx],t.bot);
+  const fast=G.pending_draw_deadline-Date.now();
+  assert.ok(fast>1800&&fast<=2000,fast);
 });

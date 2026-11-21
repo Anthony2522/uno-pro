@@ -72,3 +72,20 @@ test("padrão offline e limite de 30 cartas permanecem sincronizados no formulá
   assert.match(advanced,/De 2 a 30 cartas; padrão de 8\./);
   assert.match(i18n,/From 2 to 30 cards; default is 8\./);
 });
+
+test("não há indicador de sentido e avisos descem abaixo dos status",()=>{
+  const board=read("src/components/uno/GameTable.tsx");
+  const route=read("src/routes/sala.$code.tsx");
+  assert.doesNotMatch(board,/Sentido horário|Sentido anti-horário/);
+  assert.match(route,/top-\[11rem\] sm:top-\[12rem\]/);
+});
+test("mensagem de impossibilidade de revide e congelamento final têm versões em inglês",()=>{
+  const board=read("src/components/uno/GameTable.tsx");
+  const dict=read("src/lib/uno/i18n.tsx");
+  const exit=read("src/components/uno/RoomTopBar.tsx");
+  assert.match(board,/tr\("Você não tem como revidar"\)/);
+  assert.match(dict,/"Você não tem como revidar": "You have no way to counter"/);
+  assert.match(board,/roundEnding&&"pointer-events-none"/);
+  assert.match(board,/Final card on the table/);
+  assert.match(exit,/Leaving removes you from this match/);
+});

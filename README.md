@@ -29,11 +29,11 @@ Nas configurações avançadas, a **quantidade de cartas iniciais** é a primeir
 
 ## Regras recentes
 
-- 50 segundos de turno, com anúncios que não consomem tempo.
+- Turno de **50 segundos**; nas batalhas de compra, quem tem defesa válida pode usar os 50 segundos, quem não tem compra automaticamente após um sorteio de **4 a 7 segundos**. Bots com resposta válida agem em aproximadamente **2 segundos**.
 - 8 cartas iniciais, configuráveis de 2 a 30.
 - Coringa Detetive: revela privadamente as cartas do adversário selecionado por 10 segundos.
 - +2 Volta: inverte a direção e acumula duas compras; com dois jogadores, funciona como um +2 comum.
-- Primeiro colocado sai da disputa e os demais jogam pelo segundo.
+- Primeiro colocado sai da disputa e os demais jogam até completar as colocações exigidas. Após a carta decisiva, a mesa fica congelada por cinco segundos; o poder dessa última carta não é ativado.
 - 32 nomes engraçados para bots (lista fixa atual em `server/botNames.js`) e alternância de português/inglês.
 
 ## Atualização Desuno, Bomba e animações
@@ -44,15 +44,15 @@ Nas configurações avançadas, a **quantidade de cartas iniciais** é a primeir
 - Bloqueios consecutivos mostram avisos acumulativos com os nomes dos jogadores pulados.
 - Coringa Detetive exibe cartas maiores, com identificação legível, apenas ao jogador autorizado pelo prazo de dez segundos.
 - Coringa Bomba: uma cópia no baralho, cada adversário compra duas cartas sem perder a vez.
-- Desconexão não força o avanço imediato: enquanto o participante está offline, há até trinta segundos de tolerância, limitada também pelo relógio normal de cinquenta segundos. Reconectar não reinicia o tempo gasto.
+- Desconexão não força o avanço imediato: enquanto o participante está offline, há até trinta segundos de tolerância, limitada também pelo relógio normal de cinquenta segundos. Reconectar não reinicia o tempo gasto. **Sair voluntariamente da sala** remove imediatamente o jogador da partida e libera sua vaga.
 
 ## Configurações antes da partida e efeitos por sequência
 
-O anfitrião pode abrir **Configurações avançadas** também na sala de espera, inclusive após uma partida terminar, e alterar a quantidade inicial de cartas (2–20) ou as cinco regras opcionais. Configurações são somente leitura durante partidas em andamento. Os diálogos oferecem rolagem vertical no celular.
+O anfitrião pode abrir **Configurações avançadas** também na sala de espera, inclusive após uma partida terminar, e alterar a quantidade inicial de cartas (2–30) ou as cinco regras opcionais. Configurações são somente leitura durante partidas em andamento. Os diálogos oferecem rolagem vertical no celular.
 
 O **Desuno** só pode ser acionado por participantes ainda ativos: vencedores e observadores não podem denunciar. A partida termina automaticamente quando somente bots continuam na disputa; se um humano foi o primeiro colocado, ele permanece em primeiro e um bot com menos cartas ocupa o segundo lugar para encerrar a classificação.
 
-Animações especiais de cartas (bloqueios, voltas, mudança de cor, Bomba) são agregadas e reproduzidas **uma vez ao terminar a jogada**, inclusive quando ela termina automaticamente. As animações individuais de cada carta viajando ao descarte continuam acontecendo ao jogá-las.
+Animações especiais de cartas (bloqueios, voltas, mudança de cor, Bomba) são agregadas e reproduzidas **uma vez ao terminar a jogada**, exceto se a carta final já completar as colocações exigidas: nesse caso, nenhuma habilidade dessa carta é executada e sua imagem permanece na mesa por cinco segundos. As animações individuais de cada carta viajando ao descarte continuam acontecendo ao jogá-las.
 
 ## Inteligência difícil (nova política)
 
@@ -68,7 +68,7 @@ Para reproduzir os torneios: `node scripts/bot-benchmark.mjs --games=600` (bot d
 ## Novas regras e cartas (novembro de 2026)
 
 - O baralho padrão tem **215 cartas**, com Cerveja, Barata, Espada e Coringa Metralhadora inicialmente desativadas nas novas salas. Elas continuam disponíveis nas Configurações avançadas. Ao habilitar todas as cartas opcionais, o baralho completo possui **232 cartas**.
-- **Negação**: cancela +2, +4 ou +5 acumulados, um Bloqueio direcionado ao usuário ou a proibição do Sem Poderes. O portador escolhe uma nova cor e ainda pode jogar normalmente; uma decisão de bloqueio expira após nove segundos sem resposta.
+- **Negação**: cancela +2, +4 ou +5 acumulados, um Bloqueio direcionado ao usuário ou a proibição do Sem Poderes. O portador escolhe uma nova cor e **gasta a vez**, passando a jogada ao próximo participante; uma decisão de bloqueio expira após nove segundos sem resposta.
 - **Sem Poderes**: impede cartas especiais na próxima vez, permitindo apenas números, salvo se o portador usar Negação.
 - **Metralhadora**: substitui uma carta especial de cada adversário por uma carta numérica, privilegiando coringas, depois compras, depois Bloqueio/Volta. Nenhum jogador perde a vez por isso.
 - **Bloqueios**: sempre percorrem apenas adversários, sem auto-bloquear o autor quando há voltas completas; Volta em partida de dois finaliza automaticamente para devolver a vez.
@@ -85,7 +85,7 @@ No plano gratuito do Render o processo pode reiniciar e perder dados em memória
 ### Jogar offline com bots (sem login Google, sem Redis)
 
 1. Abra o UNO Pro **uma vez com internet** depois da atualização. O service worker instala um cache versionado contendo a interface, as cartas e todos os módulos de rotas.
-2. Na tela inicial, clique em **Jogar offline com bots**. Uma partida de três jogadores (você, um bot fácil e um difícil) começa **no seu navegador**, com as mesmas regras e IA do jogo online.
+2. Na tela inicial, clique em **Jogar offline com bots**. Uma partida de três jogadores (você, **zero bots fáceis e dois difíceis** por padrão) começa **no seu navegador**, com as mesmas regras e IA do jogo online.
 3. Você pode desligar o Wi-Fi, jogar, recarregar a página e voltar a essa partida pelo botão **Continuar partida offline com bots** ou pelo link local da sala.
 4. O jogo salva o baralho, suas cartas, as mãos dos bots e o turno no **localStorage deste navegador** após cada ação. Ao ficar em segundo plano, os cronômetros são pausados e ajustados quando você volta. Não há janela de expiração de cinco minutos para partidas inteiramente locais.
 
@@ -101,7 +101,7 @@ No plano gratuito do Render o processo pode reiniciar e perder dados em memória
 
 ### Partidas com outras pessoas
 
-O modo offline e o snapshot de resgate só se aplicam a partidas em que há **um único humano contra bots**. Partidas multiplayer reais continuam usando o servidor e mantendo as regras atuais de reconexão e expulsão por inatividade. Não existe fork local de partidas compartilhadas.
+O modo offline e o snapshot de resgate só se aplicam a partidas em que há **um único humano contra bots**. Partidas multiplayer reais continuam usando o servidor e mantendo a reconexão por falha de rede; quem **seleciona Sair da sala** é removido imediatamente, enquanto a expulsão por inatividade continua disponível para quem deixa o jogo aberto sem agir. Não existe fork local de partidas compartilhadas.
 
 ### Armazenamento do servidor (opcional)
 
