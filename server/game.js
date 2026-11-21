@@ -73,8 +73,8 @@ export const ROACH_RE=/^[rygb]A@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
 export const isRoach=card=>typeof card==="string"&&ROACH_RE.test(card);
 export const roachChainId=card=>isRoach(card)?card.slice(3):null;
 export const makeRoach=(color,id=crypto.randomUUID())=>color+"A@"+id;
-const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|X|B|N|P|M|Q)$/;
-const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "X" || c === "B" || c === "N" || c === "P" || c === "M" || c === "Q";
+const CARD_RE = /^(?:[rygb](?:[0-9]|S|R|D|T|H|V|C|L|E)|W|W4|W5|WD|X|B|N|P|M|Q)$/;
+const isWild = (c) => c === "W" || c === "W4" || c === "W5" || c === "WD" || c === "X" || c === "B" || c === "N" || c === "P" || c === "M" || c === "Q";
 export const cardValue = (c) => (isRoach(c)?"A":isWild(c) ? c : c.slice(1));
 export function playable(c, top, color) {
   return isWild(c) || c[0] === color || (!isWild(top) && cardValue(c) === cardValue(top));
@@ -92,7 +92,7 @@ export function shuffle(arr) {
 }
 
 /** UNO Pro: 3 of each number/action, two +2 Reverse per color, 10 wilds, 10 +4, two +5, one Detective, one Bomb, one Negation, one Powerless, one Machine Gun, and two Shields, two Vortex, one Beer, two Locks and two Swords per color = 232 cards (including one Mirror Wild and four independent Roach cards). */
-export const CUSTOM_CARD_KEYS=Object.freeze(["T","H","E","L","V","C","A","W5","X","B","N","P","M","Q"]);
+export const CUSTOM_CARD_KEYS=Object.freeze(["T","H","E","L","V","C","A","W5","WD","X","B","N","P","M","Q"]);
 // Cerveja, Barata, Espada and Coringa Metralhadora are opt-in for new rooms.
 const DISABLED_BY_DEFAULT=new Set(["C","A","E","M"]);
 export const DEFAULT_CARDS_ENABLED=Object.freeze(Object.fromEntries(CUSTOM_CARD_KEYS.map(k=>[k,!DISABLED_BY_DEFAULT.has(k)])));
@@ -114,7 +114,7 @@ export function newDeck(cardsEnabled=DEFAULT_CARDS_ENABLED) {
   }
   for (let i = 0; i < 10; i++) d.push("W", "W4");
   for (let i = 0; i < 2; i++) d.push("W5");
-  d.push("X", "B", "N", "P", "M", "Q"); // One of each custom wild per fresh deck.
+  d.push("X", "B", "N", "P", "M", "Q", "WD"); // One of each custom wild per fresh deck.
   for (const col of ["r", "y", "g", "b"]) {
     d.push(col + "T", col + "T", col + "H", col + "H", col + "V", col + "V", col + "C", col + "L", col + "L", col + "E", col + "E");
     // One original for each color. Every new infinite-deck refill creates
@@ -163,8 +163,11 @@ function draw(room, gid, n) {
     if (g.draw_pile.length === 0) {
       // Endless fresh deck; keep discard history so the visible top card never changes.
       g.draw_pile = newDeck(room.cards_enabled);
-      if(g.discard_pile.includes("Q")||[...room.hands.values()].some(h=>h.cards.includes("Q")))
-        g.draw_pile=g.draw_pile.filter(c=>c!=="Q");
+      // One physical Mirror and one Double Wild, even during infinite refills.
+      for(const unique of ["Q","WD"]){
+        if(g.discard_pile.includes(unique)||[...room.hands.values()].some(h=>h.cards.includes(unique)))
+          g.draw_pile=g.draw_pile.filter(c=>c!==unique);
+      }
     }
     drawn.push(g.draw_pile.shift());
   }
@@ -508,9 +511,11 @@ const handlers = {
       for (let i=0;i<(r.initial_cards??8);i++) {
         if(!dp.length) {
           dp=newDeck(r.cards_enabled);
-          // Preserve the Mirror's uniqueness when a large room needs a second deck.
-          if(cards.includes("Q")||[...r.hands.values()].some(h=>h.cards.includes("Q")))
-            dp=dp.filter(c=>c!=="Q");
+          // Preserve both unique wilds when dealing more than one deck.
+          for(const unique of ["Q","WD"]){
+            if(cards.includes(unique)||[...r.hands.values()].some(h=>h.cards.includes(unique)))
+              dp=dp.filter(c=>c!==unique);
+          }
         }
         cards.push(dp.shift());
       }
