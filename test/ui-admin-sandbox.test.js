@@ -89,3 +89,18 @@ test("mensagem de impossibilidade de revide e congelamento final têm versões e
   assert.match(board,/Final card on the table/);
   assert.match(exit,/Leaving removes you from this match/);
 });
+
+test("resposta de compra respeita filtro privado do servidor e avisa a cor do Cadeado",()=>{
+  const source=read("src/components/uno/GameTable.tsx");
+  const api=read("src/lib/uno/api.ts");
+  const server=read("server/pro.js");
+  const dict=read("src/lib/uno/i18n.tsx");
+  assert.match(source,/game\.legal_draw_counters\.includes\(c\)/);
+  assert.match(source,/game\.can_answer_draw===false/);
+  assert.match(source,/Cadeado: só pode revidar com \+2 ou \+2 Volta/);
+  assert.match(source,/Lock: counter only with/);
+  assert.match(source,/hand\.some\(c=>counterCard\(c\)&&cardValue\(c\)==="T"\)/);
+  assert.match(api,/legal_draw_counters\?: string\[\]/);
+  assert.match(server,/viewingDebt\?legalDrawCounters\(r,result\.me\):\[\]/);
+  assert.match(dict,/Lock: counter only with draw cards of the required color/);
+});
