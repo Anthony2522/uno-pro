@@ -78,7 +78,17 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
 
   const pending = game.pending_draw || 0;
   const effectiveCard=(c:string)=>c==="Q"?(game.last_wild||"W"):c;
-  const counterCard=(c:string)=>{const e=effectiveCard(c);return state.room.rules.stack && (game.pending_uncounterable?e==="W5":e==="W4"||e==="W5"||cardValue(e)==="D"||cardValue(e)==="T");};
+  const counterCard=(c:string)=>{
+    const e=effectiveCard(c);
+    const validKind=state.room.rules.stack &&
+      (game.pending_uncounterable?e==="W5":e==="W4"||e==="W5"||cardValue(e)==="D"||cardValue(e)==="T");
+    if(!validKind)return false;
+    if(game.powerless_remaining?.includes(me))return false;
+    if(game.lock_remaining?.includes(me)&&game.lock_color &&
+       (isWild(c)||c[0]!==game.lock_color))return false;
+    return game.legal_draw_counters===undefined||!myTurn||!pending||
+      game.legal_draw_counters.includes(c);
+  };
   const hasNegation=game.my_hand.includes("N")||(game.last_wild==="N"&&game.my_hand.includes("Q"));
   const lastPrivateNotice=useRef<number|null>(null);
   useEffect(()=>{
@@ -155,8 +165,13 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
   const normalDeadline=new Date(game.turn_started_at).getTime()+50000;
   const deadline=game.offline_deadline_at ? Math.min(normalDeadline,new Date(game.offline_deadline_at).getTime()) : normalDeadline;
   const remaining=Math.min(50,Math.max(0,Math.ceil((deadline-clock)/1000)));
-  const hasNoDrawResponse=pending>0&&!!game.pending_draw_deadline&&
-    new Date(game.pending_draw_deadline).getTime()-new Date(game.turn_started_at).getTime()<10000;
+  const hasNoDrawResponse=pending>0&&(game.can_answer_draw===false||
+    (game.can_answer_draw===undefined&&!!game.pending_draw_deadline&&
+    new Date(game.pending_draw_deadline).getTime()-new Date(game.turn_started_at).getTime()<10000));
+  const lockedDebtColor=pending>0&&game.lock_remaining?.includes(me)?game.lock_color:null;
+  const lockReplyColor=lockedDebtColor
+    ?(language==="en"?({r:"red",y:"yellow",g:"green",b:"blue"} as Record<string,string>)[lockedDebtColor]:COLOR_NAMES[lockedDebtColor])
+    :null;
   const revealRemaining=game.round_ends_at?Math.max(0,Math.ceil((new Date(game.round_ends_at).getTime()-clock)/1000)):0;
   const debtRemaining=pending>0&&game.pending_draw_deadline
     ?Math.max(0,Math.ceil((new Date(game.pending_draw_deadline).getTime()-clock)/1000)):remaining;
@@ -301,8 +316,14 @@ export function GameTable({ state, busy, actions }: { state: RoomState; busy: bo
             <p className="mt-1 text-sm text-warning">{language==="en"
               ?`Automatic draw in ${debtRemaining}s if you do not counter.`
               :`Compra automática em ${debtRemaining}s se você não revidar.`}</p>
-            {hand.some(counterCard)&&<p className="mt-1 text-sm text-cyan">Revidar → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong>
-              {!game.pending_uncounterable && hand.some(c=>cardValue(c)==="T") && game.turn_order.length>2 && <> · +2 Volta → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)-game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong></>}
+            {lockedDebtColor&&<p className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-warning/35 bg-warning/10 px-2 py-2 text-xs font-bold text-warning">
+              <LockKeyhole className="size-4 shrink-0"/>
+              {language==="en"
+                ?`Lock: counter only with ${lockReplyColor} +2 / +2 Reverse. No draw wilds.`
+                :`Cadeado: só pode revidar com +2 ou +2 Volta ${lockReplyColor}, sem coringas de compra.`}
+            </p>}
+            {hand.some(counterCard)&&<p className="mt-1 text-sm text-cyan">{language==="en"?"Counter":"Revidar"} → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)+game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong>
+              {!game.pending_uncounterable && hand.some(c=>counterCard(c)&&cardValue(c)==="T") && game.turn_order.length>2 && <> · +2 Volta → <strong>{byId.get(game.turn_order[(game.turn_order.indexOf(me)-game.direction+game.turn_order.length)%game.turn_order.length] ?? "")?.nickname??"Jogador"}</strong></>}
             </p>}
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <Button variant="glass" className="rounded-xl" onClick={actions.accept} disabled={busy}>{language==="en"?`Draw ${pending} and pass`:`Comprar ${pending} e passar`}</Button>

@@ -82,9 +82,13 @@ function shuffle(a){const b=[...a];for(let k=b.length-1;k>0;k--){const j=crypto.
 // A +5 is always stackable only by another +5. It can also answer +2/+4.
 const canCounter=(g,c)=>g.pending_uncounterable ? reflected(g,c)==="W5" : (isDraw(reflected(g,c))||reflected(g,c)==="W5");
 const counter=(r,id)=>hand(r,id).cards.some(c=>canCounter(r.game,c));
+// Share a single server-authoritative predicate between reply time and UI hints.
+function legalDrawCounters(r,id){
+  if(!r.game?.pending_draw||!ready(r).stack)return [];
+  return hand(r,id).cards.filter(c=>canCounter(r.game,c)&&allowedDuringRestrictions(r.game,c,id));
+}
 function canAnswerDebt(r,id){
-  return hasNegation(r,id)||(ready(r).stack &&
-    hand(r,id).cards.some(c=>canCounter(r.game,c)&&allowedDuringRestrictions(r.game,c,id)));
+  return hasNegation(r,id)||legalDrawCounters(r,id).length>0;
 }
 function planBotCut(r,source) {
   const g=r.game;
@@ -1314,6 +1318,10 @@ export function proRpc(fn,args={}){
       const personal=g.private_notices?.[result.me];
       result.game.private_notice=personal?{...personal,at:stamp(personal.at)}:null;
       result.game.pending_uncounterable=!!g.pending_uncounterable;
+       // The viewer may know their own permitted counters, not opponents' hands.
+       const viewingDebt=g.status==="playing"&&g.pending_draw>0&&current(g)===result.me&&!g.turn_cards?.length;
+       result.game.legal_draw_counters=viewingDebt?legalDrawCounters(r,result.me):[];
+       result.game.can_answer_draw=viewingDebt?canAnswerDebt(r,result.me):false;
       result.game.last_wild=g.last_wild||null;
       result.game.mirror_played_as=g.mirror_played_as||null;
       result.game.card_moves=[...(g.card_moves||[])];
