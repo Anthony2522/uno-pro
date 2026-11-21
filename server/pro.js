@@ -9,8 +9,8 @@ import {rpc as originalRpc, RPC_NAMES as basicNames, store, newDeck, isRoach, ro
 const DEFAULT_RULES = Object.freeze({ repeat:true, sequence:true, nine:true, cut:true, stack:true });
 const BEER_DELAY_MS = 3000;
 // A legal draw defense offers 50 seconds; otherwise sample one 4–6s delay.
-export function chooseDrawReplyDelay(canRespond,random=Math.random){
-  return canRespond?50000:4000+Math.round(Math.max(0,Math.min(1,random()))*2000);
+export function chooseDrawReplyDelay(canRespond,random=Math.random,isBotPlayer=false){
+  return canRespond?(isBotPlayer?2000:50000):4000+Math.round(Math.max(0,Math.min(1,random()))*3000);
 }
 const VORTEX_CARD_DELAY_MS = 1250;
 const SOLO_RECOVERY_MS = 5 * 60_000;
@@ -62,7 +62,11 @@ function member(room,id){return room.members.some(m=>m.guest_id===id);}
 function authenticate(token){const me=originalRpc("whoami",{p_token:token});return store.guestsById.get(me.guest_id);}
 function find(code){const r=store.roomsByCode.get(String(code||"").trim().toUpperCase());if(!r)fail("ROOM_NOT_FOUND",404);return r;}
 function guard(args){const me=authenticate(args.p_token),r=find(args.p_code);if(!member(r,me.id))fail("NOT_MEMBER",403);return {me,r};}
-function game(r){if(!r.game||r.game.status!=="playing")fail("GAME_NOT_ACTIVE");return r.game;}
+function game(r){
+  if(!r.game||r.game.status!=="playing")fail("GAME_NOT_ACTIVE");
+  if(r.game.round_ends_at)fail("ROUND_ENDING");
+  return r.game;
+}
 function ready(room){if(!room.rules)room.rules={...DEFAULT_RULES};return room.rules;}
 function hand(room,id){const h=room.hands.get(id);if(!h)fail("NOT_MEMBER",403);return h;}
 function draw(room,id,n){const g=room.game,h=hand(room,id),got=[];
@@ -120,7 +124,7 @@ function nextTurn(r,g,idx){
   // Debt starts immediately, instead of adding animation delay to the turn.
   g.turn_started_at=g.pending_draw>0?now:Math.max(now,g.visual_until||now);
   g.pending_draw_deadline=g.pending_draw>0
-    ?now+chooseDrawReplyDelay(canAnswerDebt(r,current(g))):null;
+    ?now+chooseDrawReplyDelay(canAnswerDebt(r,current(g)),Math.random,isBot(current(g))):null;
   g.bot_move=null; // The next bot turn draws its delay exactly once.
   g.turn_sword_bonus=0;
   g.beer_due=(g.beer_remaining||[]).includes(current(g)) ? now+BEER_DELAY_MS : null;
@@ -439,13 +443,9 @@ function negateEffect(r,id,color){
   if(powerless){g.powerless_remaining=[];g.powerless_target=null;}
   if(locked){g.lock_remaining=[];g.lock_target=null;g.lock_color=null;}
   const result=play(r,id,reactionCard,color,undefined,{defensiveNegation:true});
-  // Negation is a reaction, not the player's regular move. After defending,
-  // the player may still start a legal play or draw from the new color.
-  if(g.status==="playing"&&current(g)===id){
-    g.turn_cards=[];g.turn_mode=null;g.turn_step=0;
-    g.has_drawn=false;g.drawn_card=null;
-  }
+  // A defensive Negation spends this player's full turn.
   effect(r,"negation",id,"N",color,{reason:cause});
+  if(g.status==="playing"&&!g.round_ends_at&&current(g)===id&&g.turn_cards?.length)finish(r);
   g.seq++;bump(r);
   return result;
 }
@@ -461,7 +461,7 @@ function resolveDebt(r){
   }
   // Older snapshots may lack this field. Never use the hand or online state
   // to decide if a debt is paid before the deadline.
-  g.pending_draw_deadline??=clock()+chooseDrawReplyDelay(canAnswerDebt(r,actor));
+  g.pending_draw_deadline??=clock()+chooseDrawReplyDelay(canAnswerDebt(r,actor),Math.random,isBot(actor));
   if(clock()<g.pending_draw_deadline)return;
   const n=g.pending_draw,attacker=g.pending_source||actor;
   observePublic(r,actor,{kind:"forced_draw",color:g.current_color,n});
@@ -605,6 +605,23 @@ function play(r,id,card,color,targetId,options={}){
   g.discard_pile.push(card);g.current_color=wild(card)?(color||g.current_color):card[0];
   g.card_moves??=[];g.card_move_seq=(g.card_move_seq||0)+1;
   g.card_moves.push({id:g.card_move_seq,by:id,name:name(id),card,mirror_as:card==="Q"?effective:null,previous_top:previousTop,at:clock()});
+  // If this card achieves the winning threshold, skip every special effect.
+  if(h.cards.length===0 && terminalCard(r,id)){
+    if(card==="Q")g.mirror_played_as=effective;
+    else if(wild(card))g.last_wild=card;
+    g.turn_cards=[...series,effective];
+    g.last_action={type:cutting?"cut":"play",by:id,name:name(id),card,color:g.current_color,left:0};
+    g.seq++;
+    if(effective==="X"&&!color){
+      g.detective_pending_color=id;g.detective=null;bump(r);
+      return {ok:true,pending_color:true};
+    }
+    if(wild(card)&&!color){
+      g.wild_pending_color=id;g.wild_pending_since=clock();bump(r);
+      return {ok:true,pending_color:true};
+    }
+    return finishEmptyHand(r,id);
+  }
   if(card==="Q")g.mirror_played_as=effective;
   else if(wild(card))g.last_wild=card;
   // Deliver before checking victory: the last Barata also sends its copy.
@@ -702,6 +719,19 @@ function resolveWildColor(r,id,color){
   if(hand(r,id).cards.length===0)return finishEmptyHand(r,id);
   return {ok:true};
 }
+function settleRound(r){
+  const g=r.game;
+  if(!g||g.status!=="playing"||!g.round_ends_at)return;
+  g.round_ends_at=null;g.status="finished";r.status="waiting";
+  g.turn_cards=[];g.pending_draw=0;g.pending_draw_deadline=null;
+  clearSwordDebt(g);g.nine=null;g.bot_cut=null;g.bot_move=null;
+  g.seq++;bump(r,true);
+}
+function terminalCard(r,id){
+  const g=r.game,others=g.turn_order.filter(pid=>pid!==id);
+  return (g.placements?.length??0)+1>=(g.winners_target??2) ||
+    g.turn_order.length===2 || (others.length>0&&others.every(isBot));
+}
 function finishEmptyHand(r,id){
   const g=game(r);
   g.placements??=[];
@@ -715,12 +745,12 @@ function finishEmptyHand(r,id){
       if(runnerUp)g.placements.push({id:runnerUp,rank:2,name:name(runnerUp)});
     }
     g.second_winner_id=g.placements[1]?.id??null;
-    observePublic(r,id,{kind:"play",color:g.turn_start_color??g.current_color,
-      cards:[...g.turn_cards],chosen_color:g.current_color});
-    emitTurnEffect(r,id,g.turn_cards||[],g.direction);
-    g.status="finished";
+    // No final-card powers: preserve its discard for a five-second reveal.
+    g.round_ends_at=clock()+5000;
+    g.bot_cut=null;g.bot_move=null;g.skip_reaction=null;g.skip_carry=null;
     g.last_action={type:"placement",by:id,name:name(id),rank:g.placements.at(-1)?.rank??1,win:true};
-    g.pending_draw=0;g.pending_draw_deadline=null;clearSwordDebt(g);g.nine=null;r.status="waiting";bump(r,true);return {ok:true,won:true};
+    g.pending_draw=0;g.pending_draw_deadline=null;clearSwordDebt(g);g.nine=null;
+    bump(r,true);return {ok:true,won:true,ending:true};
   }
   finish(r,false,true);
   const target=current(g);
@@ -795,7 +825,7 @@ function beerTick(r){
   if(g.beer_due===null||g.beer_due===undefined)g.beer_due=clock()+BEER_DELAY_MS;
   if(clock()<g.beer_due)return true; // All viewers see three seconds before the forced move.
   if(g.pending_draw){
-    g.pending_draw_deadline??=clock()+chooseDrawReplyDelay(canAnswerDebt(r,current(g)));
+    g.pending_draw_deadline??=clock()+chooseDrawReplyDelay(canAnswerDebt(r,current(g)),Math.random,isBot(current(g)));
     if(clock()<g.pending_draw_deadline)return true;
   }
   const actor=current(g),h=hand(r,actor);
@@ -960,6 +990,10 @@ export function proSweep(){LIMITS.autoPassMs=50_000;const time=clock();
     for(const m of r.members){const b=store.guestsById.get(m.guest_id);if(b?.bot)b.last_seen=time;}
     const g=r.game;
     if(!g||g.status!=="playing")continue;
+    if(g.round_ends_at){
+      if(time>=g.round_ends_at)settleRound(r);
+      continue; // Freeze all actions during the final-card reveal.
+    }
     if(isSoloHumanBotMatch(r)){
       if(g.solo_recovery_until && time>=g.solo_recovery_until){
         store.rooms.delete(r.id);store.roomsByCode.delete(r.code);
@@ -1214,7 +1248,7 @@ export function proRpc(fn,args={}){
     }
     const result=originalRpc(fn,args),g=r.game;
     r.winners_target=Math.min(r.winners_target??2,g.turn_order.length-1);
-    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_draw_deadline:null,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:null,mirror_played_as:null,roach_chains:{},lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
+    Object.assign(g,{turn_cards:[],turn_mode:null,turn_step:0,pending_draw:0,pending_draw_deadline:null,pending_uncounterable:false,pending_source:null,nine:null,effects:[],event_seq:0,last_draw_by_id:{},draw_nonce:0,bot_cut:null,bot_move:null,visual_until:0,offline_since:null,card_moves:[],card_move_seq:0,public_history:{},turn_start_color:g.current_color,winners_target:r.winners_target,round_ends_at:null,timeout_counts:{},private_notices:{},private_notice_seq:0,powerless_target:null,powerless_remaining:[],last_wild:null,mirror_played_as:null,roach_chains:{},lock_target:null,lock_color:null,lock_remaining:[],shields:{},swords:{},turn_sword_bonus:0,pending_sword_bonus:0,pending_sword_source:null,solo_paused_at:null,solo_recovery_until:null,solo_force_pause:false,beer_remaining:[],beer_resolving:false,beer_due:null,vortex_queue:null,wild_pending_color:null,wild_pending_since:null,detective_pending_color:null,machine_gun_hits:[],machine_gun_new_by_id:{},machine_gun_seq:0,skip_reaction:null,skip_carry:0});
     planBotCut(r,null);
     for(const h of r.hands.values())h.uno_since=null;
     return result;
@@ -1224,6 +1258,7 @@ export function proRpc(fn,args={}){
     result.members=result.members.map(m=>({ ...m,bot:isBot(m.id),difficulty:store.guestsById.get(m.id)?.difficulty||null,spectator:!!r.members.find(x=>x.guest_id===m.id)?.spectator}));
     if(g&&result.game){result.game.turn_cards=[...(g.turn_cards||[])];result.game.pending_draw=g.pending_draw||0;
        result.game.pending_draw_deadline=g.pending_draw&&g.pending_draw_deadline!=null?stamp(g.pending_draw_deadline):null;
+       result.game.round_ends_at=g.round_ends_at?stamp(g.round_ends_at):null;
       result.game.nine=g.nine?{source:g.nine.source,count:g.nine.count,eligible:[...g.nine.eligible],pressed:[...g.nine.pressed],deadline:stamp(g.nine.deadline)}:null;
       result.game.effects=[...(g.effects||[])];
       result.game.action_locked_until=activeNotification(g) && actionLocked(g)
